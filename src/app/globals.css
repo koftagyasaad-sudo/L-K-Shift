@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: rgba(255, 255, 255, 0.92);
+  --border: rgba(148, 163, 184, 0.22);
+  --muted: #64748b;
+  --primary: #d8261c;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #121212;
+  --foreground: #f8fafc;
+  --card: rgba(23, 23, 23, 0.9);
+  --border: rgba(255, 255, 255, 0.1);
+  --muted: #94a3b8;
+  --primary: #d8261c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(216, 38, 28, 0.2);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
