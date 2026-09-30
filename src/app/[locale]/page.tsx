@@ -4,7 +4,7 @@ import { attendanceLogs, branches, notifications, users } from "@/db/schema";
 import { ensureSeedData } from "@/db/seed";
 import { Link } from "@/i18n/navigation";
 import { formatDate } from "@/lib/utils";
-import { count, desc, eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 
 export default async function OverviewPage({
