@@ -5,7 +5,7 @@ import { adminBranchScopes, branches, customRoles, users } from "@/db/schema";
 import { formatDate } from "@/lib/utils";
 import { permissionCatalog } from "@/lib/permissions";
 import { requireSuperAdmin } from "@/lib/auth-guards";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { assignBranchScopeAction, createRoleAction } from "./actions";
 
