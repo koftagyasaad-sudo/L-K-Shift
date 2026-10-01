@@ -1,71 +1,42 @@
 @import "tailwindcss";
 
-/* 🔑 الإصلاح الحرج: تفعيل dark mode بناءً على الـ class بدلاً من OS */
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   color-scheme: light;
-
-  /* الخلفيات */
   --background: #fafafa;
   --background-secondary: #f4f4f5;
   --surface: #ffffff;
-  --surface-elevated: #ffffff;
-
-  /* النصوص */
   --foreground: #18181b;
   --foreground-muted: #71717a;
-  --foreground-subtle: #a1a1aa;
-
-  /* الحدود */
   --border: #e4e4e7;
   --border-strong: #d4d4d8;
-
-  /* الألوان الأساسية - أحمر + برتقالي */
   --primary: #e63946;
   --primary-hover: #d12836;
   --primary-foreground: #ffffff;
-
   --accent: #ff7a00;
   --accent-hover: #e86d00;
   --accent-foreground: #ffffff;
-
-  /* تدرج الهيرو */
   --gradient-hero: linear-gradient(135deg, #e63946 0%, #ff7a00 100%);
-
-  /* حالات */
-  --success: #16a34a;
-  --warning: #f59e0b;
   --danger: #dc2626;
 }
 
 .dark {
   color-scheme: dark;
-
   --background: #0a0a0b;
   --background-secondary: #121214;
   --surface: #18181b;
-  --surface-elevated: #1f1f23;
-
   --foreground: #fafafa;
   --foreground-muted: #a1a1aa;
-  --foreground-subtle: #71717a;
-
   --border: #27272a;
   --border-strong: #3f3f46;
-
   --primary: #ff4d5e;
   --primary-hover: #ff6472;
   --primary-foreground: #ffffff;
-
   --accent: #ff8c33;
   --accent-hover: #ffa052;
   --accent-foreground: #0a0a0b;
-
   --gradient-hero: linear-gradient(135deg, #ff4d5e 0%, #ff8c33 100%);
-
-  --success: #22c55e;
-  --warning: #fbbf24;
   --danger: #ef4444;
 }
 
@@ -76,10 +47,14 @@
   --color-foreground: var(--foreground);
   --color-foreground-muted: var(--foreground-muted);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
 }
 
 * {
@@ -116,7 +91,6 @@ button {
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: var(--calendar-filter, none);
 }
 
 .dark input[type="date"]::-webkit-calendar-picker-indicator,
@@ -138,7 +112,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   background: transparent;
 }
 
-/* Utility classes للتدرج */
 .gradient-hero {
   background: var(--gradient-hero);
 }
