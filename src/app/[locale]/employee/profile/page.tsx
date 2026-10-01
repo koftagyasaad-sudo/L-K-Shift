@@ -1,9 +1,8 @@
 import { ActionDialog } from "@/components/ui/action-dialog";
-import { DataTable } from "@/components/ui/data-table";
 import { db } from "@/db";
 import { ensureSeedData } from "@/db/seed";
 import { attendanceLogs, branches } from "@/db/schema";
-import { formatDate, formatDateTime, formatMinutesAsHours } from "@/lib/utils";
+import { formatMinutesAsHours } from "@/lib/utils";
 import { requireSession } from "@/lib/auth-guards";
 import { eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
@@ -12,6 +11,7 @@ import {
   createLeaveRequestAction,
   justifyMissedDayAction,
 } from "./actions";
+import { AttendanceTable } from "./attendance-table";
 
 export default async function EmployeeProfilePage({
   params,
@@ -65,8 +65,8 @@ export default async function EmployeeProfilePage({
   }));
 
   const branchOptions = Array.from(new Set(tableRows.map((row) => row.branch))).map((branch) => ({
-    label: branch,
-    value: branch,
+    label: branch ?? "",
+    value: branch ?? "",
   }));
 
   const statusOptions = Array.from(new Set(tableRows.map((row) => row.status))).map((status) => ({
@@ -183,66 +183,11 @@ export default async function EmployeeProfilePage({
         </div>
       </section>
 
-      <DataTable
-        title={t("employeeProfile.historyTitle")}
-        description={t("employeeProfile.historyDescription")}
+      <AttendanceTable
         data={tableRows}
-        exportFileName="lk-shift-attendance-history"
-        searchableKeys={["branch", "status"]}
-        dateAccessor={(row) => row.date}
-        filterDefinitions={[
-          {
-            key: "branch",
-            label: t("employeeProfile.branch"),
-            options: branchOptions,
-            accessor: (row) => row.branch,
-          },
-          {
-            key: "status",
-            label: t("employeeProfile.status"),
-            options: statusOptions,
-            accessor: (row) => row.status,
-          },
-        ]}
-        rowKey={(row) => row.id}
-        columns={[
-          {
-            key: "date",
-            header: t("employeeProfile.attendanceDate"),
-            render: (row) => formatDate(row.date, locale),
-            exportValue: (row) => formatDate(row.date, locale),
-          },
-          {
-            key: "branch",
-            header: t("employeeProfile.branch"),
-          },
-          {
-            key: "checkIn",
-            header: t("employeeProfile.checkIn"),
-            render: (row) => formatDateTime(row.checkIn, locale),
-            exportValue: (row) => formatDateTime(row.checkIn, locale),
-          },
-          {
-            key: "checkOut",
-            header: t("employeeProfile.checkOut"),
-            render: (row) => formatDateTime(row.checkOut, locale),
-            exportValue: (row) => formatDateTime(row.checkOut, locale),
-          },
-          {
-            key: "status",
-            header: t("employeeProfile.status"),
-            render: (row) => t(`status.${row.status}`),
-            exportValue: (row) => t(`status.${row.status}`),
-          },
-          {
-            key: "lateMinutes",
-            header: t("employeeProfile.late"),
-          },
-          {
-            key: "overtimeMinutes",
-            header: t("employeeProfile.overtimeMinutes"),
-          },
-        ]}
+        locale={locale}
+        branchOptions={branchOptions}
+        statusOptions={statusOptions}
       />
     </div>
   );
