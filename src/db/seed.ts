@@ -350,6 +350,33 @@ export async function ensureSeedData() {
   });
 }
 
+export async function ensureDemoLoginUser() {
+  const existing = await db.select({ id: users.id }).from(users).where(eq(users.phone, "010")).limit(1);
+
+  if (existing.length > 0) {
+    return;
+  }
+
+  const branchRows = await db.select({ id: branches.id }).from(branches).limit(1);
+  const primaryBranchId = branchRows[0]?.id ?? null;
+
+  const passwordHash = await hash("123", 10);
+
+  await db.insert(users).values({
+    fullNameAr: "مستخدم تجريبي",
+    fullNameEn: "Demo User",
+    phone: "010",
+    passwordHash,
+    systemRole: "SUPER_ADMIN",
+    jobRole: "Demo Admin",
+    primaryBranchId,
+    verificationMode: "MANUAL",
+    hireDate: new Date(),
+    salaryType: "MONTHLY",
+    monthlySalary: "0.00",
+  });
+}
+
 export async function getRecentNotifications(userId: number) {
   return db
     .select()
