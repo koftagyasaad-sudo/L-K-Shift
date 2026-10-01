@@ -1,3 +1,4 @@
+// src/app/[locale]/(app)/page.tsx
 import { Link } from "@/i18n/navigation";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -37,13 +38,19 @@ export default async function OverviewPage({
   const totalAttendance = attendanceRows.length;
   const totalAbsences = attendanceRows.filter((a) => a.status === "ABSENT").length;
 
+  // تم فصل الـ href الخاص بالموظفين خارج الـ array لتطبيق as const بشكل صحيح
+  const employeesHref =
+    session?.user?.systemRole === "SUPER_ADMIN"
+      ? ("/admin/roles" as const)
+      : ("/employee/profile" as const);
+
   const statCards = [
     { label: t("home.statsBranches"), value: branchRows.length, icon: Building2, href: "#branches" as const },
     {
       label: t("home.statsUsers"),
       value: totalEmployees,
       icon: UsersIcon,
-      href: (session?.user?.systemRole === "SUPER_ADMIN" ? "/admin/roles" : "/employee/profile") as const,
+      href: employeesHref,
     },
     { label: t("home.statsAttendance"), value: totalAttendance, icon: CalendarCheck, href: "/employee/profile" as const },
     { label: t("employeeProfile.absences"), value: totalAbsences, icon: UserX, href: "/employee/profile" as const },
