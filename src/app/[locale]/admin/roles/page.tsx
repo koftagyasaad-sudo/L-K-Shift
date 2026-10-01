@@ -53,49 +53,52 @@ export default async function AdminRolesPage({
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[32px] bg-[#121212] p-8 text-white shadow-2xl shadow-black/20">
-        <h1 className="text-4xl font-black">{t("adminRoles.title")}</h1>
-        <p className="mt-4 max-w-3xl text-base leading-8 text-white/75">{t("adminRoles.subtitle")}</p>
+      <section className="gradient-hero relative overflow-hidden rounded-[32px] p-8 text-white shadow-2xl shadow-primary/20">
+        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="relative">
+          <h1 className="text-4xl font-black">{t("adminRoles.title")}</h1>
+          <p className="mt-4 max-w-3xl text-base leading-8 text-white/85">{t("adminRoles.subtitle")}</p>
+        </div>
       </section>
 
       <section className="grid gap-8 xl:grid-cols-[1fr_1fr]">
         <form
           action={createRoleAction}
-          className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171717]"
+          className="rounded-[28px] border border-border bg-surface p-6 shadow-sm"
         >
           <input type="hidden" name="locale" value={locale} />
-          <h2 className="text-2xl font-bold text-slate-950 dark:text-white">{t("adminRoles.createRole")}</h2>
+          <h2 className="text-2xl font-bold text-foreground">{t("adminRoles.createRole")}</h2>
           <div className="mt-6 grid gap-4">
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("adminRoles.roleName")}</span>
+              <span className="mb-2 block text-sm font-medium text-foreground">{t("adminRoles.roleName")}</span>
               <input
                 name="name"
                 required
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none dark:border-white/10 dark:bg-white/5"
+                className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground outline-none focus:border-primary"
               />
             </label>
             <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("adminRoles.roleNameAr")}</span>
+              <span className="mb-2 block text-sm font-medium text-foreground">{t("adminRoles.roleNameAr")}</span>
               <input
                 name="nameAr"
                 required
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none dark:border-white/10 dark:bg-white/5"
+                className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground outline-none focus:border-primary"
               />
             </label>
           </div>
 
           <div className="mt-6">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">{t("adminRoles.permissions")}</p>
+            <p className="text-sm font-semibold text-foreground">{t("adminRoles.permissions")}</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               {permissionCatalog.map((group) => (
-                <div key={group.category} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-sm font-semibold text-slate-950 dark:text-white">
+                <div key={group.category} className="rounded-3xl border border-border bg-background-secondary p-4">
+                  <p className="text-sm font-semibold text-foreground">
                     {locale === "ar" ? group.categoryAr : group.category}
                   </p>
                   <div className="mt-4 space-y-3">
                     {group.items.map((item) => (
-                      <label key={item.id} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
-                        <input type="checkbox" name="permissions" value={item.id} className="mt-1" />
+                      <label key={item.id} className="flex items-start gap-3 text-sm text-foreground-muted">
+                        <input type="checkbox" name="permissions" value={item.id} className="mt-1 accent-primary" />
                         <span>{locale === "ar" ? item.labelAr : item.label}</span>
                       </label>
                     ))}
@@ -107,7 +110,7 @@ export default async function AdminRolesPage({
 
           <button
             type="submit"
-            className="mt-6 rounded-2xl bg-[#D8261C] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[#D8261C]/30 transition hover:bg-[#bb2319]"
+            className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover"
           >
             {t("adminRoles.create")}
           </button>
@@ -116,16 +119,16 @@ export default async function AdminRolesPage({
         <div className="space-y-6">
           <form
             action={assignBranchScopeAction}
-            className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171717]"
+            className="rounded-[28px] border border-border bg-surface p-6 shadow-sm"
           >
             <input type="hidden" name="locale" value={locale} />
-            <h2 className="text-2xl font-bold text-slate-950 dark:text-white">{t("adminRoles.assignScope")}</h2>
+            <h2 className="text-2xl font-bold text-foreground">{t("adminRoles.assignScope")}</h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("adminRoles.adminUser")}</span>
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("adminRoles.adminUser")}</span>
                 <select
                   name="userId"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none dark:border-white/10 dark:bg-white/5"
+                  className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground outline-none focus:border-primary"
                 >
                   {adminRows.map((admin) => (
                     <option key={admin.id} value={admin.id}>
@@ -135,10 +138,10 @@ export default async function AdminRolesPage({
                 </select>
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("adminRoles.branch")}</span>
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("adminRoles.branch")}</span>
                 <select
                   name="branchId"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none dark:border-white/10 dark:bg-white/5"
+                  className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground outline-none focus:border-primary"
                 >
                   {branchRows.map((branch) => (
                     <option key={branch.id} value={branch.id}>
@@ -150,28 +153,28 @@ export default async function AdminRolesPage({
             </div>
             <button
               type="submit"
-              className="mt-6 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/10"
+              className="mt-6 rounded-2xl border border-border px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-background-secondary"
             >
               {t("adminRoles.assign")}
             </button>
           </form>
 
-          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171717]">
-            <h2 className="text-xl font-bold text-slate-950 dark:text-white">{t("adminRoles.assignedScopes")}</h2>
+          <section className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-foreground">{t("adminRoles.assignedScopes")}</h2>
             <div className="mt-5 space-y-4">
               {scopeSummary.map(({ admin, scopes }) => (
-                <div key={admin.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-sm font-semibold text-slate-950 dark:text-white">
+                <div key={admin.id} className="rounded-3xl border border-border bg-background-secondary p-4">
+                  <p className="text-sm font-semibold text-foreground">
                     {locale === "ar" ? admin.fullNameAr : admin.fullNameEn ?? admin.fullNameAr}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {scopes.length === 0 ? (
-                      <span className="text-sm text-slate-500 dark:text-slate-400">—</span>
+                      <span className="text-sm text-foreground-muted">—</span>
                     ) : (
                       scopes.map((scope) => (
                         <span
                           key={`${scope.userId}-${scope.branchId}`}
-                          className="rounded-full bg-[#D8261C]/10 px-3 py-1 text-xs font-semibold text-[#D8261C]"
+                          className="bg-accent/10 text-accent rounded-full px-3 py-1 text-xs font-semibold"
                         >
                           {locale === "ar" ? scope.branchNameAr : scope.branchNameEn}
                         </span>
