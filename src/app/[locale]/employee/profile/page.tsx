@@ -83,50 +83,53 @@ export default async function EmployeeProfilePage({
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[32px] bg-[#121212] p-8 text-white shadow-2xl shadow-black/20">
-        <h1 className="text-4xl font-black">{t("employeeProfile.title")}</h1>
-        <p className="mt-4 max-w-3xl text-base leading-8 text-white/75">{t("employeeProfile.subtitle")}</p>
+      <section className="gradient-hero relative overflow-hidden rounded-[32px] p-8 text-white shadow-2xl shadow-primary/20">
+        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="relative">
+          <h1 className="text-4xl font-black">{t("employeeProfile.title")}</h1>
+          <p className="mt-4 max-w-3xl text-base leading-8 text-white/85">{t("employeeProfile.subtitle")}</p>
+        </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => (
           <article
             key={card.label}
-            className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171717]"
+            className="rounded-[28px] border border-border bg-surface p-6 shadow-sm"
           >
-            <p className="text-sm text-slate-600 dark:text-slate-300">{card.label}</p>
-            <p className="mt-3 text-3xl font-black text-slate-950 dark:text-white">{card.value}</p>
+            <p className="text-sm text-foreground-muted">{card.label}</p>
+            <p className="mt-3 text-3xl font-black text-foreground">{card.value}</p>
           </article>
         ))}
       </section>
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-[#171717]">
+      <section className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
         <div className="flex flex-wrap gap-3">
           <ActionDialog triggerLabel={t("employeeProfile.leaveDialog")} title={t("employeeProfile.leaveDialog")}>
             <form action={createLeaveRequestAction} className="grid gap-4">
               <input type="hidden" name="locale" value={locale} />
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.leaveType")}</span>
-                <select name="leaveType" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.leaveType")}</span>
+                <select name="leaveType" className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground">
                   <option value="ANNUAL">Annual</option>
                   <option value="SICK">Sick</option>
                 </select>
               </label>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.startDate")}</span>
-                  <input type="date" name="startDate" required className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                  <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.startDate")}</span>
+                  <input type="date" name="startDate" required className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.endDate")}</span>
-                  <input type="date" name="endDate" required className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                  <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.endDate")}</span>
+                  <input type="date" name="endDate" required className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
                 </label>
               </div>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.reason")}</span>
-                <textarea name="reason" rows={4} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.reason")}</span>
+                <textarea name="reason" rows={4} className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
               </label>
-              <button type="submit" className="rounded-2xl bg-[#D8261C] px-4 py-3 text-sm font-semibold text-white">{t("employeeProfile.submit")}</button>
+              <button type="submit" className="rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{t("employeeProfile.submit")}</button>
             </form>
           </ActionDialog>
 
@@ -134,12 +137,12 @@ export default async function EmployeeProfilePage({
             <form action={createExceptionRequestAction} className="grid gap-4">
               <input type="hidden" name="locale" value={locale} />
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.workDate")}</span>
-                <input type="date" name="workDate" required className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.workDate")}</span>
+                <input type="date" name="workDate" required className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.exceptionType")}</span>
-                <select name="exceptionType" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.exceptionType")}</span>
+                <select name="exceptionType" className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground">
                   <option value="FORGOT_CHECK_IN">Forgot check-in</option>
                   <option value="FORGOT_CHECK_OUT">Forgot check-out</option>
                   <option value="DEVICE_ISSUE">Device issue</option>
@@ -150,19 +153,19 @@ export default async function EmployeeProfilePage({
               </label>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.requestedCheckIn")}</span>
-                  <input type="datetime-local" name="requestedCheckIn" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                  <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.requestedCheckIn")}</span>
+                  <input type="datetime-local" name="requestedCheckIn" className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.requestedCheckOut")}</span>
-                  <input type="datetime-local" name="requestedCheckOut" className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                  <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.requestedCheckOut")}</span>
+                  <input type="datetime-local" name="requestedCheckOut" className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
                 </label>
               </div>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.description")}</span>
-                <textarea name="description" rows={4} required className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.description")}</span>
+                <textarea name="description" rows={4} required className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
               </label>
-              <button type="submit" className="rounded-2xl bg-[#D8261C] px-4 py-3 text-sm font-semibold text-white">{t("employeeProfile.submit")}</button>
+              <button type="submit" className="rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{t("employeeProfile.submit")}</button>
             </form>
           </ActionDialog>
 
@@ -170,14 +173,14 @@ export default async function EmployeeProfilePage({
             <form action={justifyMissedDayAction} className="grid gap-4">
               <input type="hidden" name="locale" value={locale} />
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.workDate")}</span>
-                <input type="date" name="workDate" required className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.workDate")}</span>
+                <input type="date" name="workDate" required className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("employeeProfile.description")}</span>
-                <textarea name="description" rows={4} required className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5" />
+                <span className="mb-2 block text-sm font-medium text-foreground">{t("employeeProfile.description")}</span>
+                <textarea name="description" rows={4} required className="w-full rounded-2xl border border-border bg-background-secondary px-4 py-3 text-foreground" />
               </label>
-              <button type="submit" className="rounded-2xl bg-[#D8261C] px-4 py-3 text-sm font-semibold text-white">{t("employeeProfile.submit")}</button>
+              <button type="submit" className="rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">{t("employeeProfile.submit")}</button>
             </form>
           </ActionDialog>
         </div>
