@@ -1,23 +1,85 @@
 @import "tailwindcss";
 
+/* 🔑 الإصلاح الحرج: تفعيل dark mode بناءً على الـ class بدلاً من OS */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: rgba(255, 255, 255, 0.92);
-  --border: rgba(148, 163, 184, 0.22);
-  --muted: #64748b;
-  --primary: #d8261c;
+
+  /* الخلفيات */
+  --background: #fafafa;
+  --background-secondary: #f4f4f5;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+
+  /* النصوص */
+  --foreground: #18181b;
+  --foreground-muted: #71717a;
+  --foreground-subtle: #a1a1aa;
+
+  /* الحدود */
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+
+  /* الألوان الأساسية - أحمر + برتقالي */
+  --primary: #e63946;
+  --primary-hover: #d12836;
+  --primary-foreground: #ffffff;
+
+  --accent: #ff7a00;
+  --accent-hover: #e86d00;
+  --accent-foreground: #ffffff;
+
+  /* تدرج الهيرو */
+  --gradient-hero: linear-gradient(135deg, #e63946 0%, #ff7a00 100%);
+
+  /* حالات */
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #dc2626;
 }
 
 .dark {
   color-scheme: dark;
-  --background: #121212;
-  --foreground: #f8fafc;
-  --card: rgba(23, 23, 23, 0.9);
-  --border: rgba(255, 255, 255, 0.1);
-  --muted: #94a3b8;
-  --primary: #d8261c;
+
+  --background: #0a0a0b;
+  --background-secondary: #121214;
+  --surface: #18181b;
+  --surface-elevated: #1f1f23;
+
+  --foreground: #fafafa;
+  --foreground-muted: #a1a1aa;
+  --foreground-subtle: #71717a;
+
+  --border: #27272a;
+  --border-strong: #3f3f46;
+
+  --primary: #ff4d5e;
+  --primary-hover: #ff6472;
+  --primary-foreground: #ffffff;
+
+  --accent: #ff8c33;
+  --accent-hover: #ffa052;
+  --accent-foreground: #0a0a0b;
+
+  --gradient-hero: linear-gradient(135deg, #ff4d5e 0%, #ff8c33 100%);
+
+  --success: #22c55e;
+  --warning: #fbbf24;
+  --danger: #ef4444;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
 }
 
 * {
@@ -37,10 +99,11 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 ::selection {
-  background: rgba(216, 38, 28, 0.2);
+  background: rgba(230, 57, 70, 0.25);
 }
 
 input,
@@ -53,6 +116,12 @@ button {
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
+  filter: var(--calendar-filter, none);
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
 ::-webkit-scrollbar {
@@ -61,10 +130,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: var(--border-strong);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Utility classes للتدرج */
+.gradient-hero {
+  background: var(--gradient-hero);
 }
