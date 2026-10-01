@@ -3,7 +3,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { ensureSeedData } from "@/db/seed";
+import { ensureDemoLoginUser, ensureSeedData } from "@/db/seed";
 import { eq } from "drizzle-orm";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -22,6 +22,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       authorize: async (credentials) => {
         await ensureSeedData();
+        await ensureDemoLoginUser();
 
         const phone = String(credentials?.phone ?? "").trim();
         const password = String(credentials?.password ?? "");
