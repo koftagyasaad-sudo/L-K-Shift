@@ -40,12 +40,12 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
   function Brand() {
     return (
       <Link href="/" locale={locale} className="flex items-center gap-3">
-        <div className="gradient-hero flex h-11 w-11 items-center justify-center rounded-2xl text-lg font-black text-white shadow-lg">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-lg font-black text-white backdrop-blur-sm">
           LK
         </div>
         <div>
-          <p className="text-base font-bold text-foreground">L&amp;K Shift</p>
-          <p className="text-xs text-foreground-muted">Workforce Hub</p>
+          <p className="text-base font-bold text-white">L&amp;K Shift</p>
+          <p className="text-xs text-white/80">Workforce Hub</p>
         </div>
       </Link>
     );
@@ -65,7 +65,7 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30"
+                  ? "bg-accent text-accent-foreground shadow-lg shadow-accent/30"
                   : "text-foreground-muted hover:bg-background-secondary hover:text-foreground"
               }`}
             >
@@ -99,18 +99,16 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
 
   return (
     <>
-      {/* Sidebar ثابت على الديسكتوب */}
-      <aside
-        className={`sticky top-0 hidden h-screen w-72 flex-col bg-surface ${borderSide} border-border lg:flex`}
-      >
-        <div className="border-b border-border px-6 py-5">
+      <aside className={`sticky top-0 hidden h-screen w-72 flex-col bg-surface ${borderSide} border-border lg:flex`}>
+        <div className="gradient-hero px-6 py-6">
           <Brand />
         </div>
-        <NavLinks />
-        <LogoutButton />
+        <div className="sidebar-glow flex flex-1 flex-col">
+          <NavLinks />
+          <LogoutButton />
+        </div>
       </aside>
 
-      {/* زر فتح القائمة على الموبايل */}
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
@@ -121,38 +119,27 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         <Menu className="h-5 w-5 text-foreground" />
       </button>
 
-      {/* الخلفية المعتمة + القائمة المنسدلة على الموبايل */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       <aside
         className={`fixed top-0 z-50 flex h-screen w-72 flex-col bg-surface ${borderSide} border-border transition-transform duration-300 lg:hidden ${
           isRtl
-            ? mobileOpen
-              ? "right-0 translate-x-0"
-              : "right-0 translate-x-full"
-            : mobileOpen
-              ? "left-0 translate-x-0"
-              : "left-0 -translate-x-full"
+            ? mobileOpen ? "right-0 translate-x-0" : "right-0 translate-x-full"
+            : mobileOpen ? "left-0 translate-x-0" : "left-0 -translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
+        <div className="gradient-hero flex items-center justify-between gap-3 px-6 py-6">
           <Brand />
-          <button
-            type="button"
-            onClick={() => setMobileOpen(false)}
-            className="rounded-full p-2 hover:bg-background-secondary"
-            aria-label="Close menu"
-          >
-            <X className="h-5 w-5 text-foreground" />
+          <button type="button" onClick={() => setMobileOpen(false)} className="rounded-full p-2 text-white hover:bg-white/10" aria-label="Close menu">
+            <X className="h-5 w-5" />
           </button>
         </div>
-        <NavLinks onNavigate={() => setMobileOpen(false)} />
-        <LogoutButton onNavigate={() => setMobileOpen(false)} />
+        <div className="sidebar-glow flex flex-1 flex-col">
+          <NavLinks onNavigate={() => setMobileOpen(false)} />
+          <LogoutButton onNavigate={() => setMobileOpen(false)} />
+        </div>
       </aside>
     </>
   );
