@@ -9,6 +9,7 @@
   --surface: #ffffff;
   --foreground: #18181b;
   --foreground-muted: #71717a;
+  --foreground-subtle: #a1a1aa;
   --border: #e4e4e7;
   --border-strong: #d4d4d8;
   --primary: #e63946;
@@ -28,6 +29,7 @@
   --surface: #18181b;
   --foreground: #fafafa;
   --foreground-muted: #a1a1aa;
+  --foreground-subtle: #71717a;
   --border: #27272a;
   --border-strong: #3f3f46;
   --primary: #ff4d5e;
@@ -46,6 +48,7 @@
   --color-surface: var(--surface);
   --color-foreground: var(--foreground);
   --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
@@ -114,4 +117,12 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 
 .gradient-hero {
   background: var(--gradient-hero);
+}
+
+.sidebar-glow {
+  background: linear-gradient(180deg, rgba(230, 57, 70, 0.07) 0%, transparent 55%);
+}
+
+.dark .sidebar-glow {
+  background: linear-gradient(180deg, rgba(255, 77, 94, 0.1) 0%, transparent 55%);
 }
