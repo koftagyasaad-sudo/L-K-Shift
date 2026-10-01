@@ -1,10 +1,11 @@
 import { NextIntlClientProvider } from "next-intl";
-import { getMessages, setRequestLocale } from "next-intl/server";
+import { getMessages, setRequestLocale, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { AppProviders } from "@/components/providers/app-providers";
 import { GlobalHeader } from "@/components/layout/global-header";
+import { Sidebar } from "@/components/layout/sidebar";
 import { isValidLocale, routing } from "@/i18n/routing";
 
 export function generateStaticParams() {
@@ -26,14 +27,38 @@ export default async function LocaleLayout({
 
   setRequestLocale(locale);
 
-  const [messages, session] = await Promise.all([getMessages(), auth()]);
+  const [messages, session, t] = await Promise.all([
+    getMessages(),
+    auth(),
+    getTranslations("header"),
+  ]);
+
+  const typedLocale = locale as "ar" | "en";
+  const dir = typedLocale === "ar" ? "rtl" : "ltr";
+  const logoutLabel = typedLocale === "ar" ? "تسجيل الخروج" : "Logout";
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <AppProviders session={session}>
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(216,38,28,0.16),_transparent_32%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_40%,_#f8fafc_100%)] text-slate-950 dark:bg-[radial-gradient(circle_at_top,_rgba(216,38,28,0.24),_transparent_28%),linear-gradient(180deg,_#09090b_0%,_#121212_45%,_#0b1120_100%)] dark:text-white">
-          <GlobalHeader locale={locale as "ar" | "en"} />
-          <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+        <div dir={dir} className="flex min-h-screen bg-background text-foreground">
+          <Sidebar
+            locale={typedLocale}
+            isSuperAdmin={session?.user?.systemRole === "SUPER_ADMIN"}
+            isAuthenticated={Boolean(session?.user)}
+            labels={{
+              overview: t("overview"),
+              adminRoles: t("adminRoles"),
+              employeeProfile: t("employeeProfile"),
+              logout: logoutLabel,
+            }}
+          />
+
+          <div className="flex min-h-screen flex-1 flex-col">
+            <GlobalHeader locale={typedLocale} />
+            <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+              {children}
+            </main>
+          </div>
         </div>
       </AppProviders>
     </NextIntlClientProvider>
