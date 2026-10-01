@@ -35,20 +35,25 @@ export function ActionDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-2xl bg-[#D8261C] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[#D8261C]/30 transition hover:bg-[#bb2319]"
+        className="rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover"
       >
         {triggerLabel}
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className={cn("w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#171717]", className)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div
+            className={cn(
+              "w-full max-w-2xl rounded-[28px] border border-border bg-surface p-6 shadow-2xl",
+              className,
+            )}
+          >
             <div className="flex items-center justify-between gap-4">
-              <h3 className="text-xl font-bold text-slate-950 dark:text-white">{title}</h3>
+              <h3 className="text-xl font-bold text-foreground">{title}</h3>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-full border border-slate-200 p-2 text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-white/10"
+                className="rounded-full border border-border p-2 text-foreground-muted transition hover:bg-background-secondary hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
