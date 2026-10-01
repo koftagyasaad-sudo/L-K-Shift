@@ -12,16 +12,22 @@ export function ThemeSwitcher() {
     setMounted(true);
   }, []);
 
-  const isDark = mounted && resolvedTheme === "dark";
+  if (!mounted) {
+    return (
+      <div className="h-[38px] w-[88px] rounded-full border border-border bg-surface" />
+    );
+  }
+
+  const isDark = resolvedTheme === "dark";
 
   return (
     <button
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/15"
+      className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground transition hover:bg-background-secondary"
       aria-label="Toggle theme"
     >
-      {isDark ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
+      {isDark ? <SunMedium className="h-4 w-4 text-accent" /> : <MoonStar className="h-4 w-4 text-primary" />}
       <span>{isDark ? "Light" : "Dark"}</span>
     </button>
   );
