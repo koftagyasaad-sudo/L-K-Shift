@@ -1,3 +1,4 @@
+// src/components/layout/theme-switcher.tsx
 "use client";
 
 import { MoonStar, SunMedium } from "lucide-react";
@@ -13,9 +14,7 @@ export function ThemeSwitcher() {
   }, []);
 
   if (!mounted) {
-    return (
-      <div className="h-[38px] w-[88px] rounded-full border border-border bg-surface" />
-    );
+    return <div className="h-9 w-9 rounded-full border border-border bg-surface" />;
   }
 
   const isDark = resolvedTheme === "dark";
@@ -24,11 +23,15 @@ export function ThemeSwitcher() {
     <button
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground transition hover:bg-background-secondary"
-      aria-label="Toggle theme"
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground transition hover:bg-background-secondary active:scale-95"
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Light mode" : "Dark mode"}
     >
-      {isDark ? <SunMedium className="h-4 w-4 text-accent" /> : <MoonStar className="h-4 w-4 text-primary" />}
-      <span>{isDark ? "Light" : "Dark"}</span>
+      {isDark ? (
+        <SunMedium className="h-4 w-4 text-accent" />
+      ) : (
+        <MoonStar className="h-4 w-4 text-primary" />
+      )}
     </button>
   );
 }
