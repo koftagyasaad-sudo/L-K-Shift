@@ -1,9 +1,20 @@
+// src/components/layout/sidebar.tsx
 "use client";
 
 import { Link, usePathname } from "@/i18n/navigation";
-import { LayoutDashboard, Shield, UserCircle, LogOut, Menu, X } from "lucide-react";
+import {
+  LayoutDashboard,
+  Shield,
+  UserCircle,
+  LogOut,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
+import { useSidebarStore } from "@/stores/sidebar-store";
 
 type NavItem = {
   href: string;
@@ -26,6 +37,8 @@ type SidebarProps = {
 export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const collapsed = useSidebarStore((state) => state.collapsed);
+  const toggleCollapsed = useSidebarStore((state) => state.toggle);
   const isRtl = locale === "ar";
   const borderSide = isRtl ? "border-l" : "border-r";
 
@@ -37,23 +50,38 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
       : []),
   ];
 
-  function Brand() {
+  // اتجاه السهم: دايمًا بيشاور ناحية الحافة اللي هيتقفل عليها الشريط
+  const CollapseIcon = isRtl
+    ? collapsed
+      ? ChevronLeft
+      : ChevronRight
+    : collapsed
+      ? ChevronRight
+      : ChevronLeft;
+
+  function Brand({ showText }: { showText: boolean }) {
     return (
-      <Link href="/" locale={locale} className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-lg font-black text-white backdrop-blur-sm">
+      <Link
+        href="/"
+        locale={locale}
+        className={`flex items-center gap-3 ${showText ? "" : "justify-center"}`}
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-lg font-black text-white backdrop-blur-sm">
           LK
         </div>
-        <div>
-          <p className="text-base font-bold text-white">L&amp;K Shift</p>
-          <p className="text-xs text-white/80">Workforce Hub</p>
-        </div>
+        {showText ? (
+          <div>
+            <p className="text-base font-bold text-white">L&amp;K Shift</p>
+            <p className="text-xs text-white/80">Workforce Hub</p>
+          </div>
+        ) : null}
       </Link>
     );
   }
 
-  function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  function NavLinks({ onNavigate, showLabels }: { onNavigate?: () => void; showLabels: boolean }) {
     return (
-      <nav className="flex-1 space-y-1 overflow-y-auto px-4 py-6">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-6">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
@@ -63,14 +91,17 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
               href={item.href}
               locale={locale}
               onClick={onNavigate}
+              title={!showLabels ? item.label : undefined}
               className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                showLabels ? "" : "justify-center"
+              } ${
                 isActive
                   ? "bg-accent text-accent-foreground shadow-lg shadow-accent/30"
                   : "text-foreground-muted hover:bg-background-secondary hover:text-foreground"
               }`}
             >
-              <Icon className="h-5 w-5" />
-              <span>{item.label}</span>
+              <Icon className="h-5 w-5 shrink-0" />
+              {showLabels ? <span>{item.label}</span> : null}
             </Link>
           );
         })}
@@ -78,20 +109,23 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
     );
   }
 
-  function LogoutButton({ onNavigate }: { onNavigate?: () => void }) {
+  function LogoutButton({ onNavigate, showLabels }: { onNavigate?: () => void; showLabels: boolean }) {
     if (!isAuthenticated) return null;
     return (
-      <div className="border-t border-border p-4">
+      <div className="border-t border-border p-3">
         <button
           type="button"
           onClick={() => {
             onNavigate?.();
             signOut({ callbackUrl: `/${locale}/login` });
           }}
-          className="text-danger hover:bg-danger/10 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition"
+          title={!showLabels ? labels.logout : undefined}
+          className={`text-danger hover:bg-danger/10 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
+            showLabels ? "" : "justify-center"
+          }`}
         >
-          <LogOut className="h-5 w-5" />
-          <span>{labels.logout}</span>
+          <LogOut className="h-5 w-5 shrink-0" />
+          {showLabels ? <span>{labels.logout}</span> : null}
         </button>
       </div>
     );
@@ -99,16 +133,38 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
 
   return (
     <>
-      <aside className={`sticky top-0 hidden h-screen w-72 flex-col bg-surface ${borderSide} border-border lg:flex`}>
-        <div className="gradient-hero px-6 py-6">
-          <Brand />
+      {/* Desktop Sidebar */}
+      <aside
+        className={`sticky top-0 relative hidden h-screen flex-col bg-surface ${borderSide} border-border transition-all duration-300 lg:flex ${
+          collapsed ? "w-20" : "w-72"
+        }`}
+      >
+        <div
+          className={`gradient-hero flex items-center px-4 py-6 ${
+            collapsed ? "justify-center px-2" : ""
+          }`}
+        >
+          <Brand showText={!collapsed} />
         </div>
+
+        {/* زرار الطي / الفتح */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="absolute top-9 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-foreground-muted shadow-md transition hover:text-foreground"
+          style={{ [isRtl ? "left" : "right"]: "-0.875rem" }}
+        >
+          <CollapseIcon className="h-4 w-4" />
+        </button>
+
         <div className="sidebar-glow flex flex-1 flex-col">
-          <NavLinks />
-          <LogoutButton />
+          <NavLinks showLabels={!collapsed} />
+          <LogoutButton showLabels={!collapsed} />
         </div>
       </aside>
 
+      {/* Mobile toggle button */}
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
@@ -123,22 +179,32 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
+      {/* Mobile Drawer (مفيهاش collapse — بيفتح كامل دايمًا) */}
       <aside
         className={`fixed top-0 z-50 flex h-screen w-72 flex-col bg-surface ${borderSide} border-border transition-transform duration-300 lg:hidden ${
           isRtl
-            ? mobileOpen ? "right-0 translate-x-0" : "right-0 translate-x-full"
-            : mobileOpen ? "left-0 translate-x-0" : "left-0 -translate-x-full"
+            ? mobileOpen
+              ? "right-0 translate-x-0"
+              : "right-0 translate-x-full"
+            : mobileOpen
+              ? "left-0 translate-x-0"
+              : "left-0 -translate-x-full"
         }`}
       >
         <div className="gradient-hero flex items-center justify-between gap-3 px-6 py-6">
-          <Brand />
-          <button type="button" onClick={() => setMobileOpen(false)} className="rounded-full p-2 text-white hover:bg-white/10" aria-label="Close menu">
+          <Brand showText />
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="rounded-full p-2 text-white hover:bg-white/10"
+            aria-label="Close menu"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="sidebar-glow flex flex-1 flex-col">
-          <NavLinks onNavigate={() => setMobileOpen(false)} />
-          <LogoutButton onNavigate={() => setMobileOpen(false)} />
+          <NavLinks onNavigate={() => setMobileOpen(false)} showLabels />
+          <LogoutButton onNavigate={() => setMobileOpen(false)} showLabels />
         </div>
       </aside>
     </>
