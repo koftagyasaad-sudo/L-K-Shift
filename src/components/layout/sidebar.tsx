@@ -11,6 +11,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
@@ -30,6 +31,7 @@ type SidebarProps = {
     overview: string;
     adminRoles: string;
     employeeProfile: string;
+    manageEmployees: string;
     logout: string;
   };
 };
@@ -44,13 +46,17 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
 
   const navItems: NavItem[] = [
     { href: "/", label: labels.overview, icon: LayoutDashboard },
-    ...(isSuperAdmin ? [{ href: "/admin/roles", label: labels.adminRoles, icon: Shield }] : []),
+    ...(isSuperAdmin
+      ? [
+          { href: "/admin/employees", label: labels.manageEmployees, icon: Users },
+          { href: "/admin/roles", label: labels.adminRoles, icon: Shield },
+        ]
+      : []),
     ...(isAuthenticated
       ? [{ href: "/employee/profile", label: labels.employeeProfile, icon: UserCircle }]
       : []),
   ];
 
-  // اتجاه السهم: دايمًا بيشاور ناحية الحافة اللي هيتقفل عليها الشريط
   const CollapseIcon = isRtl
     ? collapsed
       ? ChevronLeft
@@ -133,7 +139,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
 
   return (
     <>
-      {/* Desktop Sidebar */}
       <aside
         className={`sticky top-0 relative hidden h-screen flex-col bg-surface ${borderSide} border-border transition-all duration-300 lg:flex ${
           collapsed ? "w-20" : "w-72"
@@ -147,7 +152,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
           <Brand showText={!collapsed} />
         </div>
 
-        {/* زرار الطي / الفتح */}
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -164,7 +168,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         </div>
       </aside>
 
-      {/* Mobile toggle button */}
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
@@ -179,7 +182,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Mobile Drawer (مفيهاش collapse — بيفتح كامل دايمًا) */}
       <aside
         className={`fixed top-0 z-50 flex h-screen w-72 flex-col bg-surface ${borderSide} border-border transition-transform duration-300 lg:hidden ${
           isRtl
