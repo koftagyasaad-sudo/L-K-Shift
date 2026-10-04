@@ -7,10 +7,13 @@ import { EmployeeForm } from "@/components/admin/employee-form";
 
 export default async function NewEmployeePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ branchId?: string }>;
 }) {
   const { locale } = await params;
+  const { branchId } = await searchParams;
   const typedLocale = locale as "ar" | "en";
   const isAr = typedLocale === "ar";
   const session = await auth();
@@ -34,7 +37,12 @@ export default async function NewEmployeePage({
       </div>
 
       <div className="rounded-[24px] border border-border bg-surface p-6 shadow-sm">
-        <EmployeeForm locale={typedLocale} branches={allBranches} mode="create" />
+        <EmployeeForm
+          locale={typedLocale}
+          branches={allBranches}
+          mode="create"
+          initialValues={branchId ? { primaryBranchId: branchId } : undefined}
+        />
       </div>
     </div>
   );
