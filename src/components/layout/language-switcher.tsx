@@ -1,3 +1,4 @@
+// src/components/layout/language-switcher.tsx
 "use client";
 
 import { Languages } from "lucide-react";
@@ -14,11 +15,11 @@ export function LanguageSwitcher() {
     <button
       type="button"
       onClick={() => router.replace(pathname, { locale: nextLocale })}
-      className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground transition hover:bg-background-secondary"
-      aria-label="Switch language"
+      className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground transition hover:bg-background-secondary active:scale-95"
+      aria-label={locale === "ar" ? "Switch to English" : "التبديل إلى العربية"}
+      title={locale === "ar" ? "English" : "العربية"}
     >
       <Languages className="h-4 w-4 text-accent" />
-      <span>{locale === "ar" ? "EN" : "AR"}</span>
     </button>
   );
 }
