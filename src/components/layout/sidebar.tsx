@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
+import Image from "next/image";
 import { useSidebarStore } from "@/stores/sidebar-store";
 
 type NavItem = {
@@ -72,8 +73,8 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         locale={locale}
         className={`flex items-center gap-3 ${showText ? "" : "justify-center"}`}
       >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-lg font-black text-white backdrop-blur-sm">
-          LK
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 p-1.5 backdrop-blur-sm">
+          <Image src="/Logo.png" alt="L&K Shift" fill sizes="44px" className="object-contain p-1.5" priority />
         </div>
         {showText ? (
           <div>
