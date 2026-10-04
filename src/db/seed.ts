@@ -1,3 +1,4 @@
+// src/db/seed.ts
 import { hash } from "bcryptjs";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -350,10 +351,27 @@ export async function ensureSeedData() {
   });
 }
 
+/**
+ * يضمن وجود مستخدم الدخول الرئيسي (phone: 010 / password: 123)
+ * بصلاحية SUPER_ADMIN كاملة، باسم "admin" بدلاً من "Demo User".
+ * لو كان موجود بالفعل باسم قديم، يتم تحديث اسمه تلقائيًا.
+ */
 export async function ensureDemoLoginUser() {
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.phone, "010")).limit(1);
+  const existing = await db.select().from(users).where(eq(users.phone, "010")).limit(1);
 
   if (existing.length > 0) {
+    const current = existing[0];
+    // تحديث الاسم فقط لو لسه بالاسم القديم، عشان نضمن التوافق مع بيانات قديمة
+    if (current.fullNameEn !== "Admin" || current.fullNameAr !== "المدير العام") {
+      await db
+        .update(users)
+        .set({
+          fullNameAr: "المدير العام",
+          fullNameEn: "Admin",
+          jobRole: "System Administrator",
+        })
+        .where(eq(users.id, current.id));
+    }
     return;
   }
 
@@ -363,12 +381,12 @@ export async function ensureDemoLoginUser() {
   const passwordHash = await hash("123", 10);
 
   await db.insert(users).values({
-    fullNameAr: "مستخدم تجريبي",
-    fullNameEn: "Demo User",
+    fullNameAr: "المدير العام",
+    fullNameEn: "Admin",
     phone: "010",
     passwordHash,
     systemRole: "SUPER_ADMIN",
-    jobRole: "Demo Admin",
+    jobRole: "System Administrator",
     primaryBranchId,
     verificationMode: "MANUAL",
     hireDate: new Date(),
