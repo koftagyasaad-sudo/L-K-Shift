@@ -1,3 +1,4 @@
+// src/app/[locale]/(app)/layout.tsx
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
@@ -23,6 +24,7 @@ export default async function AppLayout({
   const typedLocale = locale as "ar" | "en";
   const dir = typedLocale === "ar" ? "rtl" : "ltr";
   const logoutLabel = typedLocale === "ar" ? "تسجيل الخروج" : "Logout";
+  const manageEmployeesLabel = typedLocale === "ar" ? "إدارة الموظفين" : "Manage Employees";
 
   return (
     <div dir={dir} className="flex min-h-screen bg-background text-foreground">
@@ -34,6 +36,7 @@ export default async function AppLayout({
           overview: t("overview"),
           adminRoles: t("adminRoles"),
           employeeProfile: t("employeeProfile"),
+          manageEmployees: manageEmployeesLabel,
           logout: logoutLabel,
         }}
       />
