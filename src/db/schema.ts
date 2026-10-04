@@ -1,3 +1,4 @@
+// src/db/schema.ts
 import {
   boolean,
   date,
@@ -45,6 +46,13 @@ export const exceptionTypeEnum = pgEnum("exception_type", [
   "OTHER",
 ]);
 
+// 🆕 نوع إدارة جديد: مستخدم عادي / مدير فرع / مدير منطقة
+export const managementRoleEnum = pgEnum("management_role", [
+  "NONE",
+  "BRANCH_MANAGER",
+  "AREA_MANAGER",
+]);
+
 const createdAt = timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = timestamp("updated_at", { withTimezone: true })
   .defaultNow()
@@ -74,6 +82,12 @@ export const users = pgTable("users", {
   fullNameEn: text("full_name_en"),
   phone: text("phone").notNull().unique(),
   nationalId: text("national_id").unique(),
+  // 🆕 حقول جديدة
+  address: text("address"),
+  governorate: text("governorate"),
+  employeeNumber: text("employee_number").unique(),
+  managementRole: managementRoleEnum("management_role").default("NONE").notNull(),
+  // نهاية الحقول الجديدة
   passwordHash: text("password_hash").notNull(),
   systemRole: userRoleEnum("system_role").default("EMPLOYEE").notNull(),
   jobRole: text("job_role").notNull(),
@@ -303,6 +317,7 @@ export type AttendanceStatus = typeof attendanceStatusEnum.enumValues[number];
 export type CheckMethod = typeof checkMethodEnum.enumValues[number];
 export type LeaveStatus = typeof leaveStatusEnum.enumValues[number];
 export type ExceptionType = typeof exceptionTypeEnum.enumValues[number];
+export type ManagementRole = typeof managementRoleEnum.enumValues[number];
 
 export type Branch = typeof branches.$inferSelect;
 export type NewBranch = typeof branches.$inferInsert;
