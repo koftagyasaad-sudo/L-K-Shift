@@ -21,40 +21,53 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       authorize: async (credentials) => {
-        await ensureSeedData();
-        await ensureDemoLoginUser();
+        try {
+          await ensureSeedData();
+          await ensureDemoLoginUser();
 
-        const phone = String(credentials?.phone ?? "").trim();
-        const password = String(credentials?.password ?? "");
+          const phone = String(credentials?.phone ?? "").trim();
+          const password = String(credentials?.password ?? "");
 
-        if (!phone || !password) {
+          if (!phone || !password) {
+            console.error("[AUTH] Missing phone or password");
+            return null;
+          }
+
+          const record = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+          const user = record[0];
+
+          if (!user) {
+            console.error(`[AUTH] No user found with phone: ${phone}`);
+            return null;
+          }
+
+          if (!user.isActive) {
+            console.error(`[AUTH] User is inactive: ${phone}`);
+            return null;
+          }
+
+          const isValid = await compare(password, user.passwordHash);
+
+          if (!isValid) {
+            console.error(`[AUTH] Invalid password for phone: ${phone}`);
+            return null;
+          }
+
+          await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+
+          return {
+            id: String(user.id),
+            name: user.fullNameEn ?? user.fullNameAr,
+            phone: user.phone,
+            fullNameAr: user.fullNameAr,
+            fullNameEn: user.fullNameEn,
+            systemRole: user.systemRole,
+            primaryBranchId: user.primaryBranchId,
+          };
+        } catch (error) {
+          console.error("[AUTH_CRITICAL_ERROR]", error);
           return null;
         }
-
-        const record = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
-        const user = record[0];
-
-        if (!user || !user.isActive) {
-          return null;
-        }
-
-        const isValid = await compare(password, user.passwordHash);
-
-        if (!isValid) {
-          return null;
-        }
-
-        await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
-
-        return {
-          id: String(user.id),
-          name: user.fullNameEn ?? user.fullNameAr,
-          phone: user.phone,
-          fullNameAr: user.fullNameAr,
-          fullNameEn: user.fullNameEn,
-          systemRole: user.systemRole,
-          primaryBranchId: user.primaryBranchId,
-        };
       },
     }),
   ],
