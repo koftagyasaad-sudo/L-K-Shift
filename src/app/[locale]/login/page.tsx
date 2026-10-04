@@ -1,11 +1,13 @@
 "use client";
 
-import { Lock, Phone, Loader2 } from "lucide-react";
+import { Lock, Phone, Loader2, Eye, EyeOff, Fingerprint } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { useLocale } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+
+const REMEMBER_KEY = "lk-shift-remembered-phone";
 
 export default function LoginPage() {
   const locale = useLocale();
@@ -13,6 +15,8 @@ export default function LoginPage() {
   const { status } = useSession();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const isRtl = locale === "ar";
 
@@ -21,6 +25,14 @@ export default function LoginPage() {
       router.push("/");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    const savedPhone = typeof window !== "undefined" ? localStorage.getItem(REMEMBER_KEY) : null;
+    if (savedPhone) {
+      setPhone(savedPhone);
+      setRememberMe(true);
+    }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,9 +46,17 @@ export default function LoginPage() {
     });
 
     if (!result || result.error) {
-      toast.error(isRtl ? "رقم الهاتف أو كلمة المرور غير صحيحة" : "Invalid phone or password");
+      toast.error(isRtl ? "بيانات الدخول غير صحيحة" : "Invalid login credentials");
       setLoading(false);
       return;
+    }
+
+    if (typeof window !== "undefined") {
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_KEY, phone.trim());
+      } else {
+        localStorage.removeItem(REMEMBER_KEY);
+      }
     }
 
     toast.success(isRtl ? "تم تسجيل الدخول بنجاح" : "Signed in successfully");
@@ -45,96 +65,116 @@ export default function LoginPage() {
   }
 
   return (
-    <div dir={isRtl ? "rtl" : "ltr"} className="flex min-h-screen bg-background">
-      <div className="gradient-hero relative hidden flex-1 flex-col justify-between overflow-hidden p-12 text-white lg:flex">
-        <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-black/10 blur-3xl" />
+    <div
+      dir={isRtl ? "rtl" : "ltr"}
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-white via-orange-50 to-orange-100 px-4 py-10"
+    >
+      {/* زخرفة خلفية خفيفة */}
+      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-300/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-orange-400/20 blur-3xl" />
 
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 text-2xl font-black backdrop-blur-sm">
-            LK
-          </div>
-          <div>
-            <p className="text-xl font-bold">L&amp;K Shift</p>
-            <p className="text-sm text-white/80">Workforce Hub</p>
-          </div>
-        </div>
+      <div className="relative w-full max-w-md">
+        <div className="overflow-hidden rounded-[28px] border border-orange-100 bg-white/90 shadow-2xl shadow-orange-900/10 backdrop-blur-sm">
+          {/* شريط علوي رفيع بالتدرج البرتقالي */}
+          <div className="h-1.5 w-full bg-gradient-to-r from-orange-400 via-orange-500 to-red-500" />
 
-        <div className="relative max-w-md">
-          <h2 className="text-4xl font-black leading-tight">
-            {isRtl ? "نظام إدارة الحضور والموارد البشرية" : "Attendance & HR Management System"}
-          </h2>
-          <p className="mt-4 text-base leading-7 text-white/85">
-            {isRtl
-              ? "منصة موحدة لإدارة حضور الموظفين والفروع والطلبات في مكان واحد."
-              : "One unified platform to manage employee attendance, branches, and requests."}
-          </p>
-        </div>
+          <div className="px-8 pb-8 pt-10 sm:px-10">
+            {/* اللوجو */}
+            <div className="flex flex-col items-center text-center">
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 shadow-lg shadow-orange-500/40">
+                <Fingerprint className="h-8 w-8 text-white" strokeWidth={2} />
+              </div>
 
-        <p className="relative text-xs text-white/60">© {new Date().getFullYear()} Lion Broast &amp; Koftagi</p>
-      </div>
-
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 text-center lg:hidden">
-            <div className="gradient-hero mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-xl font-black text-white shadow-lg shadow-primary/30">
-              LK
+              <h1 className="mt-4 text-xl font-black tracking-tight text-neutral-900">
+                L&amp;K <span className="text-orange-500">Shift</span>
+              </h1>
+              <p className="mt-1 text-sm font-semibold text-neutral-500">
+                {isRtl ? "نظام الموارد البشرية" : "Human Resources System"}
+              </p>
+              <p className="text-xs text-neutral-400">
+                {isRtl ? "للأسد والكفتجي" : "Lion Broast & Koftagi"}
+              </p>
             </div>
-            <p className="text-lg font-bold text-foreground">L&amp;K Shift</p>
+
+            {/* الفورم */}
+            <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-neutral-600">
+                  {isRtl ? "رقم الهاتف أو اسم المستخدم" : "Phone or Username"}
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 transition focus-within:border-orange-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+                  <Phone className="h-4 w-4 shrink-0 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    required
+                    autoComplete="username"
+                    placeholder={isRtl ? "أدخل رقم الهاتف" : "Enter phone number"}
+                    className="w-full bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400"
+                  />
+                </div>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold text-neutral-600">
+                  {isRtl ? "كلمة المرور" : "Password"}
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 transition focus-within:border-orange-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+                  <Lock className="h-4 w-4 shrink-0 text-neutral-400" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className="w-full bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="shrink-0 text-neutral-400 transition hover:text-orange-500"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-neutral-600">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 accent-orange-500"
+                />
+                {isRtl ? "تذكر بيانات دخولي" : "Remember my login"}
+              </label>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-orange-500/30 transition hover:from-orange-600 hover:to-red-600 disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{isRtl ? "جاري الدخول..." : "Signing in..."}</span>
+                  </>
+                ) : (
+                  <span>{isRtl ? "دخول" : "Sign in"}</span>
+                )}
+              </button>
+            </form>
           </div>
-
-          <h1 className="text-2xl font-bold text-foreground">{isRtl ? "تسجيل الدخول" : "Sign in"}</h1>
-          <p className="mt-2 text-sm text-foreground-muted">
-            {isRtl ? "أدخل بياناتك للوصول إلى لوحة التحكم" : "Enter your credentials to access the dashboard"}
-          </p>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-foreground">{isRtl ? "رقم الهاتف" : "Phone number"}</span>
-              <div className="flex items-center gap-2 rounded-2xl border border-border bg-background-secondary px-4 py-3 transition focus-within:border-accent">
-                <Phone className="h-4 w-4 text-foreground-muted" />
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  required
-                  autoComplete="tel"
-                  className="w-full bg-transparent text-foreground outline-none"
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-foreground">{isRtl ? "كلمة المرور" : "Password"}</span>
-              <div className="flex items-center gap-2 rounded-2xl border border-border bg-background-secondary px-4 py-3 transition focus-within:border-accent">
-                <Lock className="h-4 w-4 text-foreground-muted" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="w-full bg-transparent text-foreground outline-none"
-                />
-              </div>
-            </label>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-accent hover:bg-accent-hover flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-accent-foreground shadow-lg shadow-accent/30 transition disabled:opacity-60"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>{isRtl ? "جاري الدخول..." : "Signing in..."}</span>
-                </>
-              ) : (
-                <span>{isRtl ? "دخول" : "Sign in"}</span>
-              )}
-            </button>
-          </form>
         </div>
+
+        {/* التوقيع */}
+        <p className="mt-6 text-center text-[11px] font-medium text-neutral-400">
+          Powered by{" "}
+          <span className="font-semibold text-orange-500">Omar Abd Elhalim</span>
+        </p>
       </div>
     </div>
   );
