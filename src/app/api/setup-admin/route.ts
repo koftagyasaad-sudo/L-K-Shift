@@ -1,11 +1,9 @@
-// src/app/api/setup-admin/route.ts
 import { NextResponse } from "next/server";
-import { hash, compare } from "bcryptjs";
+import { hash } from "bcryptjs";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { branches, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { auditLogs, branches, customRoles, shiftTemplates, users } from "@/db/schema";
 
-// مفتاح سري بسيط مكتوب مباشرة هنا (مؤقت للإعداد فقط - يُحذف الملف بعد الانتهاء)
 const SETUP_KEY = "lk-setup-2024-fix";
 
 export async function GET(request: Request) {
@@ -22,142 +20,138 @@ export async function GET(request: Request) {
   const log: string[] = [];
 
   try {
-    // 1) تأكد من وجود الفروع الأربعة، أنشئها لو مش موجودة
-    const existingBranches = await db.select().from(branches);
-    log.push(`عدد الفروع الحالية: ${existingBranches.length}`);
+    // ==========================================================
+    // الخطوة 1: إضافة الأعمدة الناقصة يدويًا (بدون drizzle-kit)
+    // ==========================================================
+    log.push("🔧 جاري إصلاح بنية قاعدة البيانات...");
 
-    let managementBranchId: number | null = null;
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE "management_role" AS ENUM ('NONE', 'BRANCH_MANAGER', 'AREA_MANAGER');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    log.push("✅ تم التأكد من نوع management_role");
 
-    if (existingBranches.length === 0) {
-      const inserted = await db
-        .insert(branches)
-        .values([
-          {
-            nameAr: "الإدارة",
-            nameEn: "Management",
-            type: "HQ",
-            address: "كفر الشيخ، مصر",
-            latitude: 31.1107,
-            longitude: 30.9388,
-            geofenceRadius: 150,
-            qrSecretKey: "lk-management-secret",
-            qrRefreshSec: 60,
-            wifiSsid: "LK-MANAGEMENT",
-          },
-          {
-            nameAr: "بروست الأسد",
-            nameEn: "Lion Broast",
-            type: "BRANCH",
-            address: "كفر الشيخ، مصر",
-            latitude: 31.1107,
-            longitude: 30.9388,
-            geofenceRadius: 100,
-            qrSecretKey: "lion-broast-secret",
-            qrRefreshSec: 60,
-            wifiSsid: "LION-BROAST",
-          },
-          {
-            nameAr: "الكفتجي - دسوق",
-            nameEn: "Koftagi - Desouk",
-            type: "BRANCH",
-            address: "دسوق، كفر الشيخ، مصر",
-            latitude: 31.1316,
-            longitude: 30.644,
-            geofenceRadius: 100,
-            qrSecretKey: "koftagi-desouk-secret",
-            qrRefreshSec: 60,
-            wifiSsid: "KOFTAGI-DESOUK",
-          },
-          {
-            nameAr: "الكفتجي - كفر الشيخ",
-            nameEn: "Koftagi - Kafr El Sheikh",
-            type: "BRANCH",
-            address: "كفر الشيخ، مصر",
-            latitude: 31.1107,
-            longitude: 30.9388,
-            geofenceRadius: 100,
-            qrSecretKey: "koftagi-kafr-elsheikh-secret",
-            qrRefreshSec: 60,
-            wifiSsid: "KOFTAGI-KAFRELSHEIKH",
-          },
-        ])
-        .returning();
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "address" text;`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "governorate" text;`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "employee_number" text;`);
+    await db.execute(sql`
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "management_role" "management_role" DEFAULT 'NONE' NOT NULL;
+    `);
+    log.push("✅ تم إضافة الأعمدة الناقصة: address, governorate, employee_number, management_role");
 
-      managementBranchId = inserted.find((b) => b.nameEn === "Management")?.id ?? null;
-      log.push("✅ تم إنشاء الفروع الأربعة بنجاح");
-    } else {
-      const mgmt = existingBranches.find((b) => b.nameEn === "Management");
-      managementBranchId = mgmt?.id ?? existingBranches[0].id;
-      log.push("الفروع موجودة بالفعل، لم يتم إنشاء فروع جديدة");
-    }
+    // ==========================================================
+    // الخطوة 2: مسح كل البيانات القديمة بالكامل
+    // ==========================================================
+    log.push("🗑️ جاري مسح البيانات القديمة...");
 
-    // 2) تحقق من وجود يوزر admin
-    const existingAdmin = await db.select().from(users).where(eq(users.phone, "admin")).limit(1);
+    await db.delete(auditLogs);
+    await db.delete(users); // سيحذف تلقائيًا كل ما يرتبط بالمستخدمين (cascade)
+    await db.delete(shiftTemplates);
+    await db.delete(customRoles);
+    await db.delete(branches);
+
+    log.push("✅ تم مسح جميع البيانات القديمة (الموظفين، الفروع، السجلات)");
+
+    // ==========================================================
+    // الخطوة 3: إنشاء الفروع الأربعة المطلوبة فقط
+    // ==========================================================
+    const insertedBranches = await db
+      .insert(branches)
+      .values([
+        {
+          nameAr: "الإدارة",
+          nameEn: "Management",
+          type: "HQ",
+          address: "كفر الشيخ، مصر",
+          latitude: 31.1107,
+          longitude: 30.9388,
+          geofenceRadius: 150,
+          qrSecretKey: "lk-management-secret",
+          qrRefreshSec: 60,
+          wifiSsid: "LK-MANAGEMENT",
+        },
+        {
+          nameAr: "بروست الأسد",
+          nameEn: "Lion Broast",
+          type: "BRANCH",
+          address: "كفر الشيخ، مصر",
+          latitude: 31.1107,
+          longitude: 30.9388,
+          geofenceRadius: 100,
+          qrSecretKey: "lion-broast-secret",
+          qrRefreshSec: 60,
+          wifiSsid: "LION-BROAST",
+        },
+        {
+          nameAr: "الكفتجي - دسوق",
+          nameEn: "Koftagi - Desouk",
+          type: "BRANCH",
+          address: "دسوق، كفر الشيخ، مصر",
+          latitude: 31.1316,
+          longitude: 30.644,
+          geofenceRadius: 100,
+          qrSecretKey: "koftagi-desouk-secret",
+          qrRefreshSec: 60,
+          wifiSsid: "KOFTAGI-DESOUK",
+        },
+        {
+          nameAr: "الكفتجي - كفر الشيخ",
+          nameEn: "Koftagi - Kafr El Sheikh",
+          type: "BRANCH",
+          address: "كفر الشيخ، مصر",
+          latitude: 31.1107,
+          longitude: 30.9388,
+          geofenceRadius: 100,
+          qrSecretKey: "koftagi-kafr-elsheikh-secret",
+          qrRefreshSec: 60,
+          wifiSsid: "KOFTAGI-KAFRELSHEIKH",
+        },
+      ])
+      .returning();
+
+    log.push(`✅ تم إنشاء ${insertedBranches.length} فروع: الإدارة، بروست الأسد، الكفتجي دسوق، الكفتجي كفر الشيخ`);
+
+    const managementBranch = insertedBranches.find((b) => b.nameEn === "Management");
+
+    // ==========================================================
+    // الخطوة 4: إنشاء يوزر admin جديد تمامًا
+    // ==========================================================
     const passwordHash = await hash("123", 10);
 
-    if (existingAdmin.length > 0) {
-      const user = existingAdmin[0];
-      log.push(`يوزر "admin" موجود بالفعل (id: ${user.id})`);
-      log.push(`الحالة الحالية: isActive=${user.isActive}, systemRole=${user.systemRole}`);
-
-      // تأكد إن كلمة المرور صح
-      const currentPasswordValid = await compare("123", user.passwordHash);
-      log.push(`هل كلمة المرور الحالية "123" صحيحة؟ ${currentPasswordValid}`);
-
-      // فرض التصحيح الكامل بغض النظر عن الحالة السابقة
-      await db
-        .update(users)
-        .set({
-          passwordHash,
-          systemRole: "SUPER_ADMIN",
-          isActive: true,
-          fullNameAr: "المدير العام",
-          fullNameEn: "Admin",
-          jobRole: "System Administrator",
-          primaryBranchId: user.primaryBranchId ?? managementBranchId,
-        })
-        .where(eq(users.id, user.id));
-
-      log.push("✅ تم فرض تحديث اليوزر: SUPER_ADMIN + isActive=true + password=123");
-    } else {
-      await db.insert(users).values({
+    const [adminUser] = await db
+      .insert(users)
+      .values({
         fullNameAr: "المدير العام",
         fullNameEn: "Admin",
         phone: "admin",
         passwordHash,
         systemRole: "SUPER_ADMIN",
         jobRole: "System Administrator",
-        primaryBranchId: managementBranchId,
+        primaryBranchId: managementBranch?.id ?? null,
         verificationMode: "MANUAL",
         hireDate: new Date(),
         salaryType: "MONTHLY",
         monthlySalary: "0.00",
         isActive: true,
-      });
-      log.push("✅ تم إنشاء يوزر admin جديد من الصفر");
-    }
+      })
+      .returning();
 
-    // 3) تحقق نهائي من النتيجة
-    const finalCheck = await db.select().from(users).where(eq(users.phone, "admin")).limit(1);
-    const finalUser = finalCheck[0];
-    const finalPasswordValid = await compare("123", finalUser.passwordHash);
+    log.push(`✅ تم إنشاء يوزر admin جديد (id: ${adminUser.id})`);
 
     return NextResponse.json({
       success: true,
       log,
-      final_verification: {
-        phone: finalUser.phone,
-        systemRole: finalUser.systemRole,
-        isActive: finalUser.isActive,
-        password_123_works: finalPasswordValid,
+      final_result: {
+        phone: adminUser.phone,
+        systemRole: adminUser.systemRole,
+        isActive: adminUser.isActive,
+        branches_count: insertedBranches.length,
+        branches: insertedBranches.map((b) => b.nameAr),
       },
-      env_check: {
-        AUTH_SECRET_configured: Boolean(process.env.AUTH_SECRET),
-        DATABASE_URL_configured: Boolean(process.env.DATABASE_URL),
-      },
-      message: finalPasswordValid
-        ? "🎉 كل شيء جاهز! سجّل دخول بـ phone: admin / password: 123"
-        : "⚠️ هناك مشكلة في تخزين كلمة المرور",
+      message: "🎉 تم إصلاح كل شيء بنجاح! سجّل دخول بـ phone: admin / password: 123",
     });
   } catch (error) {
     log.push(`❌ خطأ: ${String(error)}`);
