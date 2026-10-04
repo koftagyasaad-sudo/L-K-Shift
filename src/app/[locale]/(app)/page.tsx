@@ -38,7 +38,6 @@ export default async function OverviewPage({
   const totalAttendance = attendanceRows.length;
   const totalAbsences = attendanceRows.filter((a) => a.status === "ABSENT").length;
 
-  // تم فصل الـ href الخاص بالموظفين خارج الـ array لتطبيق as const بشكل صحيح
   const employeesHref =
     session?.user?.systemRole === "SUPER_ADMIN"
       ? ("/admin/roles" as const)
@@ -58,13 +57,22 @@ export default async function OverviewPage({
 
   return (
     <div className="space-y-8">
-      <section className="gradient-hero relative overflow-hidden rounded-[32px] p-8 text-white shadow-2xl shadow-primary/20">
-        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="relative">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-white/90">{t("home.heroEyebrow")}</p>
-          <h1 className="mt-3 max-w-3xl text-3xl font-black leading-tight lg:text-4xl">{t("home.heroTitle")}</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-white/85">{t("home.heroDescription")}</p>
+      {/* شريط ملخصي صغير بدل الهيرو الكبير */}
+      <section className="gradient-hero flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-3 text-white shadow-lg shadow-primary/20">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 text-sm font-black">
+            LK
+          </span>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">
+              {t("home.heroEyebrow")}
+            </p>
+            <p className="text-sm font-bold leading-tight sm:text-base">{t("home.heroTitle")}</p>
+          </div>
         </div>
+        <p className="hidden max-w-sm truncate text-xs text-white/80 md:block">
+          {t("home.heroDescription")}
+        </p>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
