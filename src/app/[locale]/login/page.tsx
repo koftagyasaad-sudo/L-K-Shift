@@ -1,11 +1,12 @@
 "use client";
 
-import { Lock, Phone, Loader2, Eye, EyeOff, Fingerprint } from "lucide-react";
+import { Lock, Phone, Loader2, Eye, EyeOff } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
 import { useLocale } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import Image from "next/image";
 
 const REMEMBER_KEY = "lk-shift-remembered-phone";
 
@@ -69,20 +70,24 @@ export default function LoginPage() {
       dir={isRtl ? "rtl" : "ltr"}
       className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-white via-orange-50 to-orange-100 px-4 py-10"
     >
-      {/* زخرفة خلفية خفيفة */}
       <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-300/30 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-orange-400/20 blur-3xl" />
 
       <div className="relative w-full max-w-md">
         <div className="overflow-hidden rounded-[28px] border border-orange-100 bg-white/90 shadow-2xl shadow-orange-900/10 backdrop-blur-sm">
-          {/* شريط علوي رفيع بالتدرج البرتقالي */}
           <div className="h-1.5 w-full bg-gradient-to-r from-orange-400 via-orange-500 to-red-500" />
 
           <div className="px-8 pb-8 pt-10 sm:px-10">
-            {/* اللوجو */}
             <div className="flex flex-col items-center text-center">
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 shadow-lg shadow-orange-500/40">
-                <Fingerprint className="h-8 w-8 text-white" strokeWidth={2} />
+              <div className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-orange-500/40">
+                <Image
+                  src="/logo.png"
+                  alt="L&K Shift Logo"
+                  fill
+                  sizes="64px"
+                  className="object-contain"
+                  priority
+                />
               </div>
 
               <h1 className="mt-4 text-xl font-black tracking-tight text-neutral-900">
@@ -96,7 +101,6 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* الفورم */}
             <form onSubmit={handleSubmit} className="mt-8 space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-neutral-600">
@@ -170,7 +174,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* التوقيع */}
         <p className="mt-6 text-center text-[11px] font-medium text-neutral-400">
           Powered by{" "}
           <span className="font-semibold text-orange-500">Omar Abd Elhalim</span>
