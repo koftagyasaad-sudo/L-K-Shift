@@ -284,4 +284,140 @@ export async function ensureSeedData() {
           checkOutLng: checkOut ? 46.675 : null,
           checkOutDistance: checkOut ? 21.1 : null,
           checkOutMethod: checkOut ? ("GPS" as const) : null,
-          status: 
+          status: incompleteDay ? ("INCOMPLETE" as const) : lateDay ? ("LATE" as const) : ("ON_TIME" as const),
+          actualWorkedMinutes: workedMinutes,
+          lateMinutes,
+          overtimeMinutes: overtime,
+          notes: lateDay ? "Traffic delay approved by branch manager" : null,
+        };
+      }),
+    );
+
+    await tx.insert(leaveRequests).values({
+      userId: employeeUser.id,
+      leaveType: "ANNUAL",
+      startDate: startOfDay(addDays(today, 4)),
+      endDate: startOfDay(addDays(today, 5)),
+      totalDays: 2,
+      reason: "Family event",
+      status: "PENDING",
+    });
+
+    await tx.insert(notifications).values([
+      {
+        userId: adminUser.id,
+        title: "New leave request",
+        message: "Ahmed Saleh submitted a 2-day annual leave request.",
+        link: "/admin/roles",
+        isRead: false,
+      },
+      {
+        userId: adminUser.id,
+        title: "Attendance alert",
+        message: "A late arrival was recorded at Lion Broast - Olaya.",
+        link: "/",
+        isRead: false,
+      },
+      {
+        userId: employeeUser.id,
+        title: "Welcome to L&K Shift",
+        message: "Your attendance portal is ready. Review your shift logs and submit requests anytime.",
+        link: "/employee/profile",
+        isRead: false,
+      },
+      {
+        userId: employeeUser.id,
+        title: "Leave request pending",
+        message: "Your annual leave request is pending manager approval.",
+        link: "/employee/profile",
+        isRead: true,
+      },
+    ]);
+
+    await tx.insert(auditLogs).values([
+      {
+        userId: adminUser.id,
+        action: "SEED_BOOTSTRAP_COMPLETED",
+        entityType: "system",
+        entityId: null,
+      },
+      {
+        userId: employeeUser.id,
+        action: "ATTENDANCE_SYNCED",
+        entityType: "attendance_logs",
+        entityId: null,
+      },
+    ]);
+  });
+}
+
+export async function ensureDemoLoginUser() {
+  const ADMIN_PHONE = "admin";
+  const LEGACY_PHONE = "010";
+
+  const existingAdmin = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.phone, ADMIN_PHONE))
+    .limit(1);
+
+  if (existingAdmin.length > 0) {
+    return;
+  }
+
+  const legacyUser = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.phone, LEGACY_PHONE))
+    .limit(1);
+
+  if (legacyUser.length > 0) {
+    await db
+      .update(users)
+      .set({
+        phone: ADMIN_PHONE,
+        fullNameAr: "المدير العام",
+        fullNameEn: "Admin",
+        jobRole: "System Administrator",
+      })
+      .where(eq(users.id, legacyUser[0].id));
+    return;
+  }
+
+  const branchRows = await db.select({ id: branches.id }).from(branches).limit(1);
+  const primaryBranchId = branchRows[0]?.id ?? null;
+
+  const passwordHash = await hash("123", 10);
+
+  await db.insert(users).values({
+    fullNameAr: "المدير العام",
+    fullNameEn: "Admin",
+    phone: ADMIN_PHONE,
+    passwordHash,
+    systemRole: "SUPER_ADMIN",
+    jobRole: "System Administrator",
+    primaryBranchId,
+    verificationMode: "MANUAL",
+    hireDate: new Date(),
+    salaryType: "MONTHLY",
+    monthlySalary: "0.00",
+  });
+}
+
+export async function getRecentNotifications(userId: number) {
+  return db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt))
+    .limit(8);
+}
+
+export async function getUnreadNotificationCount(userId: number) {
+  const items = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+
+  return items.length;
+}
