@@ -1,6 +1,8 @@
+// src/components/layout/global-header.tsx
 import { auth } from "@/auth";
 import { getRecentNotifications } from "@/db/seed";
 import { Link } from "@/i18n/navigation";
+import Image from "next/image";
 import { LanguageSwitcher } from "./language-switcher";
 import { NotificationBell } from "./notification-bell";
 import { ThemeSwitcher } from "./theme-switcher";
@@ -18,8 +20,8 @@ export async function GlobalHeader({ locale }: { locale: "ar" | "en" }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
       <div className="flex items-center justify-between gap-4 px-4 py-4 ps-16 sm:px-6 lg:ps-6 lg:px-8">
-        <div className="gradient-hero flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black text-white lg:hidden">
-          LK
+        <div className="gradient-hero relative flex h-9 w-9 items-center justify-center rounded-xl p-1 lg:hidden">
+          <Image src="/Logo.png" alt="L&K Shift" fill sizes="36px" className="object-contain p-1" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
