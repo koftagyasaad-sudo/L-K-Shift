@@ -1,10 +1,16 @@
+// src/app/[locale]/(app)/branches/[id]/page.tsx
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { auth } from "@/auth";
 import { db } from "@/db";
 import { attendanceLogs, branches, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, ne, or, isNull } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
-import { ArrowRight, ArrowLeft, MapPin, Wifi, Users as UsersIcon } from "lucide-react";
+import { ArrowRight, ArrowLeft, MapPin, Wifi, Users as UsersIcon, Plus } from "lucide-react";
+import {
+  BranchEmployeeManager,
+  RemoveFromBranchButton,
+} from "@/components/admin/branch-employee-manager";
 
 export default async function BranchDetailsPage({
   params,
@@ -20,6 +26,8 @@ export default async function BranchDetailsPage({
 
   const t = await getTranslations();
   const typedLocale = locale as "ar" | "en";
+  const session = await auth();
+  const isSuperAdmin = session?.user?.systemRole === "SUPER_ADMIN";
 
   const [branch] = await db.select().from(branches).where(eq(branches.id, branchId)).limit(1);
   if (!branch) {
@@ -32,6 +40,23 @@ export default async function BranchDetailsPage({
     .from(attendanceLogs)
     .where(eq(attendanceLogs.branchId, branchId))
     .orderBy(attendanceLogs.workDate);
+
+  // الموظفون المتاحون للإضافة لهذا الفرع (مش مسجلين فيه بالفعل، ومش SUPER_ADMIN)
+  const availableUsers = isSuperAdmin
+    ? await db
+        .select({
+          id: users.id,
+          fullNameAr: users.fullNameAr,
+          fullNameEn: users.fullNameEn,
+          primaryBranchId: users.primaryBranchId,
+        })
+        .from(users)
+        .where(
+          or(ne(users.primaryBranchId, branchId), isNull(users.primaryBranchId)),
+        )
+    : [];
+
+  const filteredAvailableUsers = availableUsers.filter((u) => u.primaryBranchId !== branchId);
 
   const total = attendanceRows.length;
   const onTime = attendanceRows.filter((a) => a.status === "ON_TIME").length;
@@ -98,7 +123,30 @@ export default async function BranchDetailsPage({
       </section>
 
       <section className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
-        <h2 className="text-xl font-bold text-foreground">{typedLocale === "ar" ? "الموظفون" : "Employees"}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-foreground">{typedLocale === "ar" ? "الموظفون" : "Employees"}</h2>
+          {isSuperAdmin && (
+            <Link
+              href={{ pathname: "/admin/employees/new", query: { branchId: String(branchId) } }}
+              locale={typedLocale}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-background-secondary hover:text-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {typedLocale === "ar" ? "موظف جديد" : "New Employee"}
+            </Link>
+          )}
+        </div>
+
+        {isSuperAdmin && filteredAvailableUsers.length > 0 && (
+          <div className="mt-4">
+            <BranchEmployeeManager
+              branchId={branchId}
+              locale={typedLocale}
+              availableUsers={filteredAvailableUsers}
+            />
+          </div>
+        )}
+
         <div className="mt-4 space-y-3">
           {employees.length === 0 ? (
             <p className="text-sm text-foreground-muted">
@@ -106,21 +154,33 @@ export default async function BranchDetailsPage({
             </p>
           ) : (
             employees.map((employee) => (
-              <div key={employee.id} className="flex items-center justify-between rounded-2xl border border-border bg-background-secondary px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="bg-accent/10 text-accent flex h-9 w-9 items-center justify-center rounded-full">
+              <div
+                key={employee.id}
+                className="flex items-center justify-between rounded-2xl border border-border bg-background-secondary px-4 py-3"
+              >
+                <Link
+                  href={isSuperAdmin ? `/admin/employees/${employee.id}` : "/employee/profile"}
+                  locale={typedLocale}
+                  className="flex min-w-0 flex-1 items-center gap-3"
+                >
+                  <div className="bg-accent/10 text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
                     <UsersIcon className="h-4 w-4" />
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {typedLocale === "ar" ? employee.fullNameAr : employee.fullNameEn ?? employee.fullNameAr}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {typedLocale === "ar" ? employee.fullNameAr : (employee.fullNameEn ?? employee.fullNameAr)}
                     </p>
-                    <p className="text-xs text-foreground-muted">{employee.jobRole}</p>
+                    <p className="truncate text-xs text-foreground-muted">{employee.jobRole}</p>
                   </div>
+                </Link>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="whitespace-nowrap rounded-full bg-background px-3 py-1 text-[11px] font-semibold text-foreground-muted">
+                    {employee.systemRole.replace("_", " ")}
+                  </span>
+                  {isSuperAdmin && employee.systemRole !== "SUPER_ADMIN" && (
+                    <RemoveFromBranchButton employeeId={employee.id} locale={typedLocale} />
+                  )}
                 </div>
-                <span className="rounded-full bg-background px-3 py-1 text-[11px] font-semibold text-foreground-muted">
-                  {employee.systemRole.replace("_", " ")}
-                </span>
               </div>
             ))
           )}
