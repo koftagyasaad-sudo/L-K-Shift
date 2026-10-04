@@ -79,13 +79,13 @@ export default function LoginPage() {
 
           <div className="px-8 pb-8 pt-10 sm:px-10">
             <div className="flex flex-col items-center text-center">
-              <div className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-orange-500/40">
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-red-500 p-3 shadow-lg shadow-orange-500/40">
                 <Image
-                  src="/logo.png"
+                  src="/Logo.png"
                   alt="L&K Shift Logo"
                   fill
-                  sizes="64px"
-                  className="object-contain"
+                  sizes="80px"
+                  className="object-contain p-2"
                   priority
                 />
               </div>
