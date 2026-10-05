@@ -2,7 +2,7 @@
 "use client";
 
 import { useRouter } from "@/i18n/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 type BranchOption = { id: number; nameAr: string; nameEn: string };
@@ -23,6 +23,12 @@ type EmployeeFormValues = {
   managedBranchIds: number[];
   customRoleIds: number[];
   isActive: boolean;
+  salaryType: "MONTHLY" | "HOURLY";
+  monthlySalary: string;
+  hourlyRate: string;
+  workingHoursPerDay: string;
+  workingDaysPerMonth: string;
+  annualLeaveDays: string;
 };
 
 export function EmployeeForm({
@@ -54,6 +60,12 @@ export function EmployeeForm({
     managedBranchIds: initialValues?.managedBranchIds ?? [],
     customRoleIds: initialValues?.customRoleIds ?? [],
     isActive: initialValues?.isActive ?? true,
+    salaryType: initialValues?.salaryType ?? "MONTHLY",
+    monthlySalary: initialValues?.monthlySalary ?? "",
+    hourlyRate: initialValues?.hourlyRate ?? "",
+    workingHoursPerDay: initialValues?.workingHoursPerDay ?? "8",
+    workingDaysPerMonth: initialValues?.workingDaysPerMonth ?? "26",
+    annualLeaveDays: initialValues?.annualLeaveDays ?? "21",
   });
   const [password, setPassword] = useState("");
 
@@ -91,6 +103,16 @@ export function EmployeeForm({
       };
     });
   }
+
+  const calculatedMonthlySalary = useMemo(() => {
+    if (values.salaryType === "HOURLY") {
+      const rate = Number(values.hourlyRate) || 0;
+      const hours = Number(values.workingHoursPerDay) || 0;
+      const days = Number(values.workingDaysPerMonth) || 0;
+      return rate * hours * days;
+    }
+    return Number(values.monthlySalary) || 0;
+  }, [values.salaryType, values.hourlyRate, values.workingHoursPerDay, values.workingDaysPerMonth, values.monthlySalary]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -261,6 +283,103 @@ export function EmployeeForm({
             </label>
           </div>
         )}
+      </div>
+
+      {/* 🆕 قسم الراتب وساعات العمل والإجازات */}
+      <div className="rounded-2xl border border-border bg-background-secondary/50 p-4">
+        <label className={labelClass}>{isAr ? "نظام الراتب" : "Salary Type"}</label>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => updateField("salaryType", "MONTHLY")}
+            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+              values.salaryType === "MONTHLY"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-foreground-muted hover:bg-background-secondary"
+            }`}
+          >
+            {isAr ? "راتب شهري ثابت" : "Fixed Monthly"}
+          </button>
+          <button
+            type="button"
+            onClick={() => updateField("salaryType", "HOURLY")}
+            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+              values.salaryType === "HOURLY"
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border text-foreground-muted hover:bg-background-secondary"
+            }`}
+          >
+            {isAr ? "بالساعة" : "Hourly"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {values.salaryType === "MONTHLY" ? (
+            <div>
+              <label className={labelClass}>{isAr ? "الراتب الشهري (ج.م)" : "Monthly Salary (EGP)"}</label>
+              <input
+                type="number"
+                dir="ltr"
+                className={inputClass}
+                value={values.monthlySalary}
+                onChange={(e) => updateField("monthlySalary", e.target.value)}
+              />
+            </div>
+          ) : (
+            <div>
+              <label className={labelClass}>{isAr ? "سعر الساعة (ج.م)" : "Hourly Rate (EGP)"}</label>
+              <input
+                type="number"
+                dir="ltr"
+                className={inputClass}
+                value={values.hourlyRate}
+                onChange={(e) => updateField("hourlyRate", e.target.value)}
+              />
+            </div>
+          )}
+
+          <div>
+            <label className={labelClass}>{isAr ? "عدد ساعات العمل اليومية" : "Working Hours / Day"}</label>
+            <input
+              type="number"
+              dir="ltr"
+              className={inputClass}
+              value={values.workingHoursPerDay}
+              onChange={(e) => updateField("workingHoursPerDay", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>{isAr ? "عدد أيام العمل بالشهر" : "Working Days / Month"}</label>
+            <input
+              type="number"
+              dir="ltr"
+              className={inputClass}
+              value={values.workingDaysPerMonth}
+              onChange={(e) => updateField("workingDaysPerMonth", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>{isAr ? "رصيد الإجازات السنوي (يوم)" : "Annual Leave Days"}</label>
+            <input
+              type="number"
+              dir="ltr"
+              className={inputClass}
+              value={values.annualLeaveDays}
+              onChange={(e) => updateField("annualLeaveDays", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-accent/10 px-4 py-3">
+          <span className="text-xs font-bold text-foreground-muted">
+            {isAr ? "الراتب الشهري المقدر تلقائيًا" : "Auto-calculated Monthly Salary"}
+          </span>
+          <span className="text-lg font-black text-accent">
+            {calculatedMonthlySalary.toLocaleString()} {isAr ? "ج.م" : "EGP"}
+          </span>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-background-secondary/50 p-4">
