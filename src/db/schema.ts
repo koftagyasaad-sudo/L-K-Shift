@@ -52,6 +52,14 @@ export const managementRoleEnum = pgEnum("management_role", [
   "AREA_MANAGER",
 ]);
 
+// 🆕 حالة اعتماد الحضور/الانصراف
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "AUTO_APPROVED",
+  "PENDING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+]);
+
 const createdAt = timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = timestamp("updated_at", { withTimezone: true })
   .defaultNow()
@@ -94,11 +102,9 @@ export const users = pgTable("users", {
   salaryType: text("salary_type").default("MONTHLY").notNull(),
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),
   monthlySalary: numeric("monthly_salary", { precision: 12, scale: 2 }),
-  // 🆕 حقول حساب الراتب
   workingHoursPerDay: integer("working_hours_per_day").default(8).notNull(),
   workingDaysPerMonth: integer("working_days_per_month").default(26).notNull(),
   annualLeaveDays: integer("annual_leave_days").default(21).notNull(),
-  // نهاية الحقول الجديدة
   isActive: boolean("is_active").default(true).notNull(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt,
@@ -212,11 +218,23 @@ export const attendanceLogs = pgTable(
     checkInDistance: doublePrecision("check_in_distance"),
     checkInMethod: checkMethodEnum("check_in_method"),
     checkInMockDetected: boolean("check_in_mock_detected").default(false).notNull(),
+    // 🆕 حقول صورة وحالة اعتماد الحضور
+    checkInPhotoUrl: text("check_in_photo_url"),
+    checkInApprovalStatus: approvalStatusEnum("check_in_approval_status"),
+    checkInReviewedBy: integer("check_in_reviewed_by"),
+    checkInReviewedAt: timestamp("check_in_reviewed_at", { withTimezone: true }),
+    checkInReviewNotes: text("check_in_review_notes"),
     checkOutTime: timestamp("check_out_time", { withTimezone: true }),
     checkOutLat: doublePrecision("check_out_lat"),
     checkOutLng: doublePrecision("check_out_lng"),
     checkOutDistance: doublePrecision("check_out_distance"),
     checkOutMethod: checkMethodEnum("check_out_method"),
+    // 🆕 حقول صورة وحالة اعتماد الانصراف
+    checkOutPhotoUrl: text("check_out_photo_url"),
+    checkOutApprovalStatus: approvalStatusEnum("check_out_approval_status"),
+    checkOutReviewedBy: integer("check_out_reviewed_by"),
+    checkOutReviewedAt: timestamp("check_out_reviewed_at", { withTimezone: true }),
+    checkOutReviewNotes: text("check_out_review_notes"),
     status: attendanceStatusEnum("status").default("INCOMPLETE").notNull(),
     actualWorkedMinutes: integer("actual_worked_minutes").default(0).notNull(),
     lateMinutes: integer("late_minutes").default(0).notNull(),
@@ -320,6 +338,7 @@ export type CheckMethod = typeof checkMethodEnum.enumValues[number];
 export type LeaveStatus = typeof leaveStatusEnum.enumValues[number];
 export type ExceptionType = typeof exceptionTypeEnum.enumValues[number];
 export type ManagementRole = typeof managementRoleEnum.enumValues[number];
+export type ApprovalStatus = typeof approvalStatusEnum.enumValues[number];
 
 export type Branch = typeof branches.$inferSelect;
 export type NewBranch = typeof branches.$inferInsert;
