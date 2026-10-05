@@ -2,10 +2,11 @@
 "use client";
 
 import { useRouter } from "@/i18n/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 type BranchOption = { id: number; nameAr: string; nameEn: string };
+type RoleOption = { id: number; nameAr: string; name: string };
 
 type EmployeeFormValues = {
   id?: number;
@@ -20,6 +21,7 @@ type EmployeeFormValues = {
   primaryBranchId: string;
   managementRole: "NONE" | "BRANCH_MANAGER" | "AREA_MANAGER";
   managedBranchIds: number[];
+  customRoleIds: number[];
   isActive: boolean;
 };
 
@@ -37,6 +39,7 @@ export function EmployeeForm({
   const router = useRouter();
   const isAr = locale === "ar";
   const [loading, setLoading] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
   const [values, setValues] = useState<EmployeeFormValues>({
     fullNameAr: initialValues?.fullNameAr ?? "",
     fullNameEn: initialValues?.fullNameEn ?? "",
@@ -49,9 +52,17 @@ export function EmployeeForm({
     primaryBranchId: initialValues?.primaryBranchId ?? "",
     managementRole: initialValues?.managementRole ?? "NONE",
     managedBranchIds: initialValues?.managedBranchIds ?? [],
+    customRoleIds: initialValues?.customRoleIds ?? [],
     isActive: initialValues?.isActive ?? true,
   });
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    fetch("/api/roles")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setAvailableRoles(Array.isArray(data) ? data : []))
+      .catch(() => setAvailableRoles([]));
+  }, []);
 
   function updateField<K extends keyof EmployeeFormValues>(key: K, value: EmployeeFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -65,6 +76,18 @@ export function EmployeeForm({
         managedBranchIds: exists
           ? prev.managedBranchIds.filter((id) => id !== branchId)
           : [...prev.managedBranchIds, branchId],
+      };
+    });
+  }
+
+  function toggleCustomRole(roleId: number) {
+    setValues((prev) => {
+      const exists = prev.customRoleIds.includes(roleId);
+      return {
+        ...prev,
+        customRoleIds: exists
+          ? prev.customRoleIds.filter((id) => id !== roleId)
+          : [...prev.customRoleIds, roleId],
       };
     });
   }
@@ -285,6 +308,37 @@ export function EmployeeForm({
                 );
               })}
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-background-secondary/50 p-4">
+        <label className={labelClass}>{isAr ? "صلاحيات الوصول المخصصة" : "Custom Access Permissions"}</label>
+        {availableRoles.length === 0 ? (
+          <p className="mt-2 text-xs text-foreground-muted">
+            {isAr
+              ? "لا توجد صلاحيات مخصصة بعد، أنشئها من صفحة الأدوار والصلاحيات"
+              : "No custom roles yet. Create them from the Roles & Permissions page."}
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {availableRoles.map((role) => {
+              const checked = values.customRoleIds.includes(role.id);
+              return (
+                <button
+                  type="button"
+                  key={role.id}
+                  onClick={() => toggleCustomRole(role.id)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    checked
+                      ? "border-accent bg-accent text-accent-foreground"
+                      : "border-border text-foreground-muted hover:bg-background-secondary"
+                  }`}
+                >
+                  {isAr ? role.nameAr : role.name}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
