@@ -36,7 +36,6 @@ export function UserMenu({ name, role }: { name: string; role: string }) {
 
   function handleSwitchUser() {
     setOpen(false);
-    // تبديل المستخدم = تسجيل خروج ثم العودة لصفحة الدخول لإدخال حساب آخر
     signOut({ callbackUrl: `/${locale}/login` });
   }
 
@@ -45,16 +44,16 @@ export function UserMenu({ name, role }: { name: string; role: string }) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 ps-1.5 pe-3 text-foreground transition hover:bg-background-secondary"
+        className="flex items-center gap-1.5 rounded-full border border-border bg-surface py-1 ps-1 pe-2 text-foreground transition hover:bg-background-secondary"
       >
-        <span className="gradient-hero flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">
+        <span className="gradient-hero flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white">
           {initials || "U"}
         </span>
-        <ChevronDown className={`h-4 w-4 text-foreground-muted transition ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-3.5 w-3.5 text-foreground-muted transition ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open ? (
-        <div className="absolute end-0 top-12 z-50 w-56 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40">
+        <div className="absolute end-0 top-10 z-50 w-56 overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40">
           <div className="border-b border-border px-4 py-3">
             <p className="truncate text-sm font-semibold text-foreground">{name}</p>
             <span className="mt-1 inline-block rounded-full bg-background-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground-muted">
