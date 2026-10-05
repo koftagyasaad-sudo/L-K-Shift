@@ -53,6 +53,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     primaryBranchId: body.primaryBranchId ? Number(body.primaryBranchId) : null,
     managementRole: body.managementRole || "NONE",
     isActive: body.isActive ?? true,
+    salaryType: body.salaryType || "MONTHLY",
+    hourlyRate: body.hourlyRate ? String(body.hourlyRate) : null,
+    monthlySalary: body.monthlySalary ? String(body.monthlySalary) : null,
+    workingHoursPerDay: body.workingHoursPerDay ? Number(body.workingHoursPerDay) : 8,
+    workingDaysPerMonth: body.workingDaysPerMonth ? Number(body.workingDaysPerMonth) : 26,
+    annualLeaveDays: body.annualLeaveDays ? Number(body.annualLeaveDays) : 21,
   };
 
   if (body.password) {
