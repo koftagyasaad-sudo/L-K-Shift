@@ -1,9 +1,8 @@
-// src/app/api/employees/route.ts
 import { NextResponse } from "next/server";
-import { hash } from "bcryptjs";
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { adminBranchScopes, users } from "@/db/schema";
+import { users, adminBranchScopes, customRoleAssignments } from "@/db/schema";
+import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
 
 export async function GET() {
@@ -13,7 +12,17 @@ export async function GET() {
   }
 
   const allUsers = await db.select().from(users).orderBy(users.id);
-  return NextResponse.json({ users: allUsers });
+  const allScopes = await db.select().from(adminBranchScopes);
+  const allAssignments = await db.select().from(customRoleAssignments);
+
+  const result = allUsers.map((u) => ({
+    ...u,
+    passwordHash: undefined,
+    managedBranchIds: allScopes.filter((s) => s.userId === u.id).map((s) => s.branchId),
+    customRoleIds: allAssignments.filter((a) => a.userId === u.id).map((a) => a.roleId),
+  }));
+
+  return NextResponse.json(result);
 }
 
 export async function POST(request: Request) {
@@ -23,81 +32,48 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const {
-    fullNameAr,
-    fullNameEn,
-    phone,
-    nationalId,
-    address,
-    governorate,
-    employeeNumber,
-    jobRole,
-    primaryBranchId,
-    password,
-    managementRole,
-    managedBranchIds,
-  } = body as {
-    fullNameAr?: string;
-    fullNameEn?: string;
-    phone?: string;
-    nationalId?: string;
-    address?: string;
-    governorate?: string;
-    employeeNumber?: string;
-    jobRole?: string;
-    primaryBranchId?: number | string;
-    password?: string;
-    managementRole?: "NONE" | "BRANCH_MANAGER" | "AREA_MANAGER";
-    managedBranchIds?: number[];
-  };
 
-  if (!fullNameAr || !phone || !jobRole || !password) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  if (!body.fullNameAr || !body.phone || !body.jobRole || !body.password) {
+    return NextResponse.json({ error: "البيانات المطلوبة ناقصة" }, { status: 400 });
   }
 
-  const existingPhone = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.phone, phone))
-    .limit(1);
-
-  if (existingPhone.length > 0) {
-    return NextResponse.json({ error: "Phone number already exists" }, { status: 409 });
+  const existing = await db.select().from(users).where(eq(users.phone, body.phone)).limit(1);
+  if (existing.length > 0) {
+    return NextResponse.json({ error: "رقم الهاتف مستخدم بالفعل" }, { status: 400 });
   }
 
-  const passwordHash = await hash(String(password), 10);
+  const passwordHash = await hash(body.password, 10);
 
   const [created] = await db
     .insert(users)
     .values({
-      fullNameAr,
-      fullNameEn: fullNameEn || null,
-      phone,
-      nationalId: nationalId || null,
-      address: address || null,
-      governorate: governorate || null,
-      employeeNumber: employeeNumber || null,
+      fullNameAr: body.fullNameAr,
+      fullNameEn: body.fullNameEn || null,
+      phone: body.phone,
+      nationalId: body.nationalId || null,
+      address: body.address || null,
+      governorate: body.governorate || null,
+      employeeNumber: body.employeeNumber || null,
+      jobRole: body.jobRole,
+      primaryBranchId: body.primaryBranchId ? Number(body.primaryBranchId) : null,
+      managementRole: body.managementRole || "NONE",
       passwordHash,
       systemRole: "EMPLOYEE",
-      jobRole,
-      primaryBranchId: primaryBranchId ? Number(primaryBranchId) : null,
-      managementRole: managementRole ?? "NONE",
+      isActive: body.isActive ?? true,
     })
     .returning();
 
-  if (
-    managementRole &&
-    managementRole !== "NONE" &&
-    Array.isArray(managedBranchIds) &&
-    managedBranchIds.length > 0
-  ) {
+  if (Array.isArray(body.managedBranchIds) && body.managedBranchIds.length > 0) {
     await db.insert(adminBranchScopes).values(
-      managedBranchIds.map((branchId) => ({
-        userId: created.id,
-        branchId: Number(branchId),
-      })),
+      body.managedBranchIds.map((branchId: number) => ({ userId: created.id, branchId }))
     );
   }
 
-  return NextResponse.json({ user: created }, { status: 201 });
+  if (Array.isArray(body.customRoleIds) && body.customRoleIds.length > 0) {
+    await db.insert(customRoleAssignments).values(
+      body.customRoleIds.map((roleId: number) => ({ userId: created.id, roleId }))
+    );
+  }
+
+  return NextResponse.json({ success: true, id: created.id });
 }
