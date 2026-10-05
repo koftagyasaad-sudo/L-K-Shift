@@ -46,7 +46,6 @@ export const exceptionTypeEnum = pgEnum("exception_type", [
   "OTHER",
 ]);
 
-// 🆕 نوع إدارة جديد: مستخدم عادي / مدير فرع / مدير منطقة
 export const managementRoleEnum = pgEnum("management_role", [
   "NONE",
   "BRANCH_MANAGER",
@@ -82,12 +81,10 @@ export const users = pgTable("users", {
   fullNameEn: text("full_name_en"),
   phone: text("phone").notNull().unique(),
   nationalId: text("national_id").unique(),
-  // 🆕 حقول جديدة
   address: text("address"),
   governorate: text("governorate"),
   employeeNumber: text("employee_number").unique(),
   managementRole: managementRoleEnum("management_role").default("NONE").notNull(),
-  // نهاية الحقول الجديدة
   passwordHash: text("password_hash").notNull(),
   systemRole: userRoleEnum("system_role").default("EMPLOYEE").notNull(),
   jobRole: text("job_role").notNull(),
@@ -97,6 +94,11 @@ export const users = pgTable("users", {
   salaryType: text("salary_type").default("MONTHLY").notNull(),
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),
   monthlySalary: numeric("monthly_salary", { precision: 12, scale: 2 }),
+  // 🆕 حقول حساب الراتب
+  workingHoursPerDay: integer("working_hours_per_day").default(8).notNull(),
+  workingDaysPerMonth: integer("working_days_per_month").default(26).notNull(),
+  annualLeaveDays: integer("annual_leave_days").default(21).notNull(),
+  // نهاية الحقول الجديدة
   isActive: boolean("is_active").default(true).notNull(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   createdAt,
