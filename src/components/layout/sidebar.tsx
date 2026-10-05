@@ -12,6 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
+  CalendarCheck,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState } from "react";
 import Image from "next/image";
@@ -26,6 +28,7 @@ type NavItem = {
 type SidebarProps = {
   locale: "ar" | "en";
   isSuperAdmin: boolean;
+  isManager: boolean;
   isAuthenticated: boolean;
   labels: {
     overview: string;
@@ -33,31 +36,38 @@ type SidebarProps = {
     employeeProfile: string;
     manageEmployees: string;
     logout: string;
-    mySalary?: string;
+    attendance: string;
+    attendanceReview: string;
+    mySalary: string;
   };
 };
 
-export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: SidebarProps) {
+export function Sidebar({ locale, isSuperAdmin, isManager, isAuthenticated, labels }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const collapsed = useSidebarStore((state) => state.collapsed);
   const toggleCollapsed = useSidebarStore((state) => state.toggle);
   const isRtl = locale === "ar";
   const borderSide = isRtl ? "border-l" : "border-r";
-  const mySalaryLabel = labels.mySalary ?? (isRtl ? "راتبي" : "My Salary");
 
   const navItems: NavItem[] = [
     { href: "/", label: labels.overview, icon: LayoutDashboard },
+    ...(isAuthenticated
+      ? [{ href: "/attendance", label: labels.attendance, icon: CalendarCheck }]
+      : []),
     ...(isSuperAdmin
       ? [
           { href: "/admin/employees", label: labels.manageEmployees, icon: Users },
           { href: "/admin/roles", label: labels.adminRoles, icon: Shield },
         ]
       : []),
+    ...(isManager
+      ? [{ href: "/admin/attendance-review", label: labels.attendanceReview, icon: ClipboardCheck }]
+      : []),
     ...(isAuthenticated
       ? [
           { href: "/employee/profile", label: labels.employeeProfile, icon: UserCircle },
-          { href: "/employee/salary", label: mySalaryLabel, icon: Wallet },
+          { href: "/employee/salary", label: labels.mySalary, icon: Wallet },
         ]
       : []),
   ];
@@ -138,7 +148,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
           collapsed ? "w-20" : "w-72"
         }`}
       >
-        {/* رأس الشريط: زرار الطي + اللوجو الكبير المتوسط، كل ده في الـ flow الطبيعي بدون absolute */}
         <div
           className={`gradient-hero flex flex-col transition-all duration-300 ${
             collapsed ? "px-2 py-4" : "px-4 py-6"
