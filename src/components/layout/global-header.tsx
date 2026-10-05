@@ -19,12 +19,8 @@ export async function GlobalHeader({ locale }: { locale: "ar" | "en" }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
-      <div className="flex items-center justify-between gap-4 px-4 py-4 ps-16 sm:px-6 lg:ps-6 lg:px-8">
-        <div className="gradient-hero relative flex h-9 w-9 items-center justify-center rounded-xl p-1 lg:hidden">
-          <Image src="/Logo.png" alt="L&K Shift" fill sizes="36px" className="object-contain p-1" />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 ps-16 sm:px-6 lg:ps-6 lg:px-8">
+        <div className="order-1 flex flex-wrap items-center gap-1.5">
           <ThemeSwitcher />
           <LanguageSwitcher />
           {session?.user ? (
@@ -48,11 +44,15 @@ export async function GlobalHeader({ locale }: { locale: "ar" | "en" }) {
             <Link
               href="/login"
               locale={locale}
-              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover"
+              className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover"
             >
               {t("login")}
             </Link>
           )}
+        </div>
+
+        <div className="order-2 gradient-hero relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl p-1 lg:hidden">
+          <Image src="/Logo.png" alt="L&K Shift" fill sizes="32px" className="object-contain p-1" />
         </div>
       </div>
     </header>
