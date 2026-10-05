@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Shield,
   UserCircle,
+  Wallet,
   Menu,
   X,
   ChevronLeft,
@@ -32,6 +33,7 @@ type SidebarProps = {
     employeeProfile: string;
     manageEmployees: string;
     logout: string;
+    mySalary?: string;
   };
 };
 
@@ -42,6 +44,7 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
   const toggleCollapsed = useSidebarStore((state) => state.toggle);
   const isRtl = locale === "ar";
   const borderSide = isRtl ? "border-l" : "border-r";
+  const mySalaryLabel = labels.mySalary ?? (isRtl ? "راتبي" : "My Salary");
 
   const navItems: NavItem[] = [
     { href: "/", label: labels.overview, icon: LayoutDashboard },
@@ -52,7 +55,10 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         ]
       : []),
     ...(isAuthenticated
-      ? [{ href: "/employee/profile", label: labels.employeeProfile, icon: UserCircle }]
+      ? [
+          { href: "/employee/profile", label: labels.employeeProfile, icon: UserCircle },
+          { href: "/employee/salary", label: mySalaryLabel, icon: Wallet },
+        ]
       : []),
   ];
 
@@ -69,14 +75,25 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
       <Link
         href="/"
         locale={locale}
-        className={`flex items-center gap-3 ${showText ? "" : "justify-center"}`}
+        className="flex flex-col items-center gap-2 text-center"
       >
-        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 p-1.5 backdrop-blur-sm">
-          <Image src="/Logo.png" alt="L&K Shift" fill sizes="44px" className="object-contain p-1.5" priority />
+        <div
+          className={`relative flex shrink-0 items-center justify-center rounded-3xl bg-white/15 backdrop-blur-sm transition-all duration-300 ${
+            showText ? "h-24 w-24 p-3" : "h-12 w-12 p-2"
+          }`}
+        >
+          <Image
+            src="/Logo.png"
+            alt="L&K Shift"
+            fill
+            sizes="96px"
+            className="object-contain p-2"
+            priority
+          />
         </div>
         {showText ? (
           <div>
-            <p className="text-base font-bold text-white">L&amp;K Shift</p>
+            <p className="text-lg font-bold text-white">L&amp;K Shift</p>
             <p className="text-xs text-white/80">Workforce Hub</p>
           </div>
         ) : null}
@@ -117,27 +134,29 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
   return (
     <>
       <aside
-        className={`sticky top-0 relative hidden h-screen flex-col bg-surface ${borderSide} border-border transition-all duration-300 lg:flex ${
+        className={`sticky top-0 hidden h-screen flex-col bg-surface ${borderSide} border-border transition-all duration-300 lg:flex ${
           collapsed ? "w-20" : "w-72"
         }`}
       >
+        {/* رأس الشريط: زرار الطي + اللوجو الكبير المتوسط، كل ده في الـ flow الطبيعي بدون absolute */}
         <div
-          className={`gradient-hero flex items-center px-4 py-6 ${
-            collapsed ? "justify-center px-2" : ""
+          className={`gradient-hero flex flex-col transition-all duration-300 ${
+            collapsed ? "px-2 py-4" : "px-4 py-6"
           }`}
         >
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-white transition hover:bg-white/25"
+            >
+              <CollapseIcon className="h-4 w-4" />
+            </button>
+          </div>
+
           <Brand showText={!collapsed} />
         </div>
-
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="absolute top-9 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-foreground-muted shadow-md transition hover:text-foreground"
-          style={{ [isRtl ? "left" : "right"]: "-0.875rem" }}
-        >
-          <CollapseIcon className="h-4 w-4" />
-        </button>
 
         <div className="sidebar-glow flex flex-1 flex-col">
           <NavLinks showLabels={!collapsed} />
