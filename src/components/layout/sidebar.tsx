@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Shield,
   UserCircle,
-  LogOut,
   Menu,
   X,
   ChevronLeft,
@@ -14,7 +13,6 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
-import { signOut } from "next-auth/react";
 import Image from "next/image";
 import { useSidebarStore } from "@/stores/sidebar-store";
 
@@ -116,28 +114,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
     );
   }
 
-  function LogoutButton({ onNavigate, showLabels }: { onNavigate?: () => void; showLabels: boolean }) {
-    if (!isAuthenticated) return null;
-    return (
-      <div className="border-t border-border p-3">
-        <button
-          type="button"
-          onClick={() => {
-            onNavigate?.();
-            signOut({ callbackUrl: `/${locale}/login` });
-          }}
-          title={!showLabels ? labels.logout : undefined}
-          className={`text-danger hover:bg-danger/10 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
-            showLabels ? "" : "justify-center"
-          }`}
-        >
-          <LogOut className="h-5 w-5 shrink-0" />
-          {showLabels ? <span>{labels.logout}</span> : null}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <>
       <aside
@@ -165,7 +141,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
 
         <div className="sidebar-glow flex flex-1 flex-col">
           <NavLinks showLabels={!collapsed} />
-          <LogoutButton showLabels={!collapsed} />
         </div>
       </aside>
 
@@ -207,7 +182,6 @@ export function Sidebar({ locale, isSuperAdmin, isAuthenticated, labels }: Sideb
         </div>
         <div className="sidebar-glow flex flex-1 flex-col">
           <NavLinks onNavigate={() => setMobileOpen(false)} showLabels />
-          <LogoutButton onNavigate={() => setMobileOpen(false)} showLabels />
         </div>
       </aside>
     </>
