@@ -19,8 +19,14 @@ export async function GlobalHeader({ locale }: { locale: "ar" | "en" }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 ps-16 sm:px-6 lg:ps-6 lg:px-8">
-        <div className="order-1 flex flex-wrap items-center gap-1.5">
+      <div className="flex items-center gap-3 px-4 py-3 ps-16 sm:px-6 lg:ps-6 lg:px-8">
+        {/* لوجو الموبايل فقط - يظهر لما السايدبار مخفي */}
+        <div className="gradient-hero relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl p-1 lg:hidden">
+          <Image src="/Logo.png" alt="L&K Shift" fill sizes="32px" className="object-contain p-1" />
+        </div>
+
+        {/* الأيقونات: تتدفع دائمًا للطرف المقابل للسايدبار باستخدام ms-auto */}
+        <div className="ms-auto flex flex-wrap items-center gap-1.5">
           <ThemeSwitcher />
           <LanguageSwitcher />
           {session?.user ? (
@@ -49,10 +55,6 @@ export async function GlobalHeader({ locale }: { locale: "ar" | "en" }) {
               {t("login")}
             </Link>
           )}
-        </div>
-
-        <div className="order-2 gradient-hero relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl p-1 lg:hidden">
-          <Image src="/Logo.png" alt="L&K Shift" fill sizes="32px" className="object-contain p-1" />
         </div>
       </div>
     </header>
