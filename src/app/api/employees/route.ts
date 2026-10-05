@@ -60,6 +60,12 @@ export async function POST(request: Request) {
       passwordHash,
       systemRole: "EMPLOYEE",
       isActive: body.isActive ?? true,
+      salaryType: body.salaryType || "MONTHLY",
+      hourlyRate: body.hourlyRate ? String(body.hourlyRate) : null,
+      monthlySalary: body.monthlySalary ? String(body.monthlySalary) : null,
+      workingHoursPerDay: body.workingHoursPerDay ? Number(body.workingHoursPerDay) : 8,
+      workingDaysPerMonth: body.workingDaysPerMonth ? Number(body.workingDaysPerMonth) : 26,
+      annualLeaveDays: body.annualLeaveDays ? Number(body.annualLeaveDays) : 21,
     })
     .returning();
 
