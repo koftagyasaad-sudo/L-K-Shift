@@ -1,6 +1,21 @@
 // أدوات معالجة وتنسيق التواريخ الخاصة بحسابات الحضور والانصراف
 
 /**
+ * الحصول على تاريخ اليوم الحالي بتوقيت القاهرة بصيغة (YYYY-MM-DD)
+ */
+export function getCairoDateString(date: Date = new Date()): string {
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: "Africa/Cairo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  };
+
+  const formatter = new Intl.DateTimeFormat("en-CA", options);
+  return formatter.format(date); // ترجع بصيغة YYYY-MM-DD
+}
+
+/**
  * إرجاع بداية اليوم الحالي (ساعة 00:00:00)
  */
 export function getStartOfDay(date: Date = new Date()): Date {
