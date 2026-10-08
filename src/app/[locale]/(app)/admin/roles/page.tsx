@@ -19,15 +19,20 @@ export default async function RolesPage({
 
   const allRoles = await db.select().from(roles);
 
-  // قائمة الصلاحيات المتاحة في النظام
+  // كتالوج الصلاحيات بالشكل المطلوب المتوافق مع PermissionCategory[]
   const permissionCatalog = [
-    { id: "manage_employees", name: "إدارة الموظفين" },
-    { id: "manage_branches", name: "إدارة الفروع" },
-    { id: "review_attendance", name: "مراجعة الحضور" },
-    { id: "view_reports", name: "عرض التقارير" },
+    {
+      category: "Management",
+      categoryAr: "الإدارة والصلاحيات",
+      items: [
+        { id: "manage_employees", name: "إدارة الموظفين" },
+        { id: "manage_branches", name: "إدارة الفروع" },
+        { id: "review_attendance", name: "مراجعة الحضور" },
+        { id: "view_reports", name: "عرض التقارير" },
+      ],
+    },
   ];
 
-  // تنسيق البيانات لتتطابق تماماً مع النوع المطلوب لـ RoleManager
   const formattedRoles = allRoles.map((r) => ({
     id: r.id,
     name: r.nameEn || r.nameAr,
@@ -46,7 +51,7 @@ export default async function RolesPage({
         </h1>
         <p className="mt-1 text-sm text-foreground-muted">
           {locale === "ar"
-            ? "التحكم في صلاحيات المستخدمين والأدوار المتاحة بال النظام"
+            ? "التحكم في صلاحيات المستخدمين والأدوار المتاحة بالنظام"
             : "Control user roles and permissions in the system"}
         </p>
       </div>
