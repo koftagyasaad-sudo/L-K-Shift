@@ -9,7 +9,7 @@ interface EmployeeAttendanceRecord {
   phone: string;
   branchName: string;
   checkInTime: string;
-  checkOutTime: string;
+  checkOutTime?: string;
   status: string;
 }
 
@@ -88,7 +88,7 @@ export default function EmployeesSearchExport({ data }: EmployeesSearchExportPro
   return (
     <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 text-right dir-rtl space-y-4">
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-        البحث وفلترة سجلات الموظفين
+        البحث وفلترة سجلات الموظفين وتصدير البيانات
       </h3>
 
       {/* خيارات الفلترة والبحث */}
@@ -131,7 +131,7 @@ export default function EmployeesSearchExport({ data }: EmployeesSearchExportPro
         </div>
       </div>
 
-      {/* أزرار العمليات */}
+      {/* أزرار العمليات ملخصة */}
       <div className="flex justify-between items-center pt-2">
         <span className="text-xs text-slate-500 dark:text-slate-400">
           عدد النتائج: <strong className="text-slate-800 dark:text-slate-200">{filteredData.length}</strong> سجل
@@ -156,6 +156,7 @@ export default function EmployeesSearchExport({ data }: EmployeesSearchExportPro
               <th className="p-3">الفرع</th>
               <th className="p-3">وقت الحضور</th>
               <th className="p-3">وقت الانصراف</th>
+              <th className="p-3">الحالة</th>
             </tr>
           </thead>
           <tbody>
@@ -170,11 +171,16 @@ export default function EmployeesSearchExport({ data }: EmployeesSearchExportPro
                   <td className="p-3">
                     {item.checkOutTime ? new Date(item.checkOutTime).toLocaleString("ar-EG") : "-"}
                   </td>
+                  <td className="p-3">
+                    <span className="px-2 py-1 text-xs font-bold rounded-md bg-green-100 text-green-800">
+                      {item.status}
+                    </span>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-slate-400">
+                <td colSpan={7} className="p-4 text-center text-slate-400">
                   لا توجد نتائج تطابق البحث
                 </td>
               </tr>
