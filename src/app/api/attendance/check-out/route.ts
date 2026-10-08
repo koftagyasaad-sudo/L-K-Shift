@@ -24,22 +24,21 @@ export async function POST(request: Request) {
   }
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user?.primaryBranchId) {
+  if (!user?.branchId) {
     return NextResponse.json({ error: "لا يوجد فرع مرتبط بحسابك" }, { status: 400 });
   }
 
-  const [branch] = await db.select().from(branches).where(eq(branches.id, user.primaryBranchId)).limit(1);
+  const [branch] = await db.select().from(branches).where(eq(branches.id, user.branchId)).limit(1);
   if (!branch) {
     return NextResponse.json({ error: "الفرع غير موجود" }, { status: 404 });
   }
 
   const todayStr = getCairoDateString();
-  const workDate = new Date(todayStr);
 
   const [existing] = await db
     .select()
     .from(attendanceLogs)
-    .where(and(eq(attendanceLogs.userId, userId), eq(attendanceLogs.workDate, workDate)))
+    .where(and(eq(attendanceLogs.userId, userId), eq(attendanceLogs.workDate, todayStr)))
     .limit(1);
 
   if (!existing || !existing.checkInTime) {
@@ -61,7 +60,7 @@ export async function POST(request: Request) {
     if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
       lat = parsedLat;
       lng = parsedLng;
-      distance = calculateDistanceMeters(lat, lng, branch.latitude, branch.longitude);
+      distance = calculateDistanceMeters(lat, lng, Number(branch.latitude), Number(branch.longitude));
       if (distance <= branch.geofenceRadius) {
         approvalStatus = "AUTO_APPROVED";
       }
@@ -85,9 +84,9 @@ export async function POST(request: Request) {
     .update(attendanceLogs)
     .set({
       checkOutTime,
-      checkOutLat: lat,
-      checkOutLng: lng,
-      checkOutDistance: distance,
+      checkOutLat: lat !== null ? String(lat) : null,
+      checkOutLng: lng !== null ? String(lng) : null,
+      checkOutDistance: distance !== null ? Math.round(distance) : null,
       checkOutMethod: "GPS",
       checkOutPhotoUrl: blob.url,
       checkOutApprovalStatus: approvalStatus,
