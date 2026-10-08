@@ -19,16 +19,16 @@ export default async function RolesPage({
 
   const allRoles = await db.select().from(roles);
 
-  // كتالوج الصلاحيات بالشكل المطلوب المتوافق مع PermissionCategory[]
+  // كتالوج الصلاحيات مطبقاً عليه الـ label و labelAr بالخصائص المتوافقة تماماً
   const permissionCatalog = [
     {
       category: "Management",
       categoryAr: "الإدارة والصلاحيات",
       items: [
-        { id: "manage_employees", name: "إدارة الموظفين" },
-        { id: "manage_branches", name: "إدارة الفروع" },
-        { id: "review_attendance", name: "مراجعة الحضور" },
-        { id: "view_reports", name: "عرض التقارير" },
+        { id: "manage_employees", label: "Manage Employees", labelAr: "إدارة الموظفين" },
+        { id: "manage_branches", label: "Manage Branches", labelAr: "إدارة الفروع" },
+        { id: "review_attendance", label: "Review Attendance", labelAr: "مراجعة الحضور" },
+        { id: "view_reports", label: "View Reports", labelAr: "عرض التقارير" },
       ],
     },
   ];
