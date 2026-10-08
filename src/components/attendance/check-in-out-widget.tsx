@@ -1,270 +1,330 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, Clock, Loader2, MapPin, AlertTriangle, LogIn, LogOut } from "lucide-react";
-import { toast } from "sonner";
-import { useRouter } from "@/i18n/navigation";
+import React, { useState, useEffect, useRef } from "react";
 
-type AttendanceRecord = {
+interface Branch {
   id: number;
-  checkInTime: string | null;
-  checkOutTime: string | null;
-} | null;
+  nameAr: string;
+  latitude: number;
+  longitude: number;
+  geofenceRadius: number; // النطاق المسموح به بالأمتار
+}
 
-export function CheckInOutWidget({ locale }: { locale: "ar" | "en" }) {
-  const isAr = locale === "ar";
-  const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+interface CheckInOutProps {
+  userId: number;
+  branch: Branch;
+  onSuccess?: () => void;
+}
+
+export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps) {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [distance, setDistance] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [mode, setMode] = useState<"CAMERA" | "LOCATION_ONLY">("CAMERA");
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const [loadingToday, setLoadingToday] = useState(true);
-  const [record, setRecord] = useState<AttendanceRecord>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  // حساب المسافة بالأمتار (Haversine Formula)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371e3; // نصف قطر الأرض بالأمتار
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
 
-  const mode: "checkIn" | "checkOut" | "done" = !record?.checkInTime
-    ? "checkIn"
-    : !record?.checkOutTime
-      ? "checkOut"
-      : "done";
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  async function loadToday() {
-    setLoadingToday(true);
+    return Math.round(R * c);
+  };
+
+  // جلب الموقع الجغرافي للمستخدم
+  const getCurrentLocation = (): Promise<{ lat: number; lng: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("خاصية تحديد الموقع الجغرافي غير مدعومة في جهازك"));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setUserLocation({ lat, lng });
+
+          const dist = calculateDistance(lat, lng, branch.latitude, branch.longitude);
+          setDistance(dist);
+          resolve({ lat, lng });
+        },
+        (error) => {
+          let errText = "فشل الحصول على الموقع الجغرافي";
+          if (error.code === error.PERMISSION_DENIED) {
+            errText = "رجاءً قم بتفعيل صلاحية الموقع (GPS) في المتصفح";
+          }
+          reject(new Error(errText));
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  };
+
+  // تشغيل الكاميرا مع توافقية الموبايل
+  const startCamera = async () => {
+    setErrorMessage(null);
     try {
-      const res = await fetch("/api/attendance/today");
-      const data = await res.json();
-      setRecord(data.record);
-    } finally {
-      setLoadingToday(false);
-    }
-  }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("الكاميرا تتطلب الاتصال الآمن (HTTPS) أو غير مدعومة في هذا المتصفح");
+      }
 
-  useEffect(() => {
-    loadToday();
-    return () => stopCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function openCamera() {
-    setCameraError(null);
-    try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false,
       });
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
-      setCameraOpen(true);
-    } catch {
-      setCameraError(
-        isAr
-          ? "تعذر الوصول إلى الكاميرا. يرجى السماح بالصلاحية من إعدادات المتصفح."
-          : "Could not access camera. Please allow camera permission."
-      );
+      setCameraActive(true);
+    } catch (err: any) {
+      setErrorMessage(err.message || "عذرًا، تعذر فتح الكاميرا. تحقق من الصلاحيات");
+      setCameraActive(false);
     }
-  }
+  };
 
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    setCameraOpen(false);
-  }
+  // إيقاف الكاميرا
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
 
-  function getLocation(): Promise<{ lat: number | null; lng: number | null }> {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve({ lat: null, lng: null });
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve({ lat: null, lng: null }),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    });
-  }
+  // التقاط صورة
+  const takePhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          setPhotoBlob(blob);
+          setPhotoPreview(URL.createObjectURL(blob));
+          stopCamera();
+        }
+      }, "image/jpeg", 0.8);
+    }
+  };
 
-  async function captureAndSubmit() {
-    if (!videoRef.current || !canvasRef.current) return;
-    setSubmitting(true);
+  // إعادة الالتقاط
+  const resetPhoto = () => {
+    setPhotoBlob(null);
+    setPhotoPreview(null);
+    startCamera();
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  // تنفيذ تسجيل الحضور / الانصراف
+  const handleAttendance = async (type: "CHECK_IN" | "CHECK_OUT") => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setLoading(true);
 
     try {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
+      // 1. التحقق من الموقع الجغرافي
+      const loc = await getCurrentLocation();
+      const currentDist = calculateDistance(loc.lat, loc.lng, branch.latitude, branch.longitude);
 
-      // تصغير الصورة لتخفيف حجم الرفع
-      const maxWidth = 720;
-      const scale = Math.min(1, maxWidth / video.videoWidth);
-      canvas.width = video.videoWidth * scale;
-      canvas.height = video.videoHeight * scale;
+      if (currentDist > branch.geofenceRadius) {
+        throw new Error(
+          `أنت خارج نطاق الفرع المسموح به! المسافة الحالية: ${currentDist} متر (المسموح به حتى ${branch.geofenceRadius} متر)`
+        );
+      }
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas not supported");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // 2. التحقق من التقاط الصورة في حالة وضع الكاميرا
+      if (mode === "CAMERA" && !photoBlob) {
+        throw new Error("برجاء التقاط صورة وجهك أولاً لإتمام التسجيل");
+      }
 
-      const blob: Blob | null = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.85)
-      );
-
-      if (!blob) throw new Error("Failed to capture photo");
-
-      const { lat, lng } = await getLocation();
-
+      // 3. تجهيز البيانات للإرسال
       const formData = new FormData();
-      formData.append("photo", blob, "capture.jpg");
-      if (lat !== null && lng !== null) {
-        formData.append("lat", String(lat));
-        formData.append("lng", String(lng));
+      formData.append("userId", userId.toString());
+      formData.append("branchId", branch.id.toString());
+      formData.append("type", type);
+      formData.append("latitude", loc.lat.toString());
+      formData.append("longitude", loc.lng.toString());
+      formData.append("distanceMeter", currentDist.toString());
+      formData.append("mode", mode);
+
+      if (photoBlob) {
+        formData.append("photo", photoBlob, `attendance_${userId}_${Date.now()}.jpg`);
       }
 
-      const endpoint = mode === "checkIn" ? "/api/attendance/check-in" : "/api/attendance/check-out";
-      const res = await fetch(endpoint, { method: "POST", body: formData });
-      const data = await res.json();
+      // 4. إرسال الطلب للسيرفر
+      const response = await fetch("/api/attendance", {
+        method: "POST",
+        body: formData,
+      });
 
-      if (!res.ok) {
-        toast.error(data.error ?? (isAr ? "حدث خطأ" : "Something went wrong"));
-        return;
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "حدث خطأ أثناء تسجيل الحضور");
       }
 
-      if (data.approvalStatus === "AUTO_APPROVED") {
-        toast.success(
-          mode === "checkIn"
-            ? isAr ? "تم تسجيل حضورك بنجاح ✅" : "Checked in successfully ✅"
-            : isAr ? "تم تسجيل انصرافك بنجاح ✅" : "Checked out successfully ✅"
-        );
-      } else {
-        toast.warning(
-          isAr
-            ? "تم إرسال طلبك للمراجعة من قِبل المدير (تعذر تأكيد الموقع)"
-            : "Your request is pending manager review (location could not be verified)"
-        );
-      }
+      setSuccessMessage(
+        type === "CHECK_IN" ? "تم تسجيل الحضور بنجاح ✅" : "تم تسجيل الانصراف بنجاح ✅"
+      );
+      setPhotoBlob(null);
+      setPhotoPreview(null);
 
-      stopCamera();
-      await loadToday();
-      router.refresh();
-    } catch {
-      toast.error(isAr ? "حدث خطأ أثناء التسجيل" : "Error while submitting");
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      setErrorMessage(err.message || "تعذر إكمال العملية");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
-  }
-
-  if (loadingToday) {
-    return (
-      <div className="flex items-center justify-center rounded-[28px] border border-border bg-surface p-10">
-        <Loader2 className="h-6 w-6 animate-spin text-accent" />
-      </div>
-    );
-  }
+  };
 
   return (
-    <div className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground">
-          {isAr ? "تسجيل الحضور والانصراف" : "Attendance Check-In/Out"}
-        </h2>
-        {mode !== "done" && (
-          <span className="flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-            <Clock className="h-3.5 w-3.5" />
-            {new Date().toLocaleTimeString(isAr ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        )}
+    <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 text-right dir-rtl max-w-md mx-auto">
+      <h3 className="text-lg font-bold mb-3 text-slate-800 dark:text-slate-100">
+        تسجيل الحضور والانصراف - {branch.nameAr}
+      </h3>
+
+      {/* خيارات وضع التسجيل */}
+      <div className="flex gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("CAMERA");
+            startCamera();
+          }}
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition ${
+            mode === "CAMERA"
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300"
+          }`}
+        >
+          📷 بالكاميرا
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("LOCATION_ONLY");
+            stopCamera();
+          }}
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition ${
+            mode === "LOCATION_ONLY"
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300"
+          }`}
+        >
+          📍 باللوكيشن فقط
+        </button>
       </div>
 
-      <div className="mt-5">
-        {mode === "done" ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl bg-emerald-500/10 p-8 text-center">
-            <CheckCircle2 className="h-10 w-10 text-emerald-600" />
-            <p className="font-bold text-emerald-700">
-              {isAr ? "لقد أكملت حضورك وانصرافك لهذا اليوم" : "You have completed your attendance for today"}
-            </p>
-          </div>
-        ) : !cameraOpen ? (
-          <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <div
-              className={`flex h-16 w-16 items-center justify-center rounded-full ${
-                mode === "checkIn" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
-              }`}
-            >
-              {mode === "checkIn" ? <LogIn className="h-7 w-7" /> : <LogOut className="h-7 w-7" />}
-            </div>
-            <p className="text-sm text-foreground-muted">
-              {mode === "checkIn"
-                ? isAr
-                  ? "اضغط لالتقاط صورة وتسجيل حضورك الآن"
-                  : "Tap to take a photo and check in now"
-                : isAr
-                  ? "اضغط لالتقاط صورة وتسجيل انصرافك الآن"
-                  : "Tap to take a photo and check out now"}
-            </p>
-            {record?.checkInTime && mode === "checkOut" && (
-              <p className="text-xs text-foreground-muted">
-                {isAr ? "وقت الحضور: " : "Checked in at: "}
-                {new Date(record.checkInTime).toLocaleTimeString(isAr ? "ar-EG" : "en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-            )}
+      {/* منطقة عرض الكاميرا أو المعاينة */}
+      {mode === "CAMERA" && (
+        <div className="relative mb-4 bg-slate-900 rounded-lg overflow-hidden h-64 flex items-center justify-center border">
+          {photoPreview ? (
+            <img src={photoPreview} alt="معاينة الصورة" className="w-full h-full object-cover" />
+          ) : (
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
+            />
+          )}
+
+          {!cameraActive && !photoPreview && (
             <button
-              type="button"
-              onClick={openCamera}
-              className={`flex items-center gap-2 rounded-full px-6 py-3 text-sm font-bold text-white shadow-lg transition ${
-                mode === "checkIn"
-                  ? "bg-emerald-600 shadow-emerald-600/30 hover:bg-emerald-700"
-                  : "bg-amber-600 shadow-amber-600/30 hover:bg-amber-700"
-              }`}
+              onClick={startCamera}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow hover:bg-blue-700 transition"
             >
-              <Camera className="h-4 w-4" />
-              {mode === "checkIn"
-                ? isAr ? "تسجيل حضور" : "Check In"
-                : isAr ? "تسجيل انصراف" : "Check Out"}
+              فتح الكاميرا
             </button>
-            {cameraError && (
-              <p className="flex items-center gap-1.5 text-xs font-medium text-danger">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {cameraError}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-black">
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <video ref={videoRef} className="w-full" playsInline muted />
-            </div>
-            <canvas ref={canvasRef} className="hidden" />
-            <p className="flex items-center gap-1.5 text-xs text-foreground-muted">
-              <MapPin className="h-3.5 w-3.5" />
-              {isAr ? "سيتم تحديد موقعك تلقائيًا عند التقاط الصورة" : "Your location will be captured automatically"}
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={stopCamera}
-                disabled={submitting}
-                className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-foreground-muted transition hover:bg-background-secondary disabled:opacity-50"
-              >
-                {isAr ? "إلغاء" : "Cancel"}
-              </button>
-              <button
-                type="button"
-                onClick={captureAndSubmit}
-                disabled={submitting}
-                className="flex items-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover disabled:opacity-50"
-              >
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                {isAr ? "التقاط وتأكيد" : "Capture & Confirm"}
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
+
+      {/* أزرار الكاميرا */}
+      {mode === "CAMERA" && (
+        <div className="mb-4">
+          {cameraActive && !photoPreview && (
+            <button
+              onClick={takePhoto}
+              className="w-full py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
+            >
+              التقاط الصورة
+            </button>
+          )}
+          {photoPreview && (
+            <button
+              onClick={resetPhoto}
+              className="w-full py-2 bg-slate-600 text-white font-semibold rounded-lg hover:bg-slate-700 transition"
+            >
+              إعادة التقاط الصورة
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* عرض تفاصيل المسافة */}
+      {distance !== null && (
+        <div className="text-xs mb-4 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          المسافة بينك وبين الفرع: <span className="font-bold">{distance} متر</span> (المسموح: حتى{" "}
+          {branch.geofenceRadius} متر)
+        </div>
+      )}
+
+      {/* رسائل الأخطاء والنجاح */}
+      {errorMessage && (
+        <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-lg">
+          {errorMessage}
+        </div>
+      )}
+      {successMessage && (
+        <div className="mb-4 p-3 text-sm text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-lg">
+          {successMessage}
+        </div>
+      )}
+
+      {/* أزرار تسجيل الحضور والانصراف */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => handleAttendance("CHECK_IN")}
+          disabled={loading}
+          className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition shadow"
+        >
+          {loading ? "جاري الحفظ..." : "تسجيل حضور"}
+        </button>
+        <button
+          onClick={() => handleAttendance("CHECK_OUT")}
+          disabled={loading}
+          className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 disabled:opacity-50 transition shadow"
+        >
+          {loading ? "جاري الحفظ..." : "تسجيل انصراف"}
+        </button>
       </div>
     </div>
   );
