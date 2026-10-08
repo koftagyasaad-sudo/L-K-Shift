@@ -12,7 +12,7 @@ export async function GET() {
   }
 
   const userId = Number(session.user.id);
-  const workDate = new Date(getCairoDateString());
+  const workDate = getCairoDateString();
 
   const [record] = await db
     .select()
