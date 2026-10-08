@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { users, roles, branches } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import EmployeeForm from "@/components/admin/employee-form";
+import { EmployeeForm } from "@/components/admin/employee-form";
 
 export default async function EditEmployeePage({
   params,
