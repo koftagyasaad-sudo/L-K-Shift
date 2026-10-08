@@ -3,9 +3,8 @@ import { db } from "@/db";
 import { attendanceLogs, branches } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-// دالة حساب المسافة بين الإحداثيات بالأمتار (Haversine Formula)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3; // نصف قطر الأرض بالأمتار
+  const R = 6371e3;
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
   const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -28,7 +27,6 @@ export async function POST(request: Request) {
     const type = formData.get("type") as "CHECK_IN" | "CHECK_OUT";
     const latStr = formData.get("latitude") as string;
     const lngStr = formData.get("longitude") as string;
-    const mode = formData.get("mode") as string;
     const photo = formData.get("photo") as File | null;
 
     if (!userIdStr || !branchIdStr || !type || !latStr || !lngStr) {
@@ -43,7 +41,6 @@ export async function POST(request: Request) {
     const userLat = parseFloat(latStr);
     const userLng = parseFloat(lngStr);
 
-    // 1. جلب بيانات الفرع للتحقق من النطاق الجغرافي الجغرافي (Geofence)
     const branchList = await db
       .select()
       .from(branches)
@@ -64,7 +61,6 @@ export async function POST(request: Request) {
       Number(branch.longitude)
     );
 
-    // 2. التحقق الجغرافي السيرفري المزدوج بالأمتار
     if (distanceMeter > branch.geofenceRadius) {
       return NextResponse.json(
         {
@@ -75,14 +71,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. تحويل الصورة إلى Data URL أو مسار حفظ (تخزين مؤقت/دائم)
     let photoUrl: string | null = null;
     if (photo) {
       const buffer = Buffer.from(await photo.arrayBuffer());
       photoUrl = `data:${photo.type};base64,${buffer.toString("base64")}`;
     }
 
-    // 4. تسجيل الحضور أو الانصراف في داتابيز
     const now = new Date();
 
     if (type === "CHECK_IN") {
@@ -105,7 +99,6 @@ export async function POST(request: Request) {
         data: newLog,
       });
     } else {
-      // تسجيل انصراف
       const [updatedLog] = await db
         .insert(attendanceLogs)
         .values({
