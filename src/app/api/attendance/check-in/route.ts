@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         branchId: users.branchId,
       })
       .from(users)
-      .where(eq(users.id, session.user.id))
+      .where(eq(users.id, Number(session.user.id)))
       .limit(1);
 
     if (!user) {
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
       .values({
         userId: user.id,
         branchId: user.branchId,
+        workDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD
         checkInTime: new Date(),
       })
       .returning();
