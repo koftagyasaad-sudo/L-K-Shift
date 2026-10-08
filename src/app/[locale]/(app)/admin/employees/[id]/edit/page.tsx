@@ -1,7 +1,7 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { users, roles, branches } from "@/db/schema";
+import { users, branches } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { EmployeeForm } from "@/components/admin/employee-form";
 
@@ -28,9 +28,27 @@ export default async function EditEmployeePage({
     notFound();
   }
 
-  // جلب الأدوار والفروع للنموذج
-  const allRoles = await db.select().from(roles);
+  // جلب الفروع
   const allBranches = await db.select().from(branches);
+
+  // تحويل الفروع للصيغة المتوافقة BranchOption[]
+  const formattedBranches = allBranches.map((b) => ({
+    id: b.id,
+    nameAr: b.nameAr,
+    nameEn: b.nameEn,
+  }));
+
+  // تجهيز القيم الأولية للنموذج
+  const initialValues = {
+    id: employee.id,
+    name: employee.name,
+    email: employee.email ?? undefined,
+    phone: employee.phone ?? undefined,
+    employeeNumber: employee.employeeNumber ?? undefined,
+    branchId: employee.branchId ?? undefined,
+    roleId: employee.roleId ?? undefined,
+    isActive: employee.isActive ?? true,
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6 dir-rtl text-right">
@@ -44,9 +62,9 @@ export default async function EditEmployeePage({
       </div>
 
       <EmployeeForm
-        employee={employee}
-        roles={allRoles}
-        branches={allBranches}
+        mode="edit"
+        initialValues={initialValues}
+        branches={formattedBranches}
         locale={locale as "ar" | "en"}
       />
     </div>
