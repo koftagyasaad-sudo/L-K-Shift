@@ -5,7 +5,6 @@ import { eq, desc } from "drizzle-orm";
 import EmployeesSearchExport from "@/components/admin/employees-search-export";
 
 export default async function AdminAttendanceReviewPage() {
-  // جلب سجلات الحضور المباشرة من Neon DB مع ربط بيانات الموظف والفرع
   const logs = await db
     .select({
       id: attendanceLogs.id,
@@ -22,14 +21,13 @@ export default async function AdminAttendanceReviewPage() {
     .leftJoin(branches, eq(attendanceLogs.branchId, branches.id))
     .orderBy(desc(attendanceLogs.checkInTime));
 
-  // تحويل البيانات لتناسب المكون
   const formattedData = logs.map((log) => ({
     id: log.id,
     employeeName: log.employeeName || "غير محدد",
     performanceId: log.performanceId || "-",
     phone: log.phone || "-",
     branchName: log.branchName || "الفرع الرئيسي",
-    checkInTime: log.checkInTime ? new LogDate(log.checkInTime).toISOString() : new Date().toISOString(),
+    checkInTime: log.checkInTime ? new Date(log.checkInTime).toISOString() : new Date().toISOString(),
     checkOutTime: log.checkOutTime ? new Date(log.checkOutTime).toISOString() : undefined,
     status: log.status === "AUTO_APPROVED" ? "مقبول تلقائياً" : "قيد المراجعة",
   }));
@@ -40,7 +38,6 @@ export default async function AdminAttendanceReviewPage() {
         📋 تقارير سجلات الحضور والانصراف
       </h1>
 
-      {/* مكون البحث والفلترة والتصدير إلى Excel */}
       <EmployeesSearchExport data={formattedData} />
     </div>
   );
