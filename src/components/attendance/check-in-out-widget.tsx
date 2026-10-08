@@ -16,7 +16,7 @@ interface CheckInOutProps {
   onSuccess?: () => void;
 }
 
-export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps) {
+export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
@@ -32,7 +32,7 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
 
   // حساب المسافة بالأمتار (Haversine Formula)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371e3; // نصف قطر الأرض بالأمتار
+    const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -149,7 +149,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
     setLoading(true);
 
     try {
-      // 1. التحقق من الموقع الجغرافي
       const loc = await getCurrentLocation();
       const currentDist = calculateDistance(loc.lat, loc.lng, branch.latitude, branch.longitude);
 
@@ -159,12 +158,10 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         );
       }
 
-      // 2. التحقق من التقاط الصورة في حالة وضع الكاميرا
       if (mode === "CAMERA" && !photoBlob) {
         throw new Error("برجاء التقاط صورة وجهك أولاً لإتمام التسجيل");
       }
 
-      // 3. تجهيز البيانات للإرسال
       const formData = new FormData();
       formData.append("userId", userId.toString());
       formData.append("branchId", branch.id.toString());
@@ -178,7 +175,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         formData.append("photo", photoBlob, `attendance_${userId}_${Date.now()}.jpg`);
       }
 
-      // 4. إرسال الطلب للسيرفر
       const response = await fetch("/api/attendance", {
         method: "POST",
         body: formData,
@@ -210,7 +206,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         تسجيل الحضور والانصراف - {branch.nameAr}
       </h3>
 
-      {/* خيارات وضع التسجيل */}
       <div className="flex gap-2 mb-4">
         <button
           type="button"
@@ -242,7 +237,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         </button>
       </div>
 
-      {/* منطقة عرض الكاميرا أو المعاينة */}
       {mode === "CAMERA" && (
         <div className="relative mb-4 bg-slate-900 rounded-lg overflow-hidden h-64 flex items-center justify-center border">
           {photoPreview ? (
@@ -267,7 +261,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         </div>
       )}
 
-      {/* أزرار الكاميرا */}
       {mode === "CAMERA" && (
         <div className="mb-4">
           {cameraActive && !photoPreview && (
@@ -289,7 +282,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         </div>
       )}
 
-      {/* عرض تفاصيل المسافة */}
       {distance !== null && (
         <div className="text-xs mb-4 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
           المسافة بينك وبين الفرع: <span className="font-bold">{distance} متر</span> (المسموح: حتى{" "}
@@ -297,7 +289,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         </div>
       )}
 
-      {/* رسائل الأخطاء والنجاح */}
       {errorMessage && (
         <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-lg">
           {errorMessage}
@@ -309,7 +300,6 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
         </div>
       )}
 
-      {/* أزرار تسجيل الحضور والانصراف */}
       <div className="flex gap-3">
         <button
           onClick={() => handleAttendance("CHECK_IN")}
@@ -329,3 +319,5 @@ export default function CheckInOutWidget({ userId, branch, onSuccess }: CheckInO
     </div>
   );
 }
+
+export default CheckInOutWidget;
