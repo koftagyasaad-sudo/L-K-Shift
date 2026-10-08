@@ -309,3 +309,102 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
             setMode("LOCATION_ONLY");
             stopCamera();
           }}
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition ${
+            mode === "LOCATION_ONLY"
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300"
+          }`}
+        >
+          📍 باللوكيشن فقط
+        </button>
+      </div>
+
+      {mode === "CAMERA" && (
+        <div className="relative mb-4 bg-slate-900 rounded-lg overflow-hidden h-64 flex items-center justify-center border">
+          {photoPreview ? (
+            <img src={photoPreview} alt="معاينة الصورة" className="w-full h-full object-cover" />
+          ) : (
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
+            />
+          )}
+
+          {!cameraActive && !photoPreview && (
+            <button
+              type="button"
+              onClick={startCamera}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow hover:bg-blue-700 transition"
+            >
+              فتح الكاميرا
+            </button>
+          )}
+        </div>
+      )}
+
+      {mode === "CAMERA" && (
+        <div className="mb-4">
+          {cameraActive && !photoPreview && (
+            <button
+              type="button"
+              onClick={takePhoto}
+              className="w-full py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
+            >
+              التقاط الصورة
+            </button>
+          )}
+          {photoPreview && (
+            <button
+              type="button"
+              onClick={resetPhoto}
+              className="w-full py-2 bg-slate-600 text-white font-semibold rounded-lg hover:bg-slate-700 transition"
+            >
+              إعادة التقاط الصورة
+            </button>
+          )}
+        </div>
+      )}
+
+      {distance !== null && (
+        <div className="text-xs mb-4 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          المسافة بينك وبين الفرع: <span className="font-bold">{distance} متر</span> (المسموح: حتى{" "}
+          {activeBranch.geofenceRadius} متر)
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-lg">
+          {errorMessage}
+        </div>
+      )}
+      {successMessage && (
+        <div className="mb-4 p-3 text-sm text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-lg">
+          {successMessage}
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => handleAttendance("CHECK_IN")}
+          disabled={loading}
+          className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition shadow"
+        >
+          {loading ? "جاري الحفظ..." : "تسجيل حضور"}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleAttendance("CHECK_OUT")}
+          disabled={loading}
+          className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 disabled:opacity-50 transition shadow"
+        >
+          {loading ? "جاري الحفظ..." : "تسجيل انصراف"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default CheckInOutWidget;
