@@ -18,7 +18,7 @@ export default async function DashboardPage({
 
   const branchRows = await db.select().from(branches).orderBy(branches.id);
   
-  // استدعاء الحقول الموجودة فعلياً في جدول users المتوافقة مع الـ Schema
+  // الاستعلام يعتمد فقط على الحقول الموجودة في قاعدة البيانات (branchId)
   const userRows = await db
     .select({
       id: users.id,
