@@ -75,7 +75,6 @@ export async function POST(request: Request) {
   const checkInTime = new Date();
 
   if (existing) {
-    // سجل موجود لنفس اليوم بدون check-in (حالة نادرة) -> تحديث
     await db
       .update(attendanceLogs)
       .set({
