@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, branches, customRoles, customRoleAssignments } from "@/db/schema";
+import { users, branches, roles, customRoleAssignments } from "@/db/schema";
 import { Link, redirect } from "@/i18n/navigation";
 import { Plus } from "lucide-react";
 import { EmployeeDeleteButton } from "@/components/admin/employee-delete-button";
@@ -21,12 +21,16 @@ export default async function EmployeesPage({
   const [allUsers, allBranches, allRoles, allAssignments] = await Promise.all([
     db.select().from(users).orderBy(users.id),
     db.select().from(branches),
-    db.select().from(customRoles),
+    db.select().from(roles),
     db.select().from(customRoleAssignments),
   ]);
 
-  const branchMap = new Map(allBranches.map((b) => [b.id, locale === "ar" ? b.nameAr : b.nameEn]));
-  const roleMap = new Map(allRoles.map((r) => [r.id, r.nameAr]));
+  const branchMap = new Map(
+    allBranches.map((b) => [b.id, locale === "ar" ? b.nameAr : b.nameEn])
+  );
+  
+  // تم التصحيح هنا لاستخدام الحقل الصحيح r.name بدلاً من r.nameAr غير الموجودة
+  const roleMap = new Map(allRoles.map((r) => [r.id, r.name]));
 
   const managementLabels: Record<string, { ar: string; en: string }> = {
     NONE: { ar: "مستخدم عادي", en: "Regular User" },
@@ -35,7 +39,7 @@ export default async function EmployeesPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dir-rtl text-right">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
@@ -47,7 +51,6 @@ export default async function EmployeesPage({
               : "Add and manage employee data, roles, and permissions"}
           </p>
         </div>
-
         <Link
           href="/admin/employees/new"
           locale={locale}
@@ -74,20 +77,25 @@ export default async function EmployeesPage({
           </thead>
           <tbody>
             {allUsers.map((user) => {
-              const userRoleIds = allAssignments.filter((a) => a.userId === user.id).map((a) => a.roleId);
+              const userRoleIds = allAssignments
+                .filter((a) => a.userId === user.id)
+                .map((a) => a.roleId);
+
               return (
                 <tr key={user.id} className="border-b border-border last:border-0">
-                  <td className="p-3 text-foreground">
-                    {locale === "ar" ? user.fullNameAr : (user.fullNameEn ?? user.fullNameAr)}
+                  <td className="p-3 text-foreground font-semibold">
+                    {user.name}
                   </td>
-                  <td className="p-3 text-foreground-muted" dir="ltr">{user.phone}</td>
-                  <td className="p-3 text-foreground-muted">{user.jobRole}</td>
+                  <td className="p-3 text-foreground-muted" dir="ltr">
+                    {user.phone || "-"}
+                  </td>
+                  <td className="p-3 text-foreground-muted">-</td>
                   <td className="p-3 text-foreground-muted">
-                    {user.primaryBranchId ? (branchMap.get(user.primaryBranchId) ?? "-") : "-"}
+                    {user.branchId ? (branchMap.get(user.branchId) ?? "-") : "-"}
                   </td>
                   <td className="p-3">
                     <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
-                      {managementLabels[user.managementRole][locale as "ar" | "en"]}
+                      مستخدم
                     </span>
                   </td>
                   <td className="p-3 text-foreground-muted">
@@ -98,12 +106,18 @@ export default async function EmployeesPage({
                   <td className="p-3">
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        user.isActive ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
+                        user.isActive
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : "bg-red-500/10 text-red-600"
                       }`}
                     >
                       {user.isActive
-                        ? locale === "ar" ? "نشط" : "Active"
-                        : locale === "ar" ? "موقوف" : "Inactive"}
+                        ? locale === "ar"
+                          ? "نشط"
+                          : "Active"
+                        : locale === "ar"
+                        ? "موقوف"
+                        : "Inactive"}
                     </span>
                   </td>
                   <td className="p-3">
