@@ -1,198 +1,202 @@
-// src/app/[locale]/(app)/branches/[id]/page.tsx
-import { notFound } from "next/navigation";
-import { Link } from "@/i18n/navigation";
-import { auth } from "@/auth";
-import { db } from "@/db";
-import { attendanceLogs, branches, users } from "@/db/schema";
-import { eq, ne, or, isNull } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
-import { ArrowRight, ArrowLeft, MapPin, Wifi, Users as UsersIcon, Plus } from "lucide-react";
-import {
-  BranchEmployeeManager,
-  RemoveFromBranchButton,
-} from "@/components/admin/branch-employee-manager";
+"use client";
 
-export default async function BranchDetailsPage({
-  params,
-}: {
-  params: Promise<{ locale: string; id: string }>;
-}) {
-  const { locale, id } = await params;
-  const branchId = Number(id);
+import React, { useState, useEffect } from "react";
 
-  if (!branchId || Number.isNaN(branchId)) {
-    notFound();
-  }
+interface Branch {
+  id: number;
+  nameAr: string;
+  nameEn: string;
+  latitude: number;
+  longitude: number;
+  geofenceRadius: number;
+  isActive: boolean;
+}
 
-  const t = await getTranslations();
-  const typedLocale = locale as "ar" | "en";
-  const session = await auth();
-  const isSuperAdmin = session?.user?.systemRole === "SUPER_ADMIN";
+export default function BranchesManagementPage() {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [form, setForm] = useState({
+    nameAr: "",
+    nameEn: "",
+    latitude: "",
+    longitude: "",
+    geofenceRadius: "100",
+  });
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const [branch] = await db.select().from(branches).where(eq(branches.id, branchId)).limit(1);
-  if (!branch) {
-    notFound();
-  }
+  // جلب قائمة الفروع
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch("/api/branches");
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(data.branches || data || []);
+      }
+    } catch (err) {
+      console.error("فشل جلب الفروع:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const employees = await db.select().from(users).where(eq(users.primaryBranchId, branchId));
-  const attendanceRows = await db
-    .select()
-    .from(attendanceLogs)
-    .where(eq(attendanceLogs.branchId, branchId))
-    .orderBy(attendanceLogs.workDate);
+  useEffect(() => {
+    fetchBranches();
+  }, []);
 
-  // الموظفون المتاحون للإضافة لهذا الفرع (مش مسجلين فيه بالفعل، ومش SUPER_ADMIN)
-  const availableUsers = isSuperAdmin
-    ? await db
-        .select({
-          id: users.id,
-          fullNameAr: users.fullNameAr,
-          fullNameEn: users.fullNameEn,
-          primaryBranchId: users.primaryBranchId,
-        })
-        .from(users)
-        .where(
-          or(ne(users.primaryBranchId, branchId), isNull(users.primaryBranchId)),
-        )
-    : [];
+  // إضافة فرع جديد
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatusMessage(null);
 
-  const filteredAvailableUsers = availableUsers.filter((u) => u.primaryBranchId !== branchId);
+    if (!form.nameAr || !form.latitude || !form.longitude) {
+      setStatusMessage("يرجى ملء جميع الحقول المطلوبة (الاسم بالعربي، خط العرض، خط الطول)");
+      return;
+    }
 
-  const total = attendanceRows.length;
-  const onTime = attendanceRows.filter((a) => a.status === "ON_TIME").length;
-  const late = attendanceRows.filter((a) => a.status === "LATE").length;
-  const absent = attendanceRows.filter((a) => a.status === "ABSENT").length;
-  const presentRate = total > 0 ? Math.round(((onTime + late) / total) * 100) : 0;
+    try {
+      const res = await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nameAr: form.nameAr,
+          nameEn: form.nameEn || form.nameAr,
+          latitude: parseFloat(form.latitude),
+          longitude: parseFloat(form.longitude),
+          geofenceRadius: parseInt(form.geofenceRadius, 10),
+        }),
+      });
 
-  const BackIcon = typedLocale === "ar" ? ArrowRight : ArrowLeft;
+      if (res.ok) {
+        setStatusMessage("تم حفظ الفرع بنجاح ✅");
+        setForm({ nameAr: "", nameEn: "", latitude: "", longitude: "", geofenceRadius: "100" });
+        fetchBranches();
+      } else {
+        const errData = await res.json();
+        setStatusMessage(errData.error || "حدث خطأ أثناء إضافة الفرع");
+      }
+    } catch (err: any) {
+      setStatusMessage("فشل الاتصال بالسيرفر");
+    }
+  };
 
   return (
-    <div className="space-y-8">
-      <Link
-        href="/"
-        locale={typedLocale}
-        className="inline-flex items-center gap-2 text-sm font-medium text-foreground-muted transition hover:text-accent"
-      >
-        <BackIcon className="h-4 w-4" />
-        <span>{typedLocale === "ar" ? "الرجوع للرئيسية" : "Back to overview"}</span>
-      </Link>
+    <div className="p-6 max-w-6xl mx-auto space-y-6 text-right dir-rtl">
+      <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+        🏢 إدارة الفروع والنطاق الجغرافي (Geofencing)
+      </h1>
 
-      <section className="gradient-hero relative overflow-hidden rounded-[32px] p-8 text-white shadow-2xl shadow-primary/20">
-        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="relative">
-          <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide backdrop-blur-sm">
-            {branch.type.replaceAll("_", " ")}
-          </span>
-          <h1 className="mt-4 text-3xl font-black lg:text-4xl">
-            {typedLocale === "ar" ? branch.nameAr : branch.nameEn}
-          </h1>
-          <div className="mt-3 flex items-center gap-2 text-sm text-white/85">
-            <MapPin className="h-4 w-4" />
-            <span>{branch.address}</span>
-          </div>
-        </div>
-      </section>
+      {/* نموذج إضافة فرع جديد */}
+      <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800">
+        <h2 className="text-lg font-semibold mb-4 text-slate-700 dark:text-slate-200">
+          إضافة فرع جديد
+        </h2>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-[24px] border border-border bg-surface p-5 shadow-sm">
-          <p className="text-sm text-foreground-muted">{typedLocale === "ar" ? "عدد الموظفين" : "Employees"}</p>
-          <p className="mt-2 text-3xl font-black text-foreground">{employees.length}</p>
-        </div>
-        <div className="rounded-[24px] border border-border bg-surface p-5 shadow-sm">
-          <p className="text-sm text-foreground-muted">{t("status.ON_TIME")}</p>
-          <p className="mt-2 text-3xl font-black text-foreground">{onTime}</p>
-        </div>
-        <div className="rounded-[24px] border border-border bg-surface p-5 shadow-sm">
-          <p className="text-sm text-foreground-muted">{t("status.LATE")}</p>
-          <p className="mt-2 text-3xl font-black text-foreground">{late}</p>
-        </div>
-        <div className="rounded-[24px] border border-border bg-surface p-5 shadow-sm">
-          <p className="text-sm text-foreground-muted">{t("status.ABSENT")}</p>
-          <p className="mt-2 text-3xl font-black text-foreground">{absent}</p>
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-foreground">{typedLocale === "ar" ? "نسبة الحضور" : "Attendance rate"}</h2>
-          <span className="text-accent text-2xl font-black">{presentRate}%</span>
-        </div>
-        <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-background-secondary">
-          <div className="gradient-hero h-full rounded-full" style={{ width: `${presentRate}%` }} />
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-foreground">{typedLocale === "ar" ? "الموظفون" : "Employees"}</h2>
-          {isSuperAdmin && (
-            <Link
-              href={{ pathname: "/admin/employees/new", query: { branchId: String(branchId) } }}
-              locale={typedLocale}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground-muted transition hover:bg-background-secondary hover:text-foreground"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {typedLocale === "ar" ? "موظف جديد" : "New Employee"}
-            </Link>
-          )}
-        </div>
-
-        {isSuperAdmin && filteredAvailableUsers.length > 0 && (
-          <div className="mt-4">
-            <BranchEmployeeManager
-              branchId={branchId}
-              locale={typedLocale}
-              availableUsers={filteredAvailableUsers}
-            />
+        {statusMessage && (
+          <div className="mb-4 p-3 text-sm rounded-lg bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+            {statusMessage}
           </div>
         )}
 
-        <div className="mt-4 space-y-3">
-          {employees.length === 0 ? (
-            <p className="text-sm text-foreground-muted">
-              {typedLocale === "ar" ? "لا يوجد موظفون في هذا الفرع" : "No employees assigned"}
-            </p>
-          ) : (
-            employees.map((employee) => (
-              <div
-                key={employee.id}
-                className="flex items-center justify-between rounded-2xl border border-border bg-background-secondary px-4 py-3"
-              >
-                <Link
-                  href={isSuperAdmin ? `/admin/employees/${employee.id}` : "/employee/profile"}
-                  locale={typedLocale}
-                  className="flex min-w-0 flex-1 items-center gap-3"
-                >
-                  <div className="bg-accent/10 text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-                    <UsersIcon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {typedLocale === "ar" ? employee.fullNameAr : (employee.fullNameEn ?? employee.fullNameAr)}
-                    </p>
-                    <p className="truncate text-xs text-foreground-muted">{employee.jobRole}</p>
-                  </div>
-                </Link>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="whitespace-nowrap rounded-full bg-background px-3 py-1 text-[11px] font-semibold text-foreground-muted">
-                    {employee.systemRole.replace("_", " ")}
-                  </span>
-                  {isSuperAdmin && employee.systemRole !== "SUPER_ADMIN" && (
-                    <RemoveFromBranchButton employeeId={employee.id} locale={typedLocale} />
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-semibold mb-1">اسم الفرع (بالعربي)</label>
+            <input
+              type="text"
+              placeholder="مثال: الفرع الرئيسي - القاهرة"
+              value={form.nameAr}
+              onChange={(e) => setForm({ ...form, nameAr: e.target.value })}
+              className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+            />
+          </div>
 
-      {branch.wifiSsid ? (
-        <section className="flex items-center gap-3 rounded-[24px] border border-border bg-surface p-5 text-sm text-foreground-muted shadow-sm">
-          <Wifi className="h-4 w-4" />
-          <span>Wi-Fi: {branch.wifiSsid}</span>
-        </section>
-      ) : null}
+          <div>
+            <label className="block text-xs font-semibold mb-1">خط العرض (Latitude)</label>
+            <input
+              type="number"
+              step="any"
+              placeholder="مثال: 30.0444"
+              value={form.latitude}
+              onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+              className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">خط الطول (Longitude)</label>
+            <input
+              type="number"
+              step="any"
+              placeholder="مثال: 31.2357"
+              value={form.longitude}
+              onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+              className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">
+              نصف قطر نطاق الحضور (بالأمتار)
+            </label>
+            <input
+              type="number"
+              value={form.geofenceRadius}
+              onChange={(e) => setForm({ ...form, geofenceRadius: e.target.value })}
+              className="w-full px-3 py-2 text-sm border rounded-lg dark:bg-slate-800 dark:border-slate-700 dark:text-white"
+            />
+          </div>
+
+          <div className="md:col-span-2 flex items-end">
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition"
+            >
+              حفظ الفرع الجديد
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* جدول عرض الفروع المسجلة */}
+      <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <h2 className="text-lg font-semibold mb-4 text-slate-700 dark:text-slate-200">
+          الفروع المضافة حالياً
+        </h2>
+
+        {loading ? (
+          <p className="text-sm text-slate-500">جاري تحميل الفروع...</p>
+        ) : (
+          <table className="w-full text-sm text-right text-slate-600 dark:text-slate-300">
+            <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b">
+              <tr>
+                <th className="p-3">#</th>
+                <th className="p-3">اسم الفرع</th>
+                <th className="p-3">خط العرض (Lat)</th>
+                <th className="p-3">خط الطول (Lng)</th>
+                <th className="p-3">نطاق المسموح (متر)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {branches.length > 0 ? (
+                branches.map((b) => (
+                  <tr key={b.id} className="border-b hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="p-3">{b.id}</td>
+                    <td className="p-3 font-semibold text-slate-800 dark:text-slate-100">{b.nameAr}</td>
+                    <td className="p-3">{b.latitude}</td>
+                    <td className="p-3">{b.longitude}</td>
+                    <td className="p-3"><span className="px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">{b.geofenceRadius} متر</span></td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="p-4 text-center text-slate-400">
+                    لا توجد فروع مضافة حتى الآن
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
