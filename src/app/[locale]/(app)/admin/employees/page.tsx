@@ -29,8 +29,10 @@ export default async function EmployeesPage({
     allBranches.map((b) => [b.id, locale === "ar" ? b.nameAr : b.nameEn])
   );
   
-  // تم التصحيح هنا لاستخدام الحقل الصحيح r.name بدلاً من r.nameAr غير الموجودة
-  const roleMap = new Map(allRoles.map((r) => [r.id, r.name]));
+  // التصحيح هنا: استخدام nameAr و nameEn حسب تعريف الـ Schema الصحيح لجدول roles
+  const roleMap = new Map(
+    allRoles.map((r) => [r.id, locale === "ar" ? r.nameAr : r.nameEn])
+  );
 
   const managementLabels: Record<string, { ar: string; en: string }> = {
     NONE: { ar: "مستخدم عادي", en: "Regular User" },
