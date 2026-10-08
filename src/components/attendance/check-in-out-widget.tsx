@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { saveOfflineAttendance, syncOfflineAttendance } from "@/lib/offline-sync";
 
 interface Branch {
   id: number;
@@ -26,9 +27,38 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<"CAMERA" | "LOCATION_ONLY">("CAMERA");
+  const [isOnline, setIsOnline] = useState<boolean>(true);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // مراجعة حالة الاتصال بالإنترنت ومزامنة البيانات المعلقة تلقائيًا
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = async () => {
+      setIsOnline(true);
+      const res = await syncOfflineAttendance();
+      if (res.syncedCount > 0) {
+        setSuccessMessage(`تمت مزامنة ${res.syncedCount} سجلات حضور معلقة بنجاح ✅`);
+      }
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // محاولة مزامنة أوليّة عند فتح المكون
+    syncOfflineAttendance();
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // حساب المسافة بالأمتار (Haversine Formula)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -76,7 +106,7 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
     });
   };
 
-  // تشغيل الكاميرا مع توافقية الموبايل
+  // تشغيل الكاميرا
   const startCamera = async () => {
     setErrorMessage(null);
     try {
@@ -142,6 +172,16 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
     };
   }, []);
 
+  // تحويل Blob إلى Base64 للحفظ الأوفلاين
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // تنفيذ تسجيل الحضور / الانصراف
   const handleAttendance = async (type: "CHECK_IN" | "CHECK_OUT") => {
     setErrorMessage(null);
@@ -162,6 +202,32 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
         throw new Error("برجاء التقاط صورة وجهك أولاً لإتمام التسجيل");
       }
 
+      // في حالة انقطاع الإنترنت (Offline Handling)
+      if (!navigator.onLine) {
+        let photoBase64: string | undefined = undefined;
+        if (photoBlob) {
+          photoBase64 = await blobToBase64(photoBlob);
+        }
+
+        await saveOfflineAttendance({
+          userId,
+          branchId: branch.id,
+          type,
+          latitude: loc.lat.toString(),
+          longitude: loc.lng.toString(),
+          timestamp: new Date().toISOString(),
+          photoBase64,
+          mode,
+        });
+
+        setSuccessMessage("تم حفظ التسجيل محليًا (أوفلاين) 📶 وسيتزامن تلقائيًا عند توفر الإنترنت");
+        setPhotoBlob(null);
+        setPhotoPreview(null);
+        if (onSuccess) onSuccess();
+        return;
+      }
+
+      // في حالة وجود إنترنت (Online Request)
       const formData = new FormData();
       formData.append("userId", userId.toString());
       formData.append("branchId", branch.id.toString());
@@ -202,9 +268,18 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
 
   return (
     <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 text-right dir-rtl max-w-md mx-auto">
-      <h3 className="text-lg font-bold mb-3 text-slate-800 dark:text-slate-100">
-        تسجيل الحضور والانصراف - {branch.nameAr}
-      </h3>
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+          تسجيل الحضور - {branch.nameAr}
+        </h3>
+        <span
+          className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+            isOnline ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {isOnline ? "متصل بالإنترنت 🟢" : "أوفلاين 🟡"}
+        </span>
+      </div>
 
       <div className="flex gap-2 mb-4">
         <button
