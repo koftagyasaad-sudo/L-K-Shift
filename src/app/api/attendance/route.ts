@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendanceLogs, branches } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3;
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId = parseInt(userIdStr, 10);
+    const employeeId = parseInt(userIdStr, 10);
     const branchId = parseInt(branchIdStr, 10);
     const userLat = parseFloat(latStr);
     const userLng = parseFloat(lngStr);
@@ -78,13 +78,15 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     if (type === "CHECK_IN") {
       const [newLog] = await db
         .insert(attendanceLogs)
         .values({
-          userId,
+          employeeId,
           branchId,
+          workDate: today,
           checkInTime: now,
           checkInLat: userLat.toString(),
           checkInLng: userLng.toString(),
@@ -99,24 +101,56 @@ export async function POST(request: Request) {
         data: newLog,
       });
     } else {
-      const [updatedLog] = await db
-        .insert(attendanceLogs)
-        .values({
-          userId,
-          branchId,
-          checkOutTime: now,
-          checkOutLat: userLat.toString(),
-          checkOutLng: userLng.toString(),
-          checkOutPhotoUrl: photoUrl,
-          checkOutApprovalStatus: "AUTO_APPROVED",
-        })
-        .returning();
+      // تسجيل الانصراف للسجل القائم الخاص برقم الموظف لليوم
+      const existingLogs = await db
+        .select()
+        .from(attendanceLogs)
+        .where(
+          and(
+            eq(attendanceLogs.employeeId, employeeId),
+            eq(attendanceLogs.workDate, today)
+          )
+        );
 
-      return NextResponse.json({
-        success: true,
-        message: "تم تسجيل الانصراف بنجاح",
-        data: updatedLog,
-      });
+      if (existingLogs.length > 0) {
+        const [updatedLog] = await db
+          .update(attendanceLogs)
+          .set({
+            checkOutTime: now,
+            checkOutLat: userLat.toString(),
+            checkOutLng: userLng.toString(),
+            checkOutPhotoUrl: photoUrl,
+            checkOutApprovalStatus: "AUTO_APPROVED",
+          })
+          .where(eq(attendanceLogs.id, existingLogs[0].id))
+          .returning();
+
+        return NextResponse.json({
+          success: true,
+          message: "تم تسجيل الانصراف بنجاح",
+          data: updatedLog,
+        });
+      } else {
+        const [newLog] = await db
+          .insert(attendanceLogs)
+          .values({
+            employeeId,
+            branchId,
+            workDate: today,
+            checkOutTime: now,
+            checkOutLat: userLat.toString(),
+            checkOutLng: userLng.toString(),
+            checkOutPhotoUrl: photoUrl,
+            checkOutApprovalStatus: "AUTO_APPROVED",
+          })
+          .returning();
+
+        return NextResponse.json({
+          success: true,
+          message: "تم تسجيل الانصراف بنجاح",
+          data: newLog,
+        });
+      }
     }
   } catch (error: any) {
     return NextResponse.json(
