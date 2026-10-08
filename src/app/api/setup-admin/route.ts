@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { hash, compare } from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { branches, users } from "@/db/schema";
 
 const SETUP_KEY = "lk-setup-2024-fix";
 
-// ⚠️ هذا الملف لم يعد يحذف أي بيانات إطلاقًا. فقط يتحقق وينشئ الناقص.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const key = searchParams.get("key");
@@ -18,7 +17,41 @@ export async function GET(request: Request) {
   const log: string[] = [];
 
   try {
-    // 1) تأكد من وجود الفروع، أنشئها فقط لو الجدول فاضي
+    // ==========================================================
+    // الخطوة 0: إصلاح بنية قاعدة البيانات (إضافة أي أعمدة ناقصة بأمان)
+    // ==========================================================
+    log.push("🔧 جاري التحقق من بنية قاعدة البيانات...");
+
+    await db.execute(sql`
+      DO $$ BEGIN
+        CREATE TYPE "approval_status" AS ENUM ('AUTO_APPROVED', 'PENDING_REVIEW', 'APPROVED', 'REJECTED');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+
+    // أعمدة الراتب وساعات العمل
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "working_hours_per_day" integer DEFAULT 8 NOT NULL;`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "working_days_per_month" integer DEFAULT 26 NOT NULL;`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "annual_leave_days" integer DEFAULT 21 NOT NULL;`);
+
+    // أعمدة صور ومراجعة الحضور/الانصراف
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_photo_url" text;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_approval_status" "approval_status";`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_reviewed_by" integer;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_reviewed_at" timestamp with time zone;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_review_notes" text;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_out_photo_url" text;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_out_approval_status" "approval_status";`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_out_reviewed_by" integer;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_out_reviewed_at" timestamp with time zone;`);
+    await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_out_review_notes" text;`);
+
+    log.push("✅ تم التأكد من جميع الأعمدة المطلوبة (الراتب + الحضور بالصور)");
+
+    // ==========================================================
+    // الخطوة 1: تأكد من وجود الفروع (بدون حذف أي شيء)
+    // ==========================================================
     const existingBranches = await db.select().from(branches);
 
     let branchList = existingBranches;
@@ -76,14 +109,16 @@ export async function GET(request: Request) {
           },
         ])
         .returning();
-      log.push(`✅ تم إنشاء ${branchList.length} فروع جديدة (لم تكن موجودة)`);
+      log.push(`✅ تم إنشاء ${branchList.length} فروع جديدة`);
     } else {
-      log.push(`ℹ️ الفروع موجودة بالفعل (${branchList.length} فرع)، لم يتم إنشاء جديد`);
+      log.push(`ℹ️ الفروع موجودة بالفعل (${branchList.length} فرع)`);
     }
 
     const managementBranch = branchList.find((b) => b.nameEn === "Management") ?? branchList[0];
 
-    // 2) تأكد من وجود admin، أنشئه فقط لو مش موجود، أو أصلح كلمة سره لو موجود بس معطوب
+    // ==========================================================
+    // الخطوة 2: تأكد من وجود admin أو أصلحه (بدون حذف أي شيء)
+    // ==========================================================
     const existingAdminList = await db.select().from(users).where(eq(users.phone, "admin"));
 
     if (existingAdminList.length === 0) {
@@ -116,16 +151,16 @@ export async function GET(request: Request) {
           .update(users)
           .set({ passwordHash, isActive: true, systemRole: "SUPER_ADMIN" })
           .where(eq(users.id, admin.id));
-        log.push("🔧 تم إصلاح كلمة مرور/حالة المستخدم admin الموجود بالفعل");
+        log.push("🔧 تم إصلاح كلمة مرور/حالة admin");
       } else {
-        log.push("ℹ️ مستخدم admin موجود بالفعل وكلمة المرور صحيحة، لم يتم تعديل شيء");
+        log.push("ℹ️ admin موجود وكلمة المرور صحيحة بالفعل");
       }
     }
 
     return NextResponse.json({
       success: true,
       log,
-      message: "تم التحقق/الإصلاح بأمان دون حذف أي بيانات. سجّل دخول بـ admin / 123",
+      message: "تم الإصلاح بنجاح وبأمان. سجّل دخول بـ admin / 123",
     });
   } catch (error) {
     log.push(`❌ خطأ: ${String(error)}`);
