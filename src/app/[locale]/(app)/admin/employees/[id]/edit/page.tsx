@@ -47,7 +47,7 @@ export default async function EditEmployeePage({
         employee={employee}
         roles={allRoles}
         branches={allBranches}
-        locale={locale}
+        locale={locale as "ar" | "en"}
       />
     </div>
   );
