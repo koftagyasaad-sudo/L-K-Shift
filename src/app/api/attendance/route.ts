@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const employeeId = parseInt(userIdStr, 10);
+    const userId = parseInt(userIdStr, 10);
     const branchId = parseInt(branchIdStr, 10);
     const userLat = parseFloat(latStr);
     const userLng = parseFloat(lngStr);
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
       const [newLog] = await db
         .insert(attendanceLogs)
         .values({
-          employeeId,
+          userId,
           branchId,
           workDate: today,
           checkInTime: now,
@@ -101,13 +101,12 @@ export async function POST(request: Request) {
         data: newLog,
       });
     } else {
-      // تسجيل الانصراف للسجل القائم الخاص برقم الموظف لليوم
       const existingLogs = await db
         .select()
         .from(attendanceLogs)
         .where(
           and(
-            eq(attendanceLogs.employeeId, employeeId),
+            eq(attendanceLogs.userId, userId),
             eq(attendanceLogs.workDate, today)
           )
         );
@@ -134,7 +133,7 @@ export async function POST(request: Request) {
         const [newLog] = await db
           .insert(attendanceLogs)
           .values({
-            employeeId,
+            userId,
             branchId,
             workDate: today,
             checkOutTime: now,
