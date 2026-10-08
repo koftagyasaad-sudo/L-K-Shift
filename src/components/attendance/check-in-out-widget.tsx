@@ -12,12 +12,13 @@ interface Branch {
 }
 
 interface CheckInOutProps {
-  userId: number;
-  branch: Branch;
+  userId?: number;
+  branch?: Branch;
+  locale?: "ar" | "en";
   onSuccess?: () => void;
 }
 
-export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps) {
+export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess }: CheckInOutProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
@@ -31,6 +32,15 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // قيم افتراضية للفرع في حالة عدم تمرير الفرع كـ prop
+  const activeBranch: Branch = branch || {
+    id: 1,
+    nameAr: "الفرع الرئيسي",
+    latitude: 30.0444,
+    longitude: 31.2357,
+    geofenceRadius: 100,
+  };
 
   // مراجعة حالة الاتصال بالإنترنت ومزامنة البيانات المعلقة تلقائيًا
   useEffect(() => {
@@ -51,7 +61,6 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // محاولة مزامنة أوليّة عند فتح المكون
     syncOfflineAttendance();
 
     return () => {
@@ -90,7 +99,7 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
           const lng = position.coords.longitude;
           setUserLocation({ lat, lng });
 
-          const dist = calculateDistance(lat, lng, branch.latitude, branch.longitude);
+          const dist = calculateDistance(lat, lng, activeBranch.latitude, activeBranch.longitude);
           setDistance(dist);
           resolve({ lat, lng });
         },
@@ -190,11 +199,11 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
 
     try {
       const loc = await getCurrentLocation();
-      const currentDist = calculateDistance(loc.lat, loc.lng, branch.latitude, branch.longitude);
+      const currentDist = calculateDistance(loc.lat, loc.lng, activeBranch.latitude, activeBranch.longitude);
 
-      if (currentDist > branch.geofenceRadius) {
+      if (currentDist > activeBranch.geofenceRadius) {
         throw new Error(
-          `أنت خارج نطاق الفرع المسموح به! المسافة الحالية: ${currentDist} متر (المسموح به حتى ${branch.geofenceRadius} متر)`
+          `أنت خارج نطاق الفرع المسموح به! المسافة الحالية: ${currentDist} متر (المسموح به حتى ${activeBranch.geofenceRadius} متر)`
         );
       }
 
@@ -202,7 +211,6 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
         throw new Error("برجاء التقاط صورة وجهك أولاً لإتمام التسجيل");
       }
 
-      // في حالة انقطاع الإنترنت (Offline Handling)
       if (!navigator.onLine) {
         let photoBase64: string | undefined = undefined;
         if (photoBlob) {
@@ -211,7 +219,7 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
 
         await saveOfflineAttendance({
           userId,
-          branchId: branch.id,
+          branchId: activeBranch.id,
           type,
           latitude: loc.lat.toString(),
           longitude: loc.lng.toString(),
@@ -227,10 +235,9 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
         return;
       }
 
-      // في حالة وجود إنترنت (Online Request)
       const formData = new FormData();
       formData.append("userId", userId.toString());
-      formData.append("branchId", branch.id.toString());
+      formData.append("branchId", activeBranch.id.toString());
       formData.append("type", type);
       formData.append("latitude", loc.lat.toString());
       formData.append("longitude", loc.lng.toString());
@@ -270,7 +277,7 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
     <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 text-right dir-rtl max-w-md mx-auto">
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-          تسجيل الحضور - {branch.nameAr}
+          تسجيل الحضور - {activeBranch.nameAr}
         </h3>
         <span
           className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
@@ -302,97 +309,3 @@ export function CheckInOutWidget({ userId, branch, onSuccess }: CheckInOutProps)
             setMode("LOCATION_ONLY");
             stopCamera();
           }}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition ${
-            mode === "LOCATION_ONLY"
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300"
-          }`}
-        >
-          📍 باللوكيشن فقط
-        </button>
-      </div>
-
-      {mode === "CAMERA" && (
-        <div className="relative mb-4 bg-slate-900 rounded-lg overflow-hidden h-64 flex items-center justify-center border">
-          {photoPreview ? (
-            <img src={photoPreview} alt="معاينة الصورة" className="w-full h-full object-cover" />
-          ) : (
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
-            />
-          )}
-
-          {!cameraActive && !photoPreview && (
-            <button
-              onClick={startCamera}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow hover:bg-blue-700 transition"
-            >
-              فتح الكاميرا
-            </button>
-          )}
-        </div>
-      )}
-
-      {mode === "CAMERA" && (
-        <div className="mb-4">
-          {cameraActive && !photoPreview && (
-            <button
-              onClick={takePhoto}
-              className="w-full py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
-            >
-              التقاط الصورة
-            </button>
-          )}
-          {photoPreview && (
-            <button
-              onClick={resetPhoto}
-              className="w-full py-2 bg-slate-600 text-white font-semibold rounded-lg hover:bg-slate-700 transition"
-            >
-              إعادة التقاط الصورة
-            </button>
-          )}
-        </div>
-      )}
-
-      {distance !== null && (
-        <div className="text-xs mb-4 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-          المسافة بينك وبين الفرع: <span className="font-bold">{distance} متر</span> (المسموح: حتى{" "}
-          {branch.geofenceRadius} متر)
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-lg">
-          {errorMessage}
-        </div>
-      )}
-      {successMessage && (
-        <div className="mb-4 p-3 text-sm text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-lg">
-          {successMessage}
-        </div>
-      )}
-
-      <div className="flex gap-3">
-        <button
-          onClick={() => handleAttendance("CHECK_IN")}
-          disabled={loading}
-          className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition shadow"
-        >
-          {loading ? "جاري الحفظ..." : "تسجيل حضور"}
-        </button>
-        <button
-          onClick={() => handleAttendance("CHECK_OUT")}
-          disabled={loading}
-          className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 disabled:opacity-50 transition shadow"
-        >
-          {loading ? "جاري الحفظ..." : "تسجيل انصراف"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default CheckInOutWidget;
