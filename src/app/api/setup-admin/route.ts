@@ -17,9 +17,6 @@ export async function GET(request: Request) {
   const log: string[] = [];
 
   try {
-    // ==========================================================
-    // الخطوة 0: إصلاح بنية قاعدة البيانات (إضافة أي أعمدة ناقصة بأمان)
-    // ==========================================================
     log.push("🔧 جاري التحقق من بنية قاعدة البيانات...");
 
     await db.execute(sql`
@@ -30,12 +27,10 @@ export async function GET(request: Request) {
       END $$;
     `);
 
-    // أعمدة الراتب وساعات العمل
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "working_hours_per_day" integer DEFAULT 8 NOT NULL;`);
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "working_days_per_month" integer DEFAULT 26 NOT NULL;`);
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "annual_leave_days" integer DEFAULT 21 NOT NULL;`);
 
-    // أعمدة صور ومراجعة الحضور/الانصراف
     await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_photo_url" text;`);
     await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_approval_status" "approval_status";`);
     await db.execute(sql`ALTER TABLE "attendance_logs" ADD COLUMN IF NOT EXISTS "check_in_reviewed_by" integer;`);
@@ -49,9 +44,6 @@ export async function GET(request: Request) {
 
     log.push("✅ تم التأكد من جميع الأعمدة المطلوبة (الراتب + الحضور بالصور)");
 
-    // ==========================================================
-    // الخطوة 1: تأكد من وجود الفروع (بدون حذف أي شيء)
-    // ==========================================================
     const existingBranches = await db.select().from(branches);
 
     let branchList = existingBranches;
@@ -62,7 +54,7 @@ export async function GET(request: Request) {
           {
             nameAr: "الإدارة",
             nameEn: "Management",
-            type: "HQ",
+            type: "BRANCH", // ⚠️ تم تغييره من "HQ" (غير موجود في الـ enum) إلى "BRANCH"
             address: "كفر الشيخ، مصر",
             latitude: 31.1107,
             longitude: 30.9388,
@@ -116,9 +108,6 @@ export async function GET(request: Request) {
 
     const managementBranch = branchList.find((b) => b.nameEn === "Management") ?? branchList[0];
 
-    // ==========================================================
-    // الخطوة 2: تأكد من وجود admin أو أصلحه (بدون حذف أي شيء)
-    // ==========================================================
     const existingAdminList = await db.select().from(users).where(eq(users.phone, "admin"));
 
     if (existingAdminList.length === 0) {
