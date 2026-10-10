@@ -1,3 +1,5 @@
+// src/app/api/attendance/check-out/route.ts
+
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/db";
@@ -24,11 +26,11 @@ export async function POST(request: Request) {
   }
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user?.branchId) {
+  if (!user?.primaryBranchId) {
     return NextResponse.json({ error: "لا يوجد فرع مرتبط بحسابك" }, { status: 400 });
   }
 
-  const [branch] = await db.select().from(branches).where(eq(branches.id, user.branchId)).limit(1);
+  const [branch] = await db.select().from(branches).where(eq(branches.id, user.primaryBranchId)).limit(1);
   if (!branch) {
     return NextResponse.json({ error: "الفرع غير موجود" }, { status: 404 });
   }
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
     if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
       lat = parsedLat;
       lng = parsedLng;
-      distance = calculateDistanceMeters(lat, lng, Number(branch.latitude), Number(branch.longitude));
+      distance = calculateDistanceMeters(lat, lng, branch.latitude, branch.longitude);
       if (distance <= branch.geofenceRadius) {
         approvalStatus = "AUTO_APPROVED";
       }
@@ -84,9 +86,9 @@ export async function POST(request: Request) {
     .update(attendanceLogs)
     .set({
       checkOutTime,
-      checkOutLat: lat !== null ? String(lat) : null,
-      checkOutLng: lng !== null ? String(lng) : null,
-      checkOutDistance: distance !== null ? Math.round(distance) : null,
+      checkOutLat: lat,
+      checkOutLng: lng,
+      checkOutDistance: distance,
       checkOutMethod: "GPS",
       checkOutPhotoUrl: blob.url,
       checkOutApprovalStatus: approvalStatus,
