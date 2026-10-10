@@ -26,11 +26,11 @@ export async function POST(request: Request) {
   }
 
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user?.branchId) {
+  if (!user?.primaryBranchId) {
     return NextResponse.json({ error: "لا يوجد فرع مرتبط بحسابك" }, { status: 400 });
   }
 
-  const [branch] = await db.select().from(branches).where(eq(branches.id, user.branchId)).limit(1);
+  const [branch] = await db.select().from(branches).where(eq(branches.id, user.primaryBranchId)).limit(1);
   if (!branch) {
     return NextResponse.json({ error: "الفرع غير موجود" }, { status: 404 });
   }
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
       lat = parsedLat;
       lng = parsedLng;
-      distance = calculateDistanceMeters(lat, lng, Number(branch.latitude), Number(branch.longitude));
+      distance = calculateDistanceMeters(lat, lng, branch.latitude, branch.longitude);
       if (distance <= branch.geofenceRadius) {
         approvalStatus = "AUTO_APPROVED";
       }
@@ -79,9 +79,9 @@ export async function POST(request: Request) {
       .update(attendanceLogs)
       .set({
         checkInTime,
-        checkInLat: lat !== null ? String(lat) : null,
-        checkInLng: lng !== null ? String(lng) : null,
-        checkInDistance: distance !== null ? Math.round(distance) : null,
+        checkInLat: lat,
+        checkInLng: lng,
+        checkInDistance: distance,
         checkInMethod: "GPS",
         checkInPhotoUrl: blob.url,
         checkInApprovalStatus: approvalStatus,
@@ -90,12 +90,12 @@ export async function POST(request: Request) {
   } else {
     await db.insert(attendanceLogs).values({
       userId,
-      branchId: user.branchId,
+      branchId: user.primaryBranchId,
       workDate: todayStr,
       checkInTime,
-      checkInLat: lat !== null ? String(lat) : null,
-      checkInLng: lng !== null ? String(lng) : null,
-      checkInDistance: distance !== null ? Math.round(distance) : null,
+      checkInLat: lat,
+      checkInLng: lng,
+      checkInDistance: distance,
       checkInMethod: "GPS",
       checkInPhotoUrl: blob.url,
       checkInApprovalStatus: approvalStatus,
