@@ -17,7 +17,7 @@ export async function ensureSeedData() {
     {
       nameAr: "الإدارة",
       nameEn: "Management",
-      type: "HQ",
+      type: "BRANCH",
       address: "كفر الشيخ، مصر",
       latitude: 31.1107,
       longitude: 30.9388,
