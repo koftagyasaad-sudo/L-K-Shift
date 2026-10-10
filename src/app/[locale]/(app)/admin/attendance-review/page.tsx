@@ -17,12 +17,10 @@ export default async function AttendanceReviewPage({
     return null;
   }
 
-  // جلب سجلات الحضور مع ربط جدول الموظفين والفروع بالحقول الصحيحة تماماً
   const logs = await db
     .select({
       id: attendanceLogs.id,
-      // تأكد أن الحقل هنا يطابق الـ Schema (مثل fullName أو name حسب ما هو معرّف لديك في جدول users)
-      employeeName: users.fullName, 
+      employeeName: users.name, // التصحيح هنا: استخدام users.name بدلاً من fullName
       employeeNumber: users.employeeNumber,
       phone: users.phone,
       branchName: branches.nameAr,
