@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { attendanceLogs, users, branches } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { redirect } from "@/i18n/navigation";
 
 export default async function AttendanceReviewPage({
@@ -20,7 +20,8 @@ export default async function AttendanceReviewPage({
   const logs = await db
     .select({
       id: attendanceLogs.id,
-      employeeName: users.name, // التصحيح هنا: استخدام users.name بدلاً من fullName
+      employeeNameAr: users.fullNameAr,
+      employeeNameEn: users.fullNameEn,
       employeeNumber: users.employeeNumber,
       phone: users.phone,
       branchName: branches.nameAr,
@@ -58,7 +59,9 @@ export default async function AttendanceReviewPage({
           <tbody>
             {logs.map((log) => (
               <tr key={log.id} className="border-b border-border last:border-0">
-                <td className="p-3 font-semibold text-foreground">{log.employeeName || "-"}</td>
+                <td className="p-3 font-semibold text-foreground">
+                  {(locale === "ar" ? log.employeeNameAr : log.employeeNameEn ?? log.employeeNameAr) || "-"}
+                </td>
                 <td className="p-3 text-foreground-muted">{log.employeeNumber || "-"}</td>
                 <td className="p-3 text-foreground-muted">{log.branchName || "-"}</td>
                 <td className="p-3 text-foreground-muted" dir="ltr">{log.workDate}</td>
