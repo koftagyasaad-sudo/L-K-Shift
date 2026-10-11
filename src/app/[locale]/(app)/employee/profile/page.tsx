@@ -23,15 +23,15 @@ export default async function EmployeeProfilePage({
   const [employee] = await db
     .select({
       id: users.id,
-      name: users.name,
-      email: users.email,
+      fullNameAr: users.fullNameAr,
+      fullNameEn: users.fullNameEn,
       phone: users.phone,
       employeeNumber: users.employeeNumber,
-      branchId: users.branchId,
+      primaryBranchId: users.primaryBranchId,
       branchName: branches.nameAr,
     })
     .from(users)
-    .leftJoin(branches, eq(users.branchId, branches.id))
+    .leftJoin(branches, eq(users.primaryBranchId, branches.id))
     .where(eq(users.id, userId))
     .limit(1);
 
@@ -43,9 +43,8 @@ export default async function EmployeeProfilePage({
     .orderBy(desc(attendanceLogs.workDate));
 
   const totalRecords = myAttendance.length;
-  // التصحيح هنا: استخدام الحقل الصحيح checkInApprovalStatus بدلاً من status غير الموجودة
   const approvedCount = myAttendance.filter((a) => a.checkInApprovalStatus === "APPROVED" || a.checkInApprovalStatus === "AUTO_APPROVED").length;
-  const pendingCount = myAttendance.filter((a) => a.checkInApprovalStatus === "PENDING").length;
+  const pendingCount = myAttendance.filter((a) => a.checkInApprovalStatus === "PENDING_REVIEW").length;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 dir-rtl text-right">
@@ -60,7 +59,9 @@ export default async function EmployeeProfilePage({
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-background-secondary border border-border">
             <span className="text-xs text-foreground-muted">{locale === "ar" ? "الاسم" : "Name"}</span>
-            <p className="text-base font-semibold text-foreground mt-1">{employee?.name || "-"}</p>
+            <p className="text-base font-semibold text-foreground mt-1">
+              {(locale === "ar" ? employee?.fullNameAr : employee?.fullNameEn ?? employee?.fullNameAr) || "-"}
+            </p>
           </div>
           <div className="p-4 rounded-2xl bg-background-secondary border border-border">
             <span className="text-xs text-foreground-muted">{locale === "ar" ? "رقم الموظف" : "Employee Number"}</span>
