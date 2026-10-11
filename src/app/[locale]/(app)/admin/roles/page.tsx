@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { roles } from "@/db/schema";
+import { customRoles } from "@/db/schema";
 import { redirect } from "@/i18n/navigation";
 import { RoleManager } from "@/components/admin/role-manager";
 
@@ -17,9 +17,8 @@ export default async function RolesPage({
     return null;
   }
 
-  const allRoles = await db.select().from(roles);
+  const allRoles = await db.select().from(customRoles);
 
-  // كتالوج الصلاحيات مطبقاً عليه الـ label و labelAr بالخصائص المتوافقة تماماً
   const permissionCatalog = [
     {
       category: "Management",
@@ -35,11 +34,11 @@ export default async function RolesPage({
 
   const formattedRoles = allRoles.map((r) => ({
     id: r.id,
-    name: r.nameEn || r.nameAr,
+    name: r.name,
     nameAr: r.nameAr,
-    description: r.description,
-    isSystem: false,
-    permissions: [] as string[],
+    description: null,
+    isSystem: r.isSystem,
+    permissions: Array.isArray(r.permissions) ? (r.permissions as string[]) : [],
     createdAt: r.createdAt,
   }));
 
