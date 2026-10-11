@@ -16,13 +16,12 @@ export default async function DashboardPage({
     return null;
   }
 
-  // جلب البيانات مع تصحيح اسم الحقل إلى branchId المتوافق مع الـ Schema
   const branchRows = await db.select().from(branches).orderBy(branches.id);
-  
+
   const userRows = await db
     .select({
       id: users.id,
-      branchId: users.branchId,
+      primaryBranchId: users.primaryBranchId,
     })
     .from(users);
 
