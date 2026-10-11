@@ -1,7 +1,7 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { users, branches } from "@/db/schema";
+import { users, branches, adminBranchScopes, customRoleAssignments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { EmployeeForm } from "@/components/admin/employee-form";
 
@@ -17,7 +17,6 @@ export default async function EditEmployeePage({
     notFound();
   }
 
-  // جلب بيانات الموظف
   const [employee] = await db
     .select()
     .from(users)
@@ -28,26 +27,45 @@ export default async function EditEmployeePage({
     notFound();
   }
 
-  // جلب الفروع
   const allBranches = await db.select().from(branches);
 
-  // تحويل الفروع للصيغة المتوافقة BranchOption[]
+  const scopes = await db
+    .select()
+    .from(adminBranchScopes)
+    .where(eq(adminBranchScopes.userId, employeeId));
+
+  const assignments = await db
+    .select()
+    .from(customRoleAssignments)
+    .where(eq(customRoleAssignments.userId, employeeId));
+
   const formattedBranches = allBranches.map((b) => ({
     id: b.id,
     nameAr: b.nameAr,
     nameEn: b.nameEn,
   }));
 
-  // تجهيز القيم الأولية للنموذج
   const initialValues = {
     id: employee.id,
-    name: employee.name,
-    email: employee.email ?? undefined,
-    phone: employee.phone ?? undefined,
-    employeeNumber: employee.employeeNumber ?? undefined,
-    branchId: employee.branchId ?? undefined,
-    roleId: employee.roleId ?? undefined,
-    isActive: employee.isActive ?? true,
+    fullNameAr: employee.fullNameAr,
+    fullNameEn: employee.fullNameEn ?? "",
+    phone: employee.phone,
+    nationalId: employee.nationalId ?? "",
+    address: employee.address ?? "",
+    governorate: employee.governorate ?? "",
+    employeeNumber: employee.employeeNumber ?? "",
+    jobRole: employee.jobRole,
+    primaryBranchId: employee.primaryBranchId ? String(employee.primaryBranchId) : "",
+    managementRole: employee.managementRole,
+    managedBranchIds: scopes.map((s) => s.branchId),
+    customRoleIds: assignments.map((a) => a.roleId),
+    isActive: employee.isActive,
+    salaryType: employee.salaryType as "MONTHLY" | "HOURLY",
+    monthlySalary: employee.monthlySalary ?? "",
+    hourlyRate: employee.hourlyRate ?? "",
+    workingHoursPerDay: String(employee.workingHoursPerDay),
+    workingDaysPerMonth: String(employee.workingDaysPerMonth),
+    annualLeaveDays: String(employee.annualLeaveDays),
   };
 
   return (
@@ -57,7 +75,7 @@ export default async function EditEmployeePage({
           تعديل بيانات الموظف
         </h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {employee.name}
+          {employee.fullNameAr}
         </p>
       </div>
 
