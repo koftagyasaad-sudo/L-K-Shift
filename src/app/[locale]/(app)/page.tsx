@@ -17,12 +17,11 @@ export default async function DashboardPage({
   }
 
   const branchRows = await db.select().from(branches).orderBy(branches.id);
-  
-  // الاستعلام يعتمد فقط على الحقول الموجودة في قاعدة البيانات (branchId)
+
   const userRows = await db
     .select({
       id: users.id,
-      branchId: users.branchId,
+      primaryBranchId: users.primaryBranchId,
     })
     .from(users);
 
