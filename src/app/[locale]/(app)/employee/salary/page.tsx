@@ -19,19 +19,16 @@ export default async function EmployeeSalaryPage({
 
   const userId = Number(session.user.id);
 
-  // جلب بيانات الموظف
   const [employee] = await db
     .select()
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
-  // استخدام صيغة النص (YYYY-MM-DD) المتوافقة مع نوع date في Drizzle Schema
   const currentYear = new Date().getFullYear();
   const yearStart = `${currentYear}-01-01`;
   const yearEnd = `${currentYear}-12-31`;
 
-  // جلب طلبات الإجازات المعتمدة خلال السنة الحالية بنجاح تام وبدون أخطاء Types
   const leaves = await db
     .select()
     .from(leaveRequests)
@@ -64,11 +61,34 @@ export default async function EmployeeSalaryPage({
           </h2>
           <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
             <span className="text-sm text-foreground-muted">{locale === "ar" ? "الموظف" : "Employee"}</span>
-            <span className="font-semibold text-foreground">{employee?.name || "-"}</span>
+            <span className="font-semibold text-foreground">
+              {(locale === "ar" ? employee?.fullNameAr : employee?.fullNameEn ?? employee?.fullNameAr) || "-"}
+            </span>
           </div>
           <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
             <span className="text-sm text-foreground-muted">{locale === "ar" ? "رقم الموظف" : "Employee ID"}</span>
             <span className="font-semibold text-foreground">{employee?.employeeNumber || "-"}</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
+            <span className="text-sm text-foreground-muted">{locale === "ar" ? "نظام الراتب" : "Salary Type"}</span>
+            <span className="font-semibold text-foreground">
+              {employee?.salaryType === "HOURLY"
+                ? (locale === "ar" ? "بالساعة" : "Hourly")
+                : (locale === "ar" ? "شهري" : "Monthly")}
+            </span>
+          </div>
+          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
+            <span className="text-sm text-foreground-muted">
+              {employee?.salaryType === "HOURLY"
+                ? (locale === "ar" ? "سعر الساعة" : "Hourly Rate")
+                : (locale === "ar" ? "الراتب الشهري" : "Monthly Salary")}
+            </span>
+            <span className="font-semibold text-foreground">
+              {employee?.salaryType === "HOURLY"
+                ? employee?.hourlyRate ?? "-"
+                : employee?.monthlySalary ?? "-"}{" "}
+              {locale === "ar" ? "ج.م" : "EGP"}
+            </span>
           </div>
         </div>
 
@@ -79,6 +99,10 @@ export default async function EmployeeSalaryPage({
           <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center text-emerald-600">
             <span className="text-sm">{locale === "ar" ? "الإجازات المعتمدة" : "Approved Leaves"}</span>
             <span className="text-xl font-bold">{leaves.length}</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
+            <span className="text-sm text-foreground-muted">{locale === "ar" ? "الرصيد السنوي" : "Annual Balance"}</span>
+            <span className="font-semibold text-foreground">{employee?.annualLeaveDays ?? "-"}</span>
           </div>
         </div>
       </div>
