@@ -19,7 +19,6 @@ export default async function EmployeeProfilePage({
 
   const userId = Number(session.user.id);
 
-  // جلب بيانات الموظف مع الفرع
   const [employee] = await db
     .select({
       id: users.id,
@@ -35,7 +34,6 @@ export default async function EmployeeProfilePage({
     .where(eq(users.id, userId))
     .limit(1);
 
-  // جلب سجلات الحضور الخاصة بالمستخدم
   const myAttendance = await db
     .select()
     .from(attendanceLogs)
