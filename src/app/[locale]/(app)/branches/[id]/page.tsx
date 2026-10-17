@@ -3,10 +3,9 @@
 import React, { useContext, use } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ThemeContext } from "../../layout";
+import { ThemeContext } from "@/context/ThemeContext";
 
 export default function BranchDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
-  // فك التغليف لدعم Next.js 15
   const resolvedParams = use(params);
   const branchId = resolvedParams.id;
 
@@ -20,7 +19,6 @@ export default function BranchDetailPage({ params }: { params: Promise<{ locale:
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
@@ -45,7 +43,6 @@ export default function BranchDetailPage({ params }: { params: Promise<{ locale:
         </div>
       </div>
 
-      {/* Grid Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className={cardClass}>
           <p className={`text-xs font-bold mb-1 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>الموظفين المسجلين بالفرع</p>
@@ -61,7 +58,6 @@ export default function BranchDetailPage({ params }: { params: Promise<{ locale:
         </div>
       </div>
 
-      {/* Main Details Section */}
       <div className={cardClass}>
         <h3 className="font-extrabold text-xl mb-4">بيانات وإحصائيات الفرع #{branchId}</h3>
         <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
