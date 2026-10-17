@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, createContext } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-
-// نصدر السياق لتستخدمه باقي الصفحات للتفاعل مع الثيم
-export const ThemeContext = createContext({ isDarkMode: true });
+import { ThemeContext } from "@/context/ThemeContext";
 
 export default function AppLayout({
   children,
@@ -66,7 +64,7 @@ export default function AppLayout({
     <ThemeContext.Provider value={{ isDarkMode }}>
       <div className={`flex h-screen overflow-hidden transition-colors duration-300 ${isDarkMode ? "bg-[#0a0a0a] text-white" : "bg-[#f8fafc] text-gray-900"}`} dir={isRtl ? "rtl" : "ltr"}>
         
-        {/* Sidebar - Modernized */}
+        {/* Sidebar */}
         <aside
           className={`${
             isSidebarOpen ? "w-[280px]" : "w-20"
@@ -140,7 +138,7 @@ export default function AppLayout({
               </span>
             </div>
 
-            {/* Header Controls (Theme, Language, User Dropdown) */}
+            {/* Header Controls */}
             <div className="flex items-center gap-4">
               
               {/* Theme Toggle */}
@@ -159,7 +157,7 @@ export default function AppLayout({
                 )}
               </button>
 
-              {/* Language Switcher (Small Button) */}
+              {/* Language Switcher */}
               <button
                 onClick={toggleLanguage}
                 className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-all font-bold text-sm ${
