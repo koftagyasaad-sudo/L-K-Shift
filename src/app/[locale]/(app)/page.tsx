@@ -2,11 +2,9 @@
 
 import React, { useState } from 'react';
 
-export default function DashboardMainPage() {
-  // حالة فلترة الفروع
-  const [selectedBranch, setSelectedBranch] = useState("all");
+export default function DashboardPage() {
+  const [branchFilter, setBranchFilter] = useState("all");
 
-  // الإحصائيات الحالية
   const stats = {
     totalBranches: 4,
     totalEmployees: 2,
@@ -42,7 +40,7 @@ export default function DashboardMainPage() {
           <StatCard 
             title="إجمالي الفروع" 
             value={stats.totalBranches} 
-            subtitle="4 فروع مسجلة بالنظام"
+            subtitle="4 فروع مسجلة للنظام"
             icon={<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>} 
           />
           <StatCard 
@@ -54,7 +52,7 @@ export default function DashboardMainPage() {
           <StatCard 
             title="سجلات حضور اليوم" 
             value={stats.todayAttendance} 
-            subtitle="لا توجد حركات اليوم"
+            subtitle="لا توجد سجلات اليوم"
             icon={<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>} 
           />
           <StatCard 
@@ -66,7 +64,7 @@ export default function DashboardMainPage() {
           />
         </div>
 
-        {/* ==================== 3. الأقسام المسترجعة (جدول الورديات + الشريط الجانبي) ==================== */}
+        {/* ==================== 3. سكشن الجداول والإجراءات السريعة ==================== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* جدول الورديات المباشرة والحضور */}
@@ -77,10 +75,10 @@ export default function DashboardMainPage() {
                 <p className="text-xs text-gray-400 mt-0.5">متابعة الورديات المفتوحة وحالة الحضور لكل فرع</p>
               </div>
 
-              {/* فلتر الفروع */}
+              {/* فلترة الفروع */}
               <select 
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
                 className="bg-[#1e1e1e] border border-gray-700 text-gray-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-blue-500"
               >
                 <option value="all">جميع الفروع</option>
@@ -93,9 +91,9 @@ export default function DashboardMainPage() {
               <table className="w-full text-right">
                 <thead className="text-gray-400 border-b border-gray-800 text-xs font-semibold">
                   <tr>
-                    <th className="pb-3 px-3">الموظف</th>
+                    <th className="pb-3 px-3">اسم الموظف</th>
                     <th className="pb-3 px-3">الفرع</th>
-                    <th className="pb-3 px-3">بداية الوردية</th>
+                    <th className="pb-3 px-3">وقت الدخول</th>
                     <th className="pb-3 px-3">الحالة</th>
                     <th className="pb-3 px-3 text-center">الإجراءات</th>
                   </tr>
@@ -148,7 +146,7 @@ export default function DashboardMainPage() {
                       </span>
                     </td>
                     <td className="py-4 px-3 text-center">
-                      <button className="text-xs bg-gray-800 text-gray-400 px-3 py-1.5 rounded-lg cursor-not-allowed opacity-60">
+                      <button className="text-xs bg-gray-800 text-gray-500 px-3 py-1.5 rounded-lg cursor-not-allowed">
                         مغلق
                       </button>
                     </td>
@@ -165,13 +163,13 @@ export default function DashboardMainPage() {
             <div className="bg-[#141414] rounded-2xl border border-gray-800 p-6 shadow-xl">
               <h2 className="text-lg font-bold mb-4">إجراءات سريعة</h2>
               <div className="grid grid-cols-1 gap-3">
-                <button className="flex items-center justify-between bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 p-3.5 rounded-xl border border-gray-800 transition-all group">
+                <button className="flex items-center justify-between bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 p-3.5 rounded-xl border border-gray-800 transition-all">
                   <span className="text-sm font-medium">تسجيل حضور يدوياً</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 group-hover:translate-x-[-3px] transition-transform"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 </button>
-                <button className="flex items-center justify-between bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 p-3.5 rounded-xl border border-gray-800 transition-all group">
+                <button className="flex items-center justify-between bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 p-3.5 rounded-xl border border-gray-800 transition-all">
                   <span className="text-sm font-medium">إضافة موظف جديد</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 group-hover:translate-x-[-3px] transition-transform"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 </button>
               </div>
             </div>
@@ -208,7 +206,6 @@ export default function DashboardMainPage() {
   );
 }
 
-// مكون البطاقات
 function StatCard({ title, value, subtitle, icon, highlight = false }: { title: string; value: string | number; subtitle: string; icon: React.ReactNode; highlight?: boolean }) {
   return (
     <div className={`p-5 rounded-2xl border transition-all duration-300 ${highlight ? 'bg-[#161f2d] border-blue-500/40 shadow-lg shadow-blue-900/10' : 'bg-[#141414] border-gray-800 hover:border-gray-700'}`}>
