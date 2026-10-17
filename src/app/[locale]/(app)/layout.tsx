@@ -1,61 +1,54 @@
-import { auth } from "@/auth";
-import { db } from "@/db";
-import { users, branches, attendanceLogs } from "@/db/schema";
-import { redirect } from "@/i18n/navigation";
+import React from "react";
 
-export default async function DashboardPage({
-  params,
+export default function AppLayout({
+  children,
 }: {
-  params: Promise<{ locale: string }>;
+  children: React.ReactNode;
 }) {
-  const { locale } = await params;
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    redirect({ href: "/login", locale });
-    return null;
-  }
-
-  const branchRows = await db.select().from(branches).orderBy(branches.id);
-
-  const userRows = await db
-    .select({
-      id: users.id,
-      primaryBranchId: users.primaryBranchId,
-    })
-    .from(users);
-
-  const attendanceRows = await db
-    .select({
-      branchId: attendanceLogs.branchId,
-    })
-    .from(attendanceLogs);
-
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 dir-rtl text-right">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          {locale === "ar" ? "لوحة التحكم الرئيسية" : "Main Dashboard"}
-        </h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          {locale === "ar" ? "نظرة عامة على الحضور والفروع" : "Overview of attendance and branches"}
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#0a0a0a] text-white font-sans flex flex-col">
+      {/* ==================== 1. هيدر النظام (تغيير اللغة والمود) ==================== */}
+      <header className="bg-[#141414] border-b border-gray-800 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+          
+          {/* الشعار واسم البرنامج */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/30">
+              LK
+            </div>
+            <span className="font-bold text-lg tracking-wide">L-K-Shift</span>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 rounded-[24px] border border-border bg-surface shadow-sm">
-          <span className="text-sm text-foreground-muted">{locale === "ar" ? "إجمالي الفروع" : "Total Branches"}</span>
-          <p className="text-3xl font-bold text-foreground mt-2">{branchRows.length}</p>
+          {/* عناصر التحكم العلوية */}
+          <div className="flex items-center gap-3">
+            
+            {/* زر تغيير المظهر (ليلي / نهاري) */}
+            <button 
+              className="p-2.5 rounded-xl border border-gray-800 bg-[#1e1e1e] text-yellow-400 hover:bg-gray-800 transition-all"
+              title="تغيير المظهر"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+            </button>
+
+            {/* زر تغيير اللغة */}
+            <button className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-800 bg-[#1e1e1e] text-gray-200 hover:bg-gray-800 text-xs font-semibold transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10z"/><path d="M2 12h20"/></svg>
+              English / العربية
+            </button>
+
+            {/* الملف الشخصي */}
+            <div className="w-9 h-9 rounded-xl border border-gray-800 bg-[#1e1e1e] flex items-center justify-center font-bold text-xs text-blue-400">
+              مأ
+            </div>
+          </div>
+
         </div>
-        <div className="p-6 rounded-[24px] border border-border bg-surface shadow-sm">
-          <span className="text-sm text-foreground-muted">{locale === "ar" ? "إجمالي الموظفين" : "Total Employees"}</span>
-          <p className="text-3xl font-bold text-foreground mt-2">{userRows.length}</p>
-        </div>
-        <div className="p-6 rounded-[24px] border border-border bg-surface shadow-sm">
-          <span className="text-sm text-foreground-muted">{locale === "ar" ? "سجلات الحضور" : "Attendance Logs"}</span>
-          <p className="text-3xl font-bold text-foreground mt-2">{attendanceRows.length}</p>
-        </div>
-      </div>
+      </header>
+
+      {/* ==================== 2. عرض محتوى الصفحة المباشر ==================== */}
+      <main className="flex-1">
+        {children}
+      </main>
     </div>
   );
 }
