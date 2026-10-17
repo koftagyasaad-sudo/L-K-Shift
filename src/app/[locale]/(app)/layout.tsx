@@ -21,7 +21,7 @@ export default async function DashboardPage({
   const userRows = await db
     .select({
       id: users.id,
-      primaryBranchId: users.primaryBranchId,
+      branchId: users.branchId,
     })
     .from(users);
 
