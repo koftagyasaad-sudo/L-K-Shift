@@ -3,7 +3,7 @@
 import React, { useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ThemeContext } from "./layout";
+import { ThemeContext } from "@/context/ThemeContext";
 
 export default function DashboardPage() {
   const pathname = usePathname();
@@ -18,7 +18,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black mb-1">لوحة التحكم الرئيسية</h1>
@@ -40,7 +39,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link href={`/${currentLocale}/admin/branches`} className={`${cardClass} ${linkHoverClass} block`}>
           <div className="flex justify-between items-start mb-4">
@@ -88,9 +86,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Tables Section */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Quick Actions */}
         <div className={`lg:col-span-1 ${cardClass}`}>
           <h3 className="font-bold text-lg mb-4">إجراءات سريعة</h3>
           <div className="space-y-3">
@@ -109,7 +105,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Live Shifts Table */}
         <div className={`lg:col-span-3 ${cardClass}`}>
           <div className="flex justify-between items-center mb-6">
             <div>
