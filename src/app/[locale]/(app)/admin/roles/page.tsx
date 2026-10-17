@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useContext, useState } from "react";
-import { ThemeContext } from "../layout";
+import { ThemeContext } from "@/context/ThemeContext";
 
-// قائمة الفروع المسجلة بالنظام
 const AVAILABLE_BRANCHES = [
   { id: "b1", name: "الفرع الرئيسي - القاهرة" },
   { id: "b2", name: "فرع المعادي" },
@@ -12,7 +11,6 @@ const AVAILABLE_BRANCHES = [
   { id: "b5", name: "فرع 6 أكتوبر" }
 ];
 
-// قائمة الصلاحيات المتاحة بالنظام
 const SYSTEM_PERMISSIONS = [
   { id: "emp_mgmt", label: "إدارة الموظفين والبيانات" },
   { id: "branch_mgmt", label: "إدارة الفروع والورديات" },
@@ -26,14 +24,12 @@ export default function RolesPage() {
   const { isDarkMode } = useContext(ThemeContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // حالة نموذج إنشاء الصلاحية
   const [roleName, setRoleName] = useState("");
   const [allBranchesSelected, setAllBranchesSelected] = useState(true);
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
 
-  // قائمة الصلاحيات المحفوظة للعرض
   const [rolesList, setRolesList] = useState([
     {
       id: "1",
@@ -83,7 +79,6 @@ export default function RolesPage() {
 
     setRolesList([...rolesList, newRole]);
     setIsModalOpen(false);
-    // Reset Form
     setRoleName("");
     setAllBranchesSelected(true);
     setSelectedBranches([]);
@@ -96,7 +91,6 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black mb-1">إدارة الأدوار والصلاحيات</h1>
@@ -113,7 +107,6 @@ export default function RolesPage() {
         </button>
       </div>
 
-      {/* Roles Display Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {rolesList.map((role) => (
           <div key={role.id} className={cardClass}>
@@ -124,12 +117,8 @@ export default function RolesPage() {
                   {role.badge}
                 </span>
               </div>
-              <button className={`p-2 rounded-lg transition-colors ${isDarkMode ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-100 text-gray-600"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-              </button>
             </div>
 
-            {/* Branch Badges */}
             <div className="mb-4">
               <p className={`text-xs font-bold mb-2 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>الفروع المتاحة:</p>
               <div className="flex flex-wrap gap-2">
@@ -150,7 +139,6 @@ export default function RolesPage() {
               </div>
             </div>
 
-            {/* Permissions Badges */}
             <div>
               <p className={`text-xs font-bold mb-2 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>الصلاحيات الممنوحة ({role.permissions.length}):</p>
               <div className="flex flex-wrap gap-1.5">
@@ -168,7 +156,6 @@ export default function RolesPage() {
         ))}
       </div>
 
-      {/* New Role Creation Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
           <div className={`w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border transition-all ${
@@ -182,7 +169,6 @@ export default function RolesPage() {
             </div>
             
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-              {/* Role Name */}
               <div>
                 <label className="block text-sm font-bold mb-2">اسم الصلاحية / المسمى الوظيفي</label>
                 <input 
@@ -196,13 +182,11 @@ export default function RolesPage() {
                 />
               </div>
 
-              {/* Dynamic Branch Selection */}
               <div className="space-y-3">
                 <label className="block text-sm font-extrabold text-orange-500">
                   تخصيص الفروع المسموح بها لهذا الدور:
                 </label>
 
-                {/* Option 1: All Branches Toggle */}
                 <label className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
                   allBranchesSelected 
                     ? "border-orange-500/50 bg-orange-500/10" 
@@ -223,7 +207,6 @@ export default function RolesPage() {
                   </div>
                 </label>
 
-                {/* Option 2: Custom Branch Dropdown Multi-Select */}
                 {!allBranchesSelected && (
                   <div className="relative mt-2">
                     <button
@@ -269,7 +252,6 @@ export default function RolesPage() {
                 )}
               </div>
 
-              {/* General System Permissions Grid */}
               <div>
                 <label className="block text-sm font-bold mb-3">الإدارة والصلاحيات العامة</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -295,7 +277,6 @@ export default function RolesPage() {
               </div>
             </div>
 
-            {/* Modal Actions */}
             <div className={`p-6 border-t flex gap-3 ${isDarkMode ? "border-gray-800 bg-[#1a1a1a]" : "border-gray-100 bg-gray-50"}`}>
               <button 
                 onClick={handleSaveRole}
