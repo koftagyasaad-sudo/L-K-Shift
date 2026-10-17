@@ -3,7 +3,7 @@
 import React, { useContext, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ThemeContext } from "../layout";
+import { ThemeContext } from "@/context/ThemeContext";
 
 export default function BranchesListPage() {
   const { isDarkMode } = useContext(ThemeContext);
@@ -11,7 +11,6 @@ export default function BranchesListPage() {
   const currentLocale = pathname.startsWith("/en") ? "en" : "ar";
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // قائمة الفروع المسجلة
   const [branches, setBranches] = useState([
     { id: "1", name: "الفرع الرئيسي - القاهرة", manager: "أحمد محمود", employeesCount: 15, status: "نشط", code: "BR-01" },
     { id: "2", name: "فرع المعادي", manager: "سارة حسن", employeesCount: 8, status: "نشط", code: "BR-02" },
@@ -44,12 +43,11 @@ export default function BranchesListPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black mb-1">إدارة الفروع</h1>
           <p className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
-            عرض كل الفروع وإدارتها، أو اضغط على أي فرع للدخول إلى صفحته الخاصة ورؤية بياناته ورابط الـ ID
+            عرض كل الفروع وإدارتها، أو اضغط على أي فرع للدخول إلى صفحته الخاصة لرؤية التفاصيل
           </p>
         </div>
         <button 
@@ -61,7 +59,6 @@ export default function BranchesListPage() {
         </button>
       </div>
 
-      {/* Branches Cards / Table */}
       <div className={cardClass}>
         <div className="overflow-x-auto">
           <table className="w-full text-right">
@@ -104,7 +101,6 @@ export default function BranchesListPage() {
         </div>
       </div>
 
-      {/* Modal Add Branch */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
           <div className={`w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border transition-all ${
