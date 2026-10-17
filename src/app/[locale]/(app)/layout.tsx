@@ -37,7 +37,7 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col dir-rtl">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <main className="flex-1">{children}</main>
     </div>
   );
