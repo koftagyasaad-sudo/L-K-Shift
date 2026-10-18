@@ -1,141 +1,342 @@
 "use client";
 
-import React, { useContext, useState, useEffect } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ThemeContext } from "@/context/ThemeContext";
+import { 
+  Building2, Plus, Search, MapPin, Phone, PhoneForwarded, 
+  ExternalLink, Edit, Trash2, CheckCircle2, AlertCircle, Loader2 
+} from "lucide-react";
+import { 
+  getBranchesAction, 
+  saveBranchAction, 
+  deleteBranchAction, 
+  BranchData 
+} from "@/actions/branchActions";
 
-// استدعاء دوال السيرفر التي تتصل بـ Neon
-import { getBranches, addBranch, deleteBranch } from "@/actions/branchActions";
+export default function BranchesPage() {
+  const [branches, setBranches] = useState<BranchData[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
 
-export default function BranchesListPage() {
-  const { isDarkMode } = useContext(ThemeContext);
-  const pathname = usePathname();
-  const currentLocale = pathname.startsWith("/en") ? "en" : "ar";
-  
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // حالة التحميل
+  const [editingBranch, setEditingBranch] = useState<BranchData | null>(null);
+  const [formData, setFormData] = useState<BranchData>({
+    id: "",
+    name: "",
+    manager: "",
+    phone: "",
+    ext: "",
+    address: "",
+    map_url: ""
+  });
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // 1. جلب البيانات من Neon عند فتح الصفحة
+  const fetchBranches = async () => {
+    setLoading(true);
+    const res = await getBranchesAction();
+    if (res.success) {
+      setBranches(res.data);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchNeonData = async () => {
-      setIsLoading(true);
-      const data = await getBranches(); // الاتصال بـ Neon
-      setBranches(data);
-      setIsLoading(false);
-    };
-    fetchNeonData();
+    fetchBranches();
   }, []);
 
-  const [formData, setFormData] = useState({ name: "", manager: "", phone: "", ext: "", address: "", map: "" });
-
-  const handleOpenAddModal = () => {
-    setFormData({ name: "", manager: "", phone: "", ext: "", address: "", map: "" });
+  const handleOpenModal = (branch?: BranchData) => {
+    if (branch) {
+      setEditingBranch(branch);
+      setFormData(branch);
+    } else {
+      setEditingBranch(null);
+      setFormData({
+        id: "b-" + Date.now(),
+        name: "",
+        manager: "",
+        phone: "",
+        ext: "",
+        address: "",
+        map_url: ""
+      });
+    }
     setIsModalOpen(true);
   };
 
-  // 2. حذف فرع من Neon
-  const handleDeleteBranch = async (id: string, name: string) => {
-    if (window.confirm(`هل أنت متأكد من حذف "${name}" نهائياً من قاعدة البيانات؟`)) {
-      // تحديث الواجهة فوراً (Optimistic UI)
-      setBranches(branches.filter(b => b.id !== id));
-      
-      // إرسال أمر الحذف لقاعدة بيانات Neon
-      await deleteBranch(id);
+  const handleSave = () => {
+    if (!formData.name.trim()) {
+      setMessage({ type: "error", text: "يرجى إدخال اسم الفرع" });
+      return;
     }
+
+    startTransition(async () => {
+      const res = await saveBranchAction(formData);
+      if (res.success) {
+        setMessage({ type: "success", text: "تم حفظ بيانات الفرع بنجاح في Neon DB" });
+        setIsModalOpen(false);
+        fetchBranches();
+      } else {
+        setMessage({ type: "error", text: res.error || "حدث خطأ أثناء الحفظ" });
+      }
+    });
   };
 
-  // 3. إضافة فرع لـ Neon
-  const handleSaveBranch = async () => {
-    if (!formData.name.trim()) return;
+  const handleDelete = (id: string) => {
+    if (!confirm("هل أنت تأكد من رغبتك في حذف هذا الفرع؟")) return;
 
-    const newBranch = {
-      id: Date.now().toString(),
-      ...formData,
-      employeesCount: 0,
-      status: "نشط",
-      code: `BR-0${branches.length + 1}`
-    };
-
-    // تحديث الواجهة فوراً
-    setBranches([...branches, newBranch]);
-    setIsModalOpen(false);
-
-    // إرسال البيانات للحفظ في Neon
-    await addBranch(newBranch);
+    startTransition(async () => {
+      const res = await deleteBranchAction(id);
+      if (res.success) {
+        setMessage({ type: "success", text: "تم حذف الفرع بنجاح" });
+        fetchBranches();
+      } else {
+        setMessage({ type: "error", text: res.error || "فشل عملية الحذف" });
+      }
+    });
   };
 
-  const cardClass = `rounded-2xl p-5 border transition-all ${isDarkMode ? "bg-[#0a0a0a] border-gray-800 text-white" : "bg-white border-gray-200 text-gray-900 shadow-sm"}`;
-  const inputClass = `w-full px-4 py-2.5 text-sm rounded-lg border outline-none font-semibold ${isDarkMode ? "bg-[#111] border-gray-800 focus:border-orange-500 text-white" : "bg-gray-50 border-gray-300 focus:border-orange-500 text-gray-900"}`;
-
-  if (isLoading) return <div className="p-10 text-center font-bold text-orange-500">جاري تحميل البيانات من قاعدة البيانات...</div>;
+  const filteredBranches = branches.filter((b) =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.manager.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black mb-1">إدارة الفروع</h1>
-          <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>إضافة، تعديل، وحذف الفروع المدعومة بقاعدة بيانات Neon</p>
+    <div className="p-6 space-y-6">
+      {/* Header Bar */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-gradient-to-tr from-amber-500 to-orange-500 text-white rounded-xl shadow-md">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">إدارة الفروع</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">متابعة الفروع وتحديد مواقعها ومسؤولي الإدارة</p>
+          </div>
         </div>
-        <button onClick={handleOpenAddModal} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          إضافة فرع
+
+        <button
+          onClick={() => handleOpenModal()}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-medium rounded-xl text-sm shadow-md transition-all duration-200 active:scale-95"
+        >
+          <Plus className="w-4 h-4" />
+          <span>إضافة فرع جديد</span>
         </button>
       </div>
 
-      <div className={cardClass}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-sm">
-            <thead>
-              <tr className={`border-b ${isDarkMode ? "border-gray-800 text-gray-400" : "border-gray-200 text-gray-500"}`}>
-                <th className="pb-3 font-bold">الفرع</th>
-                <th className="pb-3 font-bold">المدير</th>
-                <th className="pb-3 font-bold">الهاتف</th>
-                <th className="pb-3 font-bold text-center">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {branches.map((b) => (
-                <tr key={b.id} className={`border-b last:border-0 hover:${isDarkMode ? "bg-gray-800/30" : "bg-gray-50"} transition-colors ${isDarkMode ? "border-gray-800/60" : "border-gray-100"}`}>
-                  <td className="py-3">
-                    <p className="font-extrabold">{b.name}</p>
-                    <p className={`text-[11px] ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>{b.code} | {b.address}</p>
-                  </td>
-                  <td className="py-3 font-semibold">{b.manager}</td>
-                  <td className="py-3 font-semibold text-xs">{b.phone} (Ext: {b.ext})</td>
-                  <td className="py-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Link href={`/${currentLocale}/admin/branches/${b.id}`} className="p-1.5 rounded-md text-blue-500 hover:bg-blue-500/10 transition-all"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></Link>
-                      <button onClick={() => handleDeleteBranch(b.id, b.name)} className="p-1.5 rounded-md text-red-500 hover:bg-red-500/10 transition-all"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Message Banner */}
+      {message && (
+        <div className={`p-4 rounded-xl flex items-center gap-3 text-sm ${
+          message.type === "success" 
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
+            : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+        }`}>
+          {message.type === "success" ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span>{message.text}</span>
         </div>
+      )}
+
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="w-5 h-5 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          placeholder="ابحث عن اسم الفرع أو مدير الفرع..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pr-11 pl-4 py-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md rounded-xl border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 text-slate-900 dark:text-white placeholder-slate-400"
+        />
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className={`w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden border ${isDarkMode ? "bg-[#0a0a0a] border-gray-800 text-white" : "bg-white border-gray-200 text-gray-900"}`}>
-            <div className={`p-4 border-b flex justify-between items-center ${isDarkMode ? "border-gray-800 bg-[#111]" : "border-gray-100 bg-gray-50"}`}>
-              <h2 className="text-lg font-black">إضافة فرع</h2>
-              <button onClick={() => setIsModalOpen(false)} className={`p-1.5 rounded-lg ${isDarkMode ? "text-gray-400 hover:bg-gray-800" : "text-gray-500 hover:bg-gray-200"}`}><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      {/* Branches List Grid */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          <p className="text-sm">جاري تحميل بيانات الفروع من نيون...</p>
+        </div>
+      ) : filteredBranches.length === 0 ? (
+        <div className="text-center py-16 bg-white/40 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
+          <Building2 className="w-12 h-12 text-slate-400 mx-auto mb-3 opacity-50" />
+          <p className="text-base font-semibold text-slate-700 dark:text-slate-300">لا توجد فروع مسجلة</p>
+          <p className="text-xs text-slate-400 mt-1">اضغط على زر "إضافة فرع جديد" لإدراج فرع في النظام</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredBranches.map((branch) => (
+            <div
+              key={branch.id}
+              className="group relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-orange-500/40 transition-all duration-300 flex flex-col justify-between"
+            >
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl group-hover:scale-105 transition-transform">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-base">{branch.name}</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">مدير الفرع: {branch.manager || "غير محدد"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleOpenModal(branch)}
+                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-amber-600 transition-colors"
+                      title="تعديل الفرع"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(branch.id)}
+                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-red-600 transition-colors"
+                      title="حذف الفرع"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      الهاتف:
+                    </span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{branch.phone || "---"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <PhoneForwarded className="w-3.5 h-3.5 text-slate-400" />
+                      التحويلة:
+                    </span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{branch.ext || "---"}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{branch.address || "العنوان غير محدد"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2">
+                {branch.map_url ? (
+                  <a
+                    href={branch.map_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>خريطة جوجل</span>
+                  </a>
+                ) : <div />}
+
+                <Link
+                  href={`/ar/admin/branches/${branch.id}`}
+                  className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-orange-500 hover:text-white dark:bg-slate-800 dark:hover:bg-orange-500 text-slate-700 dark:text-slate-300 font-medium rounded-lg transition-colors"
+                >
+                  تفاصيل الفرع والشيفتات ←
+                </Link>
+              </div>
             </div>
-            
-            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div><label className="block text-xs font-bold mb-1.5">اسم الفرع</label><input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className={inputClass} /></div>
-              <div><label className="block text-xs font-bold mb-1.5">المدير المسؤول</label><input type="text" value={formData.manager} onChange={(e) => setFormData({...formData, manager: e.target.value})} className={inputClass} /></div>
-              <div><label className="block text-xs font-bold mb-1.5">رقم الهاتف</label><input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className={inputClass} /></div>
-              <div><label className="block text-xs font-bold mb-1.5">الرقم الداخلي</label><input type="text" value={formData.ext} onChange={(e) => setFormData({...formData, ext: e.target.value})} className={inputClass} /></div>
-              <div className="md:col-span-2"><label className="block text-xs font-bold mb-1.5">العنوان</label><input type="text" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className={inputClass} /></div>
-              <div className="md:col-span-2"><label className="block text-xs font-bold mb-1.5 text-blue-500">رابط جوجل ماب</label><input type="url" value={formData.map} onChange={(e) => setFormData({...formData, map: e.target.value})} className={inputClass} /></div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal for Add/Edit Branch */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
+              {editingBranch ? "تعديل بيانات الفرع" : "إضافة فرع جديد"}
+            </h2>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">اسم الفرع *</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="مثال: فرع الرياض - العليا"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">مدير الفرع</label>
+                <input
+                  type="text"
+                  value={formData.manager}
+                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
+                  placeholder="اسم مدير الفرع"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">رقم الهاتف</label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+966500000000"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">التحويلة Ext</label>
+                  <input
+                    type="text"
+                    value={formData.ext}
+                    onChange={(e) => setFormData({ ...formData, ext: e.target.value })}
+                    placeholder="101"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">العنوان التفصيلي</label>
+                <textarea
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="الشارع، الحي، المدينة"
+                  rows={2}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">رابط خرائط جوجل (Google Maps URL)</label>
+                <input
+                  type="text"
+                  value={formData.map_url}
+                  onChange={(e) => setFormData({ ...formData, map_url: e.target.value })}
+                  placeholder="https://maps.google.com/..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                />
+              </div>
             </div>
 
-            <div className={`p-4 border-t flex gap-2 ${isDarkMode ? "border-gray-800 bg-[#111]" : "border-gray-100 bg-gray-50"}`}>
-              <button onClick={handleSaveBranch} className="px-5 py-2 w-full bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-bold transition-all">حفظ البيانات</button>
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                disabled={isPending}
+                onClick={handleSave}
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium rounded-xl text-xs shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>حفظ البيانات</span>
+              </button>
             </div>
           </div>
         </div>
