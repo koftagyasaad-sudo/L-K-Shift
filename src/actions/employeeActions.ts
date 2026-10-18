@@ -11,6 +11,7 @@ export interface EmployeeData {
   role_id: string;
   base_salary: number;
   work_hours: number;
+  monthly_leave_days: number; // الحقل الجديد: رصيد الإجازات الشهري
   attendance_status: string;
   createdAt?: string;
   branch_name?: string;
@@ -26,35 +27,10 @@ const fallbackEmployees: EmployeeData[] = [
     role_id: "r1",
     base_salary: 15000,
     work_hours: 8,
+    monthly_leave_days: 2.5,
     attendance_status: "حاضر",
     branch_name: "الفرع الرئيسي - الرياض",
     role_title: "صلاحيات مطلقة (SUPER_ADMIN)",
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: "e2",
-    name: "محمد علي",
-    code: "EMP-002",
-    branch_id: "b1",
-    role_id: "r2",
-    base_salary: 9000,
-    work_hours: 8,
-    attendance_status: "حاضر",
-    branch_name: "الفرع الرئيسي - الرياض",
-    role_title: "مدير الفرع الرئيسي",
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: "e3",
-    name: "فاطمة الشهري",
-    code: "EMP-003",
-    branch_id: "b2",
-    role_id: "r2",
-    base_salary: 8500,
-    work_hours: 8,
-    attendance_status: "غائب",
-    branch_name: "فرع جدة - الكورنيش",
-    role_title: "مدير الفرع الرئيسي",
     createdAt: new Date().toISOString()
   }
 ];
@@ -72,7 +48,7 @@ export async function getEmployeesAction(): Promise<{ success: boolean; data: Em
     const rows = await sql`
       SELECT 
         e.id, e.name, e.code, e.branch_id, e.role_id, 
-        e.base_salary, e.work_hours, e.attendance_status, 
+        e.base_salary, e.work_hours, e.monthly_leave_days, e.attendance_status, 
         e.created_at as "createdAt",
         b.name as "branch_name",
         r.title as "role_title"
@@ -92,6 +68,7 @@ export async function getEmployeesAction(): Promise<{ success: boolean; data: Em
         role_id: r.role_id || "",
         base_salary: Number(r.base_salary) || 0,
         work_hours: Number(r.work_hours) || 8,
+        monthly_leave_days: Number(r.monthly_leave_days) || 2,
         attendance_status: r.attendance_status || "حاضر",
         branch_name: r.branch_name || "غير محدد",
         role_title: r.role_title || "مواطن/موظف",
@@ -109,8 +86,8 @@ export async function saveEmployeeAction(emp: EmployeeData): Promise<{ success: 
     const sql = getClient();
     if (sql) {
       await sql`
-        INSERT INTO employees (id, name, code, branch_id, role_id, base_salary, work_hours, attendance_status)
-        VALUES (${emp.id}, ${emp.name}, ${emp.code}, ${emp.branch_id}, ${emp.role_id}, ${emp.base_salary}, ${emp.work_hours}, ${emp.attendance_status})
+        INSERT INTO employees (id, name, code, branch_id, role_id, base_salary, work_hours, monthly_leave_days, attendance_status)
+        VALUES (${emp.id}, ${emp.name}, ${emp.code}, ${emp.branch_id}, ${emp.role_id}, ${emp.base_salary}, ${emp.work_hours}, ${emp.monthly_leave_days}, ${emp.attendance_status})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name,
           code = EXCLUDED.code,
@@ -118,6 +95,7 @@ export async function saveEmployeeAction(emp: EmployeeData): Promise<{ success: 
           role_id = EXCLUDED.role_id,
           base_salary = EXCLUDED.base_salary,
           work_hours = EXCLUDED.work_hours,
+          monthly_leave_days = EXCLUDED.monthly_leave_days,
           attendance_status = EXCLUDED.attendance_status
       `;
     }
