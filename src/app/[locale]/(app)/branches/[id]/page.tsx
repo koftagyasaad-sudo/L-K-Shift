@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
-import { useParams, useRouter } from "next/router";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   Building2, ArrowRight, Play, Download, Phone, MapPin, 
-  Users, CheckCircle2, Clock, ShieldCheck, Loader2 
+  CheckCircle2, Clock, Loader2 
 } from "lucide-react";
 import { getBranchByIdAction, BranchData } from "@/actions/branchActions";
 
 export default function BranchDetailsPage() {
   const params = useParams();
-  const branchId = (params?.id as string) || "";
-  
+  const router = useRouter();
+  const branchId = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+
   const [branch, setBranch] = useState<BranchData | null>(null);
   const [loading, setLoading] = useState(true);
   const [shiftActive, setShiftActive] = useState(false);
@@ -38,14 +39,15 @@ export default function BranchDetailsPage() {
   };
 
   const handleExportReport = () => {
+    if (!branch) return;
     const csvContent = "data:text/csv;charset=utf-8," 
       + `اسم الفرع,مدير الفرع,الهاتف,التحويلة,العنوان\n`
-      + `"${branch?.name}","${branch?.manager}","${branch?.phone}","${branch?.ext}","${branch?.address}"`;
+      + `"${branch.name}","${branch.manager}","${branch.phone}","${branch.ext}","${branch.address}"`;
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `تقرير_فرع_${branch?.name || "الفرع"}.csv`);
+    link.setAttribute("download", `تقرير_فرع_${branch.name || "الفرع"}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -99,7 +101,6 @@ export default function BranchDetailsPage() {
             </div>
           </div>
 
-          {/* Moved Action Buttons: Start Shift & Export Report */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleStartShift}
