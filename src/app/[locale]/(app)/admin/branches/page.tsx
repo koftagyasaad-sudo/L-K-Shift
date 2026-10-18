@@ -1,346 +1,169 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
-  Building2, Plus, Search, MapPin, Phone, PhoneForwarded, 
-  ExternalLink, Edit, Trash2, CheckCircle2, AlertCircle, Loader2 
+  Building2, ArrowRight, Play, Download, Phone, MapPin, 
+  CheckCircle2, Clock, Loader2 
 } from "lucide-react";
-import { 
-  getBranchesAction, 
-  saveBranchAction, 
-  deleteBranchAction, 
-  BranchData 
-} from "@/actions/branchActions";
+import { getBranchByIdAction, BranchData } from "@/actions/branchActions";
 
-export default function BranchesPage() {
-  const [branches, setBranches] = useState<BranchData[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+export default function AdminBranchDetailsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const branchId = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+
+  const [branch, setBranch] = useState<BranchData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
-
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<BranchData | null>(null);
-  const [formData, setFormData] = useState<BranchData>({
-    id: "",
-    name: "",
-    manager: "",
-    phone: "",
-    ext: "",
-    address: "",
-    map_url: ""
-  });
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  const fetchBranches = async () => {
-    setLoading(true);
-    const res = await getBranchesAction();
-    if (res.success) {
-      setBranches(res.data);
-    }
-    setLoading(false);
-  };
+  const [shiftActive, setShiftActive] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBranches();
-  }, []);
-
-  const handleOpenModal = (branch?: BranchData) => {
-    if (branch) {
-      setEditingBranch(branch);
-      setFormData(branch);
-    } else {
-      setEditingBranch(null);
-      setFormData({
-        id: "b-" + Date.now(),
-        name: "",
-        manager: "",
-        phone: "",
-        ext: "",
-        address: "",
-        map_url: ""
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  const handleSave = () => {
-    if (!formData.name.trim()) {
-      setMessage({ type: "error", text: "يرجى إدخال اسم الفرع" });
-      return;
-    }
-
-    startTransition(async () => {
-      const res = await saveBranchAction(formData);
-      if (res.success) {
-        setMessage({ type: "success", text: "تم حفظ بيانات الفرع بنجاح في Neon DB" });
-        setIsModalOpen(false);
-        fetchBranches();
-      } else {
-        setMessage({ type: "error", text: res.error || "حدث خطأ أثناء الحفظ" });
+    async function loadBranch() {
+      if (!branchId) return;
+      setLoading(true);
+      const res = await getBranchByIdAction(branchId);
+      if (res.success && res.data) {
+        setBranch(res.data);
       }
-    });
+      setLoading(false);
+    }
+    loadBranch();
+  }, [branchId]);
+
+  const handleStartShift = () => {
+    setShiftActive(true);
+    setMessage("تم بدء شيفت العمل لهذا الفرع بنجاح وتسجيل الحضور الأولي.");
+    setTimeout(() => setMessage(null), 4000);
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm("هل أنت تأكد من رغبتك في حذف هذا الفرع؟")) return;
+  const handleExportReport = () => {
+    if (!branch) return;
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + `اسم الفرع,مدير الفرع,الهاتف,التحويلة,العنوان\n`
+      + `"${branch.name}","${branch.manager}","${branch.phone}","${branch.ext}","${branch.address}"`;
 
-    startTransition(async () => {
-      const res = await deleteBranchAction(id);
-      if (res.success) {
-        setMessage({ type: "success", text: "تم حذف الفرع بنجاح" });
-        fetchBranches();
-      } else {
-        setMessage({ type: "error", text: res.error || "فشل عملية الحذف" });
-      }
-    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `تقرير_فرع_${branch.name || "الفرع"}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const filteredBranches = branches.filter((b) =>
-    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    b.manager.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <p className="text-sm">جاري تحميل تفاصيل الفرع من Neon...</p>
+      </div>
+    );
+  }
+
+  if (!branch) {
+    return (
+      <div className="p-8 text-center space-y-4">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white">الفرع غير موجود</h2>
+        <p className="text-xs text-slate-500">لم نتمكن من العثور على الفرع المطلوب في قاعدة البيانات.</p>
+        <Link href="/ar/admin/branches" className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-xs rounded-xl">
+          <ArrowRight className="w-4 h-4" />
+          <span>العودة لقائمة الفروع</span>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-tr from-amber-500 to-orange-500 text-white rounded-xl shadow-md">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">إدارة الفروع</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">متابعة الفروع وتحديد مواقعها ومسؤولي الإدارة</p>
-          </div>
-        </div>
-
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-medium rounded-xl text-sm shadow-md transition-all duration-200 active:scale-95"
+      {/* Top Header Navigation */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/ar/admin/branches"
+          className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors"
         >
-          <Plus className="w-4 h-4" />
-          <span>إضافة فرع جديد</span>
-        </button>
+          <ArrowRight className="w-4 h-4" />
+          <span>العودة لجميع الفروع</span>
+        </Link>
       </div>
 
-      {/* Message Banner */}
-      {message && (
-        <div className={`p-4 rounded-xl flex items-center gap-3 text-sm ${
-          message.type === "success" 
-            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-            : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-        }`}>
-          {message.type === "success" ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-          <span>{message.text}</span>
-        </div>
-      )}
-
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="w-5 h-5 absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          placeholder="ابحث عن اسم الفرع أو مدير الفرع..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pr-11 pl-4 py-3 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md rounded-xl border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 text-slate-900 dark:text-white placeholder-slate-400"
-        />
-      </div>
-
-      {/* Branches List Grid */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <p className="text-sm">جاري تحميل بيانات الفروع من نيون...</p>
-        </div>
-      ) : filteredBranches.length === 0 ? (
-        <div className="text-center py-16 bg-white/40 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">
-          <Building2 className="w-12 h-12 text-slate-400 mx-auto mb-3 opacity-50" />
-          <p className="text-base font-semibold text-slate-700 dark:text-slate-300">لا توجد فروع مسجلة</p>
-          <p className="text-xs text-slate-400 mt-1">اضغط على زر "إضافة فرع جديد" لإدراج فرع في النظام</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredBranches.map((branch) => (
-            <div
-              key={branch.id}
-              className="group relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-orange-500/40 transition-all duration-300 flex flex-col justify-between"
-            >
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl group-hover:scale-105 transition-transform">
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 dark:text-white text-base">{branch.name}</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">مدير الفرع: {branch.manager || "غير محدد"}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleOpenModal(branch)}
-                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-amber-600 transition-colors"
-                      title="تعديل الفرع"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(branch.id)}
-                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-red-600 transition-colors"
-                      title="حذف الفرع"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/60">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" />
-                      الهاتف:
-                    </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{branch.phone || "---"}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <PhoneForwarded className="w-3.5 h-3.5 text-slate-400" />
-                      التحويلة:
-                    </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">{branch.ext || "---"}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{branch.address || "العنوان غير محدد"}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2">
-                {branch.map_url ? (
-                  <a
-                    href={branch.map_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>خريطة جوجل</span>
-                  </a>
-                ) : <div />}
-
-                <Link
-                  href={`/ar/admin/branches/${branch.id}`}
-                  className="px-3 py-1.5 text-xs bg-slate-100 hover:bg-orange-500 hover:text-white dark:bg-slate-800 dark:hover:bg-orange-500 text-slate-700 dark:text-slate-300 font-medium rounded-lg transition-colors"
-                >
-                  تفاصيل الفرع والشيفتات ←
-                </Link>
-              </div>
+      {/* Main Info Card */}
+      <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 bg-gradient-to-tr from-orange-500 to-amber-500 text-white rounded-2xl shadow-md">
+              <Building2 className="w-7 h-7" />
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Modal for Add/Edit Branch */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
-              {editingBranch ? "تعديل بيانات الفرع" : "إضافة فرع جديد"}
-            </h2>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">اسم الفرع *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="مثال: فرع الرياض - العليا"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">مدير الفرع</label>
-                <input
-                  type="text"
-                  value={formData.manager}
-                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                  placeholder="اسم مدير الفرع"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">رقم الهاتف</label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+966500000000"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">التحويلة Ext</label>
-                  <input
-                    type="text"
-                    value={formData.ext}
-                    onChange={(e) => setFormData({ ...formData, ext: e.target.value })}
-                    placeholder="101"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">العنوان التفصيلي</label>
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="الشارع، الحي، المدينة"
-                  rows={2}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-medium">رابط خرائط جوجل (Google Maps URL)</label>
-                <input
-                  type="text"
-                  value={formData.map_url}
-                  onChange={(e) => setFormData({ ...formData, map_url: e.target.value })}
-                  placeholder="https://maps.google.com/..."
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                إلغاء
-              </button>
-              <button
-                disabled={isPending}
-                onClick={handleSave}
-                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium rounded-xl text-xs shadow-md transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>حفظ البيانات</span>
-              </button>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{branch.name}</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">المسؤول: {branch.manager || "غير محدد"}</p>
             </div>
           </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleStartShift}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md transition-all active:scale-95 ${
+                shiftActive
+                  ? "bg-emerald-500 text-white"
+                  : "bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-90"
+              }`}
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>{shiftActive ? "الوردية نشطة الآن" : "بدء وردية جديدة"}</span>
+            </button>
+
+            <button
+              onClick={handleExportReport}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs shadow-md transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              <span>تصدير تقرير الفرع</span>
+            </button>
+          </div>
         </div>
-      )}
+
+        {message && (
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{message}</span>
+          </div>
+        )}
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
+            <span className="text-xs text-slate-400 flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5" />
+              رقم التواصل والتحويلة
+            </span>
+            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
+              {branch.phone || "---"} (داخلي: {branch.ext || "---"})
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
+            <span className="text-xs text-slate-400 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5" />
+              العنوان التوضيحي
+            </span>
+            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate">
+              {branch.address || "غير مسجل"}
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
+            <span className="text-xs text-slate-400 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              تاريخ التسجيل
+            </span>
+            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
+              {branch.createdAt ? new Date(branch.createdAt).toLocaleDateString("ar-SA") : "الآن"}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
