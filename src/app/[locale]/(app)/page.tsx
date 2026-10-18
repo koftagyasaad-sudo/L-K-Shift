@@ -1,113 +1,293 @@
 "use client";
 
-import React, { useContext, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ThemeContext } from "@/context/ThemeContext";
+import React, { useState, useEffect, useTransition } from "react";
+import { 
+  Building2, Users, FileText, CheckCircle2, Clock, 
+  MapPin, Camera, AlertCircle, Plus, Send, Loader2 
+} from "lucide-react";
+import { getBranchesAction } from "@/actions/branchActions";
+import { getEmployeesAction } from "@/actions/employeeActions";
+import { recordAttendanceAction } from "@/actions/attendanceActions";
+import { 
+  getLeaveRequestsAction, 
+  createLeaveRequestAction, 
+  updateLeaveStatusAction, 
+  LeaveRequest 
+} from "@/actions/leaveActions";
 
 export default function DashboardPage() {
-  const pathname = usePathname();
-  const currentLocale = pathname.startsWith("/en") ? "en" : "ar";
-  const { isDarkMode } = useContext(ThemeContext);
+  const [stats, setStats] = useState({ branchesCount: 0, employeesCount: 0, presentCount: 0 });
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
 
+  // Leave Modal State
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({
+    type: "إجازة سنوية",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
+    reason: ""
+  });
 
-  const cardClass = `rounded-2xl p-6 border transition-colors ${
-    isDarkMode ? "bg-[#111111] border-gray-800 text-white" : "bg-white border-gray-200 text-gray-900 shadow-sm"
-  }`;
+  // Attendance Simulation State
+  const [attendanceMsg, setAttendanceMsg] = useState<string | null>(null);
 
-  const linkHoverClass = isDarkMode ? "hover:border-gray-600 hover:bg-[#1a1a1a]" : "hover:border-gray-300 hover:bg-gray-50";
+  const loadDashboardData = async () => {
+    setLoading(true);
+    const [bRes, eRes, lRes] = await Promise.all([
+      getBranchesAction(),
+      getEmployeesAction(),
+      getLeaveRequestsAction()
+    ]);
+
+    if (bRes.success && eRes.success) {
+      setStats({
+        branchesCount: bRes.data.length,
+        employeesCount: eRes.data.length,
+        presentCount: eRes.data.filter((e) => e.attendance_status === "حاضر").length
+      });
+    }
+
+    if (lRes.success) {
+      setLeaveRequests(lRes.data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const handleSimulateAttendance = (type: "IN" | "OUT") => {
+    startTransition(async () => {
+      const res = await recordAttendanceAction({
+        employeeId: "e1",
+        branchId: "b1",
+        lat: 24.7136,
+        lng: 46.6753,
+        faceVerified: true,
+        actionType: type
+      });
+      setAttendanceMsg(res.message);
+      setTimeout(() => setAttendanceMsg(null), 4000);
+      loadDashboardData();
+    });
+  };
+
+  const handleCreateLeave = () => {
+    if (!leaveForm.reason.trim()) return;
+
+    startTransition(async () => {
+      const res = await createLeaveRequestAction({
+        id: "l-" + Date.now(),
+        employee_id: "e1",
+        employee_name: "سعد الكفتجي",
+        type: leaveForm.type,
+        start_date: leaveForm.startDate,
+        end_date: leaveForm.endDate,
+        reason: leaveForm.reason,
+        status: "معلق"
+      });
+
+      if (res.success) {
+        setIsLeaveModalOpen(false);
+        setLeaveForm({ type: "إجازة سنوية", startDate: "", endDate: "", reason: "" });
+        loadDashboardData();
+      }
+    });
+  };
+
+  const handleStatusChange = (id: string, status: "مقبول" | "مرفوض") => {
+    startTransition(async () => {
+      await updateLeaveStatusAction(id, status);
+      loadDashboardData();
+    });
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-6 space-y-6">
+      {/* Top Banner */}
+      <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black mb-1">لوحة التحكم الرئيسية</h1>
-          <p className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
-            نظرة عامة على الإحصائيات (أدوات الوردية والتقارير متوفرة داخل صفحة كل فرع)
-          </p>
+          <h1 className="text-2xl font-bold">مرحباً بك، سعد الكفتجي 👋</h1>
+          <p className="text-xs text-orange-100 mt-1">لديك صلاحيات مطلقة للنظام وإدارة جميع الفروع</p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleSimulateAttendance("IN")}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-orange-600 font-bold rounded-xl text-xs shadow-md hover:bg-orange-50 transition-all active:scale-95"
+          >
+            <Camera className="w-4 h-4" />
+            <span>تسجيل حضور (بصمة + 3m GPS)</span>
+          </button>
+          <button
+            onClick={() => setIsLeaveModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-900/30 backdrop-blur-md text-white border border-white/20 font-medium rounded-xl text-xs hover:bg-orange-900/40 transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>طلب إجازة / استئذان</span>
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link href={`/${currentLocale}/admin/branches`} className={`${cardClass} ${linkHoverClass} block`}>
-          <div className="flex justify-between items-start mb-4">
-            <div className={`p-3 rounded-xl ${isDarkMode ? "bg-gray-800" : "bg-gray-100"}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>
-            </div>
-            <span className="text-3xl font-black">4</span>
-          </div>
-          <h3 className="font-bold text-lg">إجمالي الفروع</h3>
-        </Link>
+      {attendanceMsg && (
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{attendanceMsg}</span>
+        </div>
+      )}
 
-        <Link href={`/${currentLocale}/admin/employees`} className={`${cardClass} ${linkHoverClass} block`}>
-          <div className="flex justify-between items-start mb-4">
-            <div className={`p-3 rounded-xl ${isDarkMode ? "bg-gray-800" : "bg-gray-100"}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <span className="text-3xl font-black">12</span>
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs text-slate-400 font-medium">إجمالي الفروع</span>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{stats.branchesCount}</h3>
           </div>
-          <h3 className="font-bold text-lg">إجمالي الموظفين</h3>
-        </Link>
+          <div className="p-3 bg-orange-500/10 text-orange-500 rounded-xl">
+            <Building2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs text-slate-400 font-medium">إجمالي الموظفين</span>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{stats.employeesCount}</h3>
+          </div>
+          <div className="p-3 bg-amber-500/10 text-amber-500 rounded-xl">
+            <Users className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-xs text-slate-400 font-medium">الموظفون الحاضرون الآن</span>
+            <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{stats.presentCount}</h3>
+          </div>
+          <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Quick Actions Additions */}
-        <div className={`lg:col-span-1 ${cardClass}`}>
-          <h3 className="font-bold text-lg mb-4">إجراءات سريعة</h3>
+      {/* Pending Leave Requests Section */}
+      <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm space-y-4">
+        <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <FileText className="w-5 h-5 text-orange-500" />
+          <span>طلبات الإجازات والاستئذانات القائمة</span>
+        </h2>
+
+        {leaveRequests.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">لا توجد طلبات إجازة قائمة حالياً</p>
+        ) : (
           <div className="space-y-3">
-            <button 
-              onClick={() => setIsLeaveModalOpen(true)}
-              className={`w-full flex items-center justify-between p-4 rounded-xl border transition-colors font-semibold ${
-              isDarkMode ? "border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20" : "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
-            }`}>
-              طلب إجازة أو إذن
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </button>
-            <Link href={`/${currentLocale}/admin/employees`} className={`w-full flex items-center justify-between p-4 rounded-xl border transition-colors font-semibold ${
-              isDarkMode ? "border-gray-800 bg-[#1a1a1a] hover:bg-gray-800 text-gray-300" : "border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700"
-            }`}>
-              إضافة موظف جديد
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </Link>
+            {leaveRequests.map((leave) => (
+              <div key={leave.id} className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 dark:text-white text-sm">{leave.employee_name}</span>
+                    <span className="px-2 py-0.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-md font-medium">{leave.type}</span>
+                  </div>
+                  <p className="text-slate-500 mt-1">السبب: {leave.reason}</p>
+                  <p className="text-slate-400 text-[11px] mt-0.5">من {leave.start_date} إلى {leave.end_date}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {leave.status === "معلق" ? (
+                    <>
+                      <button
+                        onClick={() => handleStatusChange(leave.id, "مقبول")}
+                        className="px-3 py-1.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700"
+                      >
+                        قَبُول
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange(leave.id, "مرفوض")}
+                        className="px-3 py-1.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700"
+                      >
+                        رفض
+                      </button>
+                    </>
+                  ) : (
+                    <span className={`px-2.5 py-1 rounded-lg font-medium ${
+                      leave.status === "مقبول" ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600"
+                    }`}>
+                      {leave.status}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
       {/* Leave Request Modal */}
       {isLeaveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className={`w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border transition-all ${
-            isDarkMode ? "bg-[#141414] border-gray-800 text-white" : "bg-white border-gray-200 text-gray-900"
-          }`}>
-            <div className={`p-6 border-b flex justify-between items-center ${isDarkMode ? "border-gray-800 bg-[#1a1a1a]" : "border-gray-100 bg-gray-50"}`}>
-              <h2 className="text-xl font-black">تقديم طلب جديد</h2>
-              <button onClick={() => setIsLeaveModalOpen(false)} className={`p-2 rounded-xl ${isDarkMode ? "text-gray-400 hover:bg-gray-800" : "text-gray-500 hover:bg-gray-200"}`}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
+              تقديم طلب إجازة / استئذان
+            </h2>
+
+            <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-sm font-bold mb-2">نوع الطلب</label>
-                <select className={`w-full px-4 py-3.5 rounded-xl border outline-none font-semibold ${isDarkMode ? "bg-[#0d0d0d] border-gray-800 focus:border-orange-500" : "bg-gray-50 border-gray-300 focus:border-orange-500"}`}>
-                  <option>إجازة اعتيادية</option>
-                  <option>إجازة مرضية</option>
-                  <option>إذن انصراف مبكر</option>
-                  <option>إذن تأخير حضور</option>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1">نوع الطلب</label>
+                <select
+                  value={leaveForm.type}
+                  onChange={(e) => setLeaveForm({ ...leaveForm, type: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white"
+                >
+                  <option value="إجازة سنوية">إجازة سنوية</option>
+                  <option value="استئذان ساعتي">استئذان ساعتي</option>
+                  <option value="إجازة مرضية">إجازة مرضية</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">التاريخ</label>
-                <input type="date" className={`w-full px-4 py-3.5 rounded-xl border outline-none font-semibold ${isDarkMode ? "bg-[#0d0d0d] border-gray-800 focus:border-orange-500" : "bg-gray-50 border-gray-300 focus:border-orange-500"}`} />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1">تاريخ البدء</label>
+                  <input
+                    type="date"
+                    value={leaveForm.startDate}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 mb-1">تاريخ الانتهاء</label>
+                  <input
+                    type="date"
+                    value={leaveForm.endDate}
+                    onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white"
+                  />
+                </div>
               </div>
+
               <div>
-                <label className="block text-sm font-bold mb-2">السبب (للمدير)</label>
-                <textarea rows={3} className={`w-full px-4 py-3.5 rounded-xl border outline-none font-semibold ${isDarkMode ? "bg-[#0d0d0d] border-gray-800 focus:border-orange-500" : "bg-gray-50 border-gray-300 focus:border-orange-500"}`}></textarea>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1">سبب الطلب</label>
+                <textarea
+                  value={leaveForm.reason}
+                  onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })}
+                  rows={3}
+                  placeholder="اكتب تفاصيل طلبك..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-slate-900 dark:text-white"
+                />
               </div>
             </div>
-            <div className={`p-6 border-t flex gap-3 ${isDarkMode ? "border-gray-800 bg-[#1a1a1a]" : "border-gray-100 bg-gray-50"}`}>
-              <button onClick={() => { alert("تم إرسال الطلب للمدير للمراجعة."); setIsLeaveModalOpen(false); }} className="px-6 py-3 w-full bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold shadow-lg shadow-orange-500/30 transition-all">
-                إرسال الطلب
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button onClick={() => setIsLeaveModalOpen(false)} className="px-4 py-2 text-xs text-slate-500">إلغاء</button>
+              <button
+                disabled={isPending}
+                onClick={handleCreateLeave}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium rounded-xl text-xs shadow-md"
+              >
+                {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>إرسال الطلب</span>
               </button>
             </div>
           </div>
