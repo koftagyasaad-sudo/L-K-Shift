@@ -8,6 +8,7 @@ export interface LeaveRequest {
   employee_id: string;
   employee_name: string;
   type: string;
+  recipient: string; // الحقل الجديد: موجه إلى من
   start_date: string;
   end_date: string;
   reason: string;
@@ -21,6 +22,7 @@ const fallbackLeaves: LeaveRequest[] = [
     employee_id: "e2",
     employee_name: "محمد علي",
     type: "إجازة سنوية",
+    recipient: "المدير العام",
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date(Date.now() + 86400000 * 3).toISOString().split("T")[0],
     reason: "إجازة عائلية شتوية",
@@ -40,7 +42,7 @@ export async function getLeaveRequestsAction(): Promise<{ success: boolean; data
     if (!sql) return { success: true, data: fallbackLeaves };
 
     const rows = await sql`
-      SELECT id, employee_id, employee_name, type, start_date, end_date, reason, status, created_at as "createdAt"
+      SELECT id, employee_id, employee_name, type, recipient, start_date, end_date, reason, status, created_at as "createdAt"
       FROM leave_requests
       ORDER BY created_at DESC
     `;
@@ -52,6 +54,7 @@ export async function getLeaveRequestsAction(): Promise<{ success: boolean; data
         employee_id: r.employee_id,
         employee_name: r.employee_name,
         type: r.type,
+        recipient: r.recipient || "مدير الفرع",
         start_date: r.start_date ? new Date(r.start_date).toISOString().split("T")[0] : "",
         end_date: r.end_date ? new Date(r.end_date).toISOString().split("T")[0] : "",
         reason: r.reason || "",
@@ -70,8 +73,8 @@ export async function createLeaveRequestAction(request: LeaveRequest): Promise<{
     const sql = getClient();
     if (sql) {
       await sql`
-        INSERT INTO leave_requests (id, employee_id, employee_name, type, start_date, end_date, reason, status)
-        VALUES (${request.id}, ${request.employee_id}, ${request.employee_name}, ${request.type}, ${request.start_date}, ${request.end_date}, ${request.reason}, ${request.status})
+        INSERT INTO leave_requests (id, employee_id, employee_name, type, recipient, start_date, end_date, reason, status)
+        VALUES (${request.id}, ${request.employee_id}, ${request.employee_name}, ${request.type}, ${request.recipient}, ${request.start_date}, ${request.end_date}, ${request.reason}, ${request.status})
       `;
     }
 
