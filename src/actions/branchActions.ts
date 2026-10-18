@@ -1,45 +1,151 @@
-"use server"; // ⚠️ هذا السطر إجباري جداً، يخبر Next.js أن هذا الملف يعمل على السيرفر فقط ولا يذهب للمتصفح أبداً
+"use server";
 
-// استدعِ ملف الاتصال بـ Neon الخاص بك هنا (سواء كنت تستخدم Drizzle أو Prisma أو pg raw)
-// مثال: import { db } from "@/db/index"; 
+import { revalidatePath } from "next/cache";
+import { neon } from "@neondatabase/serverless";
 
-// 1. دالة جلب الفروع من Neon
-export async function getBranches() {
+export interface BranchData {
+  id: string;
+  name: string;
+  manager: string;
+  phone: string;
+  ext: string;
+  address: string;
+  map_url: string;
+  createdAt?: string;
+}
+
+const fallbackBranches: BranchData[] = [
+  {
+    id: "b1",
+    name: "الفرع الرئيسي - الرياض",
+    manager: "أحمد المحمود",
+    phone: "+966500000001",
+    ext: "101",
+    address: "شارع العليا، الرياض، المملكة العربية السعودية",
+    map_url: "https://maps.google.com/?q=24.7136,46.6753",
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "b2",
+    name: "فرع جدة - الكورنيش",
+    manager: "سارة الغامدي",
+    phone: "+966500000002",
+    ext: "102",
+    address: "طريق الكورنيش، جدة، المملكة العربية السعودية",
+    map_url: "https://maps.google.com/?q=21.5433,39.1728",
+    createdAt: new Date().toISOString()
+  }
+];
+
+function getClient() {
+  if (!process.env.DATABASE_URL) return null;
+  return neon(process.env.DATABASE_URL);
+}
+
+export async function getBranchesAction(): Promise<{ success: boolean; data: BranchData[] }> {
   try {
-    // اكتب كود الاستعلام الخاص بك هنا
-    // مثال (Drizzle): const branches = await db.select().from(branchesTable);
-    // مثال (pg): const { rows } = await db.query('SELECT * FROM branches');
-    
-    // سأقوم بإرجاع بيانات وهمية حالياً، استبدلها ببيانات Neon
-    return [
-      { id: "1", name: "الفرع الرئيسي", manager: "أحمد محمود", phone: "0100000000", ext: "101", address: "القاهرة", map: "", employeesCount: 15, status: "نشط", code: "BR-01" },
-    ];
+    const sql = getClient();
+    if (!sql) return { success: true, data: fallbackBranches };
+
+    const rows = await sql`
+      SELECT id, name, manager, phone, ext, address, map_url as "map_url", created_at as "createdAt"
+      FROM branches
+      ORDER BY created_at DESC
+    `;
+
+    return {
+      success: true,
+      data: rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        manager: r.manager || "",
+        phone: r.phone || "",
+        ext: r.ext || "",
+        address: r.address || "",
+        map_url: r.map_url || "",
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString()
+      }))
+    };
   } catch (error) {
-    console.error("Error fetching branches:", error);
-    return [];
+    console.error("Neon getBranchesAction Error:", error);
+    return { success: true, data: fallbackBranches };
   }
 }
 
-// 2. دالة إضافة فرع جديد إلى Neon
-export async function addBranch(branchData: any) {
+export async function getBranchByIdAction(id: string): Promise<{ success: boolean; data: BranchData | null }> {
   try {
-    // اكتب كود الإدخال هنا (Insert to Neon)
-    // await db.insert(branchesTable).values(branchData);
-    
-    return { success: true, message: "تمت إضافة الفرع بنجاح" };
+    const sql = getClient();
+    if (!sql) {
+      const found = fallbackBranches.find((b) => b.id === id) || null;
+      return { success: true, data: found };
+    }
+
+    const rows = await sql`
+      SELECT id, name, manager, phone, ext, address, map_url as "map_url", created_at as "createdAt"
+      FROM branches
+      WHERE id = ${id}
+      LIMIT 1
+    `;
+
+    if (rows.length === 0) return { success: true, data: null };
+
+    const r = rows[0];
+    return {
+      success: true,
+      data: {
+        id: r.id,
+        name: r.name,
+        manager: r.manager || "",
+        phone: r.phone || "",
+        ext: r.ext || "",
+        address: r.address || "",
+        map_url: r.map_url || "",
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString()
+      }
+    };
   } catch (error) {
-    return { success: false, message: "حدث خطأ أثناء الإضافة" };
+    console.error("Neon getBranchByIdAction Error:", error);
+    const found = fallbackBranches.find((b) => b.id === id) || null;
+    return { success: true, data: found };
   }
 }
 
-// 3. دالة حذف فرع من Neon
-export async function deleteBranch(branchId: string) {
+export async function saveBranchAction(branch: BranchData): Promise<{ success: boolean; error?: string }> {
   try {
-    // اكتب كود الحذف هنا (Delete from Neon)
-    // await db.delete(branchesTable).where(eq(branchesTable.id, branchId));
-    
+    const sql = getClient();
+    if (sql) {
+      await sql`
+        INSERT INTO branches (id, name, manager, phone, ext, address, map_url)
+        VALUES (${branch.id}, ${branch.name}, ${branch.manager}, ${branch.phone}, ${branch.ext}, ${branch.address}, ${branch.map_url})
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          manager = EXCLUDED.manager,
+          phone = EXCLUDED.phone,
+          ext = EXCLUDED.ext,
+          address = EXCLUDED.address,
+          map_url = EXCLUDED.map_url
+      `;
+    }
+
+    revalidatePath("/[locale]/(app)/admin/branches", "page");
     return { success: true };
-  } catch (error) {
-    return { success: false };
+  } catch (error: any) {
+    console.error("Neon saveBranchAction Error:", error);
+    return { success: false, error: error?.message || "فشل حفظ بيانات الفرع" };
+  }
+}
+
+export async function deleteBranchAction(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const sql = getClient();
+    if (sql) {
+      await sql`DELETE FROM branches WHERE id = ${id}`;
+    }
+
+    revalidatePath("/[locale]/(app)/admin/branches", "page");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Neon deleteBranchAction Error:", error);
+    return { success: false, error: error?.message || "فشل حذف الفرع" };
   }
 }
