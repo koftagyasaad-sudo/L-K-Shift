@@ -185,6 +185,15 @@ export async function updateEmployeeAction(
   }
 }
 
+export async function saveEmployeeAction(
+  data: EmployeeData
+): Promise<{ success: boolean; employee?: EmployeeData; error?: string }> {
+  if (data.id) {
+    return updateEmployeeAction(data.id, data);
+  }
+  return createEmployeeAction(data);
+}
+
 export async function deleteEmployeeAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
