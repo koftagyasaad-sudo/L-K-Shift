@@ -55,7 +55,6 @@ export interface AttendanceRecordInput {
   lng?: number;
   faceVerified?: boolean;
   actionType?: "IN" | "OUT";
-
   employee_id?: string;
   branch_id?: string;
   type?: string;
