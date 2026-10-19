@@ -13,7 +13,8 @@ import {
   Loader2,
   Filter,
 } from "lucide-react";
-import { getAttendanceLogsAction, type AttendanceRecord } from "@/actions/attendanceActions";
+import { getAttendanceLogsAction } from "@/actions/attendanceActions";
+import type { AttendanceRecord } from "@/types";
 
 export default function AttendanceReviewPage() {
   const params = useParams();
@@ -63,7 +64,7 @@ export default function AttendanceReviewPage() {
 
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Header Banner */}
+      {/* Banner */}
       <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -89,7 +90,7 @@ export default function AttendanceReviewPage() {
         </button>
       </div>
 
-      {/* Stats Overview */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-orange-600 dark:text-orange-400">
@@ -122,7 +123,7 @@ export default function AttendanceReviewPage() {
         </div>
       </div>
 
-      {/* Filters Bar */}
+      {/* Search */}
       <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
@@ -154,7 +155,7 @@ export default function AttendanceReviewPage() {
         </div>
       </div>
 
-      {/* Logs Table */}
+      {/* Table */}
       <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
