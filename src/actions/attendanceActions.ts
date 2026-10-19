@@ -1,71 +1,126 @@
 "use server";
 
 import { neon } from "@neondatabase/serverless";
-import type { BranchData } from "@/types";
+import type { AttendanceRecordInput, AttendanceRecord, AttendanceFilterOptions } from "@/types";
 
-export async function getBranchesAction() {
+export async function recordAttendanceAction(input: AttendanceRecordInput) {
   try {
     const sql = neon(process.env.DATABASE_URL!);
-    const branches = (await sql`
-      SELECT id, name, location, created_at FROM branches ORDER BY created_at DESC
-    `) as BranchData[];
 
-    return { success: true, data: branches, branches };
-  } catch (error: any) {
-    console.error("getBranchesAction error:", error);
-    return { success: false, data: [], branches: [], error: error.message };
-  }
-}
+    const empId = input.employeeId || input.employee_id || "";
+    const rawType = input.actionType || input.type || "IN";
+    const type =
+      rawType.toUpperCase() === "CHECK_IN" || rawType.toUpperCase() === "IN"
+        ? "IN"
+        : "OUT";
+    const faceVerified = input.faceVerified ?? input.verified_by_face ?? true;
+    const lat = input.lat ?? input.gps_lat ?? null;
+    const lng = input.lng ?? input.gps_lng ?? null;
 
-export async function getBranchByIdAction(id: string) {
-  try {
-    const sql = neon(process.env.DATABASE_URL!);
-    const result = await sql`
-      SELECT id, name, location, created_at FROM branches WHERE id = ${id} LIMIT 1
+    if (!empId) {
+      return { success: false, error: "معرّف الموظف مطلوب" };
+    }
+
+    const emp = await sql`SELECT id, branch_id FROM employees WHERE id = ${empId} LIMIT 1`;
+    if (!emp || emp.length === 0) {
+      return { success: false, error: "الموظف غير موجود في النظام" };
+    }
+
+    const branchId = input.branchId || input.branch_id || emp[0].branch_id || null;
+
+    await sql`
+      INSERT INTO attendance_logs (
+        employee_id, branch_id, action_type, face_verified, latitude, longitude, created_at
+      ) VALUES (
+        ${empId}, ${branchId}, ${type}, ${faceVerified}, ${lat}, ${lng}, NOW()
+      )
     `;
-    if (!result || result.length === 0) {
-      return { success: false, error: "الفرع غير موجود" };
-    }
-    return { success: true, branch: result[0] };
-  } catch (error: any) {
-    console.error("getBranchByIdAction error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-export async function saveBranchAction(data: BranchData) {
-  try {
-    const sql = neon(process.env.DATABASE_URL!);
-
-    const loc = data.location || data.address || null;
-
-    if (data.id) {
-      await sql`
-        UPDATE branches
-        SET name = ${data.name}, location = ${loc}
-        WHERE id = ${data.id}
-      `;
-    } else {
-      await sql`
-        INSERT INTO branches (name, location)
-        VALUES (${data.name}, ${loc})
-      `;
-    }
 
     return { success: true };
   } catch (error: any) {
-    console.error("saveBranchAction error:", error);
-    return { success: false, error: error.message || "فشل حفظ بيانات الفرع" };
+    console.error("recordAttendanceAction error:", error);
+    return {
+      success: false,
+      error: error.message || "حدث خطأ أثناء تسجيل البصمة",
+    };
   }
 }
 
-export async function deleteBranchAction(id: string) {
+export async function getAttendanceLogsAction(filters?: AttendanceFilterOptions) {
   try {
     const sql = neon(process.env.DATABASE_URL!);
-    await sql`DELETE FROM branches WHERE id = ${id}`;
-    return { success: true };
+
+    const normalizedFilters =
+      typeof filters === "string" ? { employeeId: filters } : filters || {};
+
+    const { employeeId, startDate, endDate, branchId } = normalizedFilters;
+
+    if (!employeeId && !branchId && !startDate && !endDate) {
+      const logs = (await sql`
+        SELECT 
+          a.id,
+          a.employee_id,
+          e.name as employee_name,
+          e.employee_code,
+          b.name as branch_name,
+          a.action_type,
+          a.face_verified,
+          a.latitude,
+          a.longitude,
+          a.created_at
+        FROM attendance_logs a
+        LEFT JOIN employees e ON a.employee_id = e.id
+        LEFT JOIN branches b ON a.branch_id = b.id
+        ORDER BY a.created_at DESC
+        LIMIT 200
+      `) as AttendanceRecord[];
+      return { success: true, logs };
+    }
+
+    let baseQuery = `
+      SELECT 
+        a.id,
+        a.employee_id,
+        e.name as employee_name,
+        e.employee_code,
+        b.name as branch_name,
+        a.action_type,
+        a.face_verified,
+        a.latitude,
+        a.longitude,
+        a.created_at
+      FROM attendance_logs a
+      LEFT JOIN employees e ON a.employee_id = e.id
+      LEFT JOIN branches b ON a.branch_id = b.id
+      WHERE 1=1
+    `;
+
+    const params: any[] = [];
+    let idx = 1;
+
+    if (employeeId) {
+      baseQuery += ` AND a.employee_id = $${idx++}`;
+      params.push(employeeId);
+    }
+    if (branchId) {
+      baseQuery += ` AND a.branch_id = $${idx++}`;
+      params.push(branchId);
+    }
+    if (startDate) {
+      baseQuery += ` AND a.created_at >= $${idx++}`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      baseQuery += ` AND a.created_at <= $${idx++}`;
+      params.push(endDate);
+    }
+
+    baseQuery += ` ORDER BY a.created_at DESC LIMIT 200`;
+
+    const logs = (await sql(baseQuery, params)) as AttendanceRecord[];
+    return { success: true, logs };
   } catch (error: any) {
-    console.error("deleteBranchAction error:", error);
-    return { success: false, error: error.message || "فشل حذف الفرع" };
+    console.error("getAttendanceLogsAction error:", error);
+    return { success: false, logs: [], error: error.message };
   }
 }
