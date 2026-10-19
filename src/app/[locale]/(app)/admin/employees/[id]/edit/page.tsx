@@ -18,7 +18,6 @@ import {
 import { getEmployeesAction, saveEmployeeAction } from "@/actions/employeeActions";
 import { getBranchesAction } from "@/actions/branchActions";
 import { getRolesAction } from "@/actions/roleActions";
-import { getAttendanceLogsAction } from "@/actions/attendanceActions";
 
 export default function EditEmployeePage() {
   const params = useParams();
@@ -52,14 +51,21 @@ export default function EditEmployeePage() {
           getEmployeesAction(),
           getBranchesAction(),
           getRolesAction(),
-          getAttendanceLogsAction({ employeeId: empId }),
         ]);
 
-        if (branchRes.success) setBranches(branchRes.branches || []);
-        if (roleRes.success) setRoles(roleRes.roles || []);
+        if (branchRes.success) {
+          const branchesList = (branchRes as any).branches || (branchRes as any).data || [];
+          setBranches(branchesList);
+        }
 
-        if (empRes.success && empRes.employees) {
-          const currentEmp = empRes.employees.find((e: any) => e.id === empId);
+        if (roleRes.success) {
+          const rolesList = (roleRes as any).roles || (roleRes as any).data || [];
+          setRoles(rolesList);
+        }
+
+        if (empRes.success) {
+          const employeesList = (empRes as any).employees || (empRes as any).data || [];
+          const currentEmp = employeesList.find((e: any) => e.id === empId);
           if (currentEmp) {
             setFormData({
               id: currentEmp.id,
