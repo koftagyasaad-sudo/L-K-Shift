@@ -1,126 +1,116 @@
 "use server";
 
-import { neon } from "@neondatabase/serverless";
+import { query } from "@/lib/db";
 import type { AttendanceRecordInput, AttendanceRecord, AttendanceFilterOptions } from "@/types";
 
-export async function recordAttendanceAction(input: AttendanceRecordInput) {
+export async function recordAttendanceAction(
+  input: AttendanceRecordInput
+): Promise<{ success: boolean; log?: AttendanceRecord; error?: string }> {
   try {
-    const sql = neon(process.env.DATABASE_URL!);
-
-    const empId = input.employeeId || input.employee_id || "";
-    const rawType = input.actionType || input.type || "IN";
-    const type =
-      rawType.toUpperCase() === "CHECK_IN" || rawType.toUpperCase() === "IN"
-        ? "IN"
-        : "OUT";
-    const faceVerified = input.faceVerified ?? input.verified_by_face ?? true;
+    const empId = input.employeeId || input.employee_id;
+    const branchId = input.branchId || input.branch_id;
+    const actionType = input.actionType || input.type || "IN";
+    const faceVerified = input.faceVerified ?? input.verified_by_face ?? false;
     const lat = input.lat ?? input.gps_lat ?? null;
     const lng = input.lng ?? input.gps_lng ?? null;
 
     if (!empId) {
-      return { success: false, error: "معرّف الموظف مطلوب" };
+      return { success: false, error: "معرف الموظف مطلوب" };
     }
 
-    const emp = await sql`SELECT id, branch_id FROM employees WHERE id = ${empId} LIMIT 1`;
-    if (!emp || emp.length === 0) {
-      return { success: false, error: "الموظف غير موجود في النظام" };
-    }
+    const result = await query(
+      `INSERT INTO attendance_logs (employee_id, branch_id, action_type, face_verified, latitude, longitude)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, employee_id, branch_id, action_type, face_verified, latitude, longitude, created_at`,
+      [empId, branchId || null, actionType, faceVerified, lat, lng]
+    );
 
-    const branchId = input.branchId || input.branch_id || emp[0].branch_id || null;
-
-    await sql`
-      INSERT INTO attendance_logs (
-        employee_id, branch_id, action_type, face_verified, latitude, longitude, created_at
-      ) VALUES (
-        ${empId}, ${branchId}, ${type}, ${faceVerified}, ${lat}, ${lng}, NOW()
-      )
-    `;
-
-    return { success: true };
-  } catch (error: any) {
-    console.error("recordAttendanceAction error:", error);
-    return {
-      success: false,
-      error: error.message || "حدث خطأ أثناء تسجيل البصمة",
+    const row = result.rows[0];
+    const log: AttendanceRecord = {
+      id: row.id,
+      employee_id: row.employee_id,
+      action_type: row.action_type,
+      face_verified: Boolean(row.face_verified),
+      latitude: row.latitude ? Number(row.latitude) : null,
+      longitude: row.longitude ? Number(row.longitude) : null,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
     };
+
+    return { success: true, log };
+  } catch (err: any) {
+    console.error("Error recording attendance:", err);
+    return { success: false, error: err.message || "فشل تسجيل الحركة" };
   }
 }
 
-export async function getAttendanceLogsAction(filters?: AttendanceFilterOptions) {
+export async function getAttendanceLogsAction(
+  options?: AttendanceFilterOptions
+): Promise<{ success: boolean; logs?: AttendanceRecord[]; error?: string }> {
   try {
-    const sql = neon(process.env.DATABASE_URL!);
+    let empId: string | undefined;
+    let branchId: string | undefined;
+    let startDate: string | undefined;
+    let endDate: string | undefined;
 
-    const normalizedFilters =
-      typeof filters === "string" ? { employeeId: filters } : filters || {};
-
-    const { employeeId, startDate, endDate, branchId } = normalizedFilters;
-
-    if (!employeeId && !branchId && !startDate && !endDate) {
-      const logs = (await sql`
-        SELECT 
-          a.id,
-          a.employee_id,
-          e.name as employee_name,
-          e.employee_code,
-          b.name as branch_name,
-          a.action_type,
-          a.face_verified,
-          a.latitude,
-          a.longitude,
-          a.created_at
-        FROM attendance_logs a
-        LEFT JOIN employees e ON a.employee_id = e.id
-        LEFT JOIN branches b ON a.branch_id = b.id
-        ORDER BY a.created_at DESC
-        LIMIT 200
-      `) as AttendanceRecord[];
-      return { success: true, logs };
+    if (typeof options === "string") {
+      empId = options;
+    } else if (options && typeof options === "object") {
+      empId = options.employeeId;
+      branchId = options.branchId;
+      startDate = options.startDate;
+      endDate = options.endDate;
     }
 
-    let baseQuery = `
-      SELECT 
-        a.id,
-        a.employee_id,
-        e.name as employee_name,
-        e.employee_code,
-        b.name as branch_name,
-        a.action_type,
-        a.face_verified,
-        a.latitude,
-        a.longitude,
-        a.created_at
+    let sql = `
+      SELECT a.id, a.employee_id, a.action_type, a.face_verified, a.latitude, a.longitude, a.created_at,
+             e.name as employee_name, e.employee_code, b.name as branch_name
       FROM attendance_logs a
       LEFT JOIN employees e ON a.employee_id = e.id
       LEFT JOIN branches b ON a.branch_id = b.id
       WHERE 1=1
     `;
-
     const params: any[] = [];
-    let idx = 1;
 
-    if (employeeId) {
-      baseQuery += ` AND a.employee_id = $${idx++}`;
-      params.push(employeeId);
+    if (empId) {
+      params.push(empId);
+      sql += ` AND a.employee_id = $${params.length}`;
     }
+
     if (branchId) {
-      baseQuery += ` AND a.branch_id = $${idx++}`;
       params.push(branchId);
+      sql += ` AND a.branch_id = $${params.length}`;
     }
+
     if (startDate) {
-      baseQuery += ` AND a.created_at >= $${idx++}`;
       params.push(startDate);
+      sql += ` AND a.created_at >= $${params.length}`;
     }
+
     if (endDate) {
-      baseQuery += ` AND a.created_at <= $${idx++}`;
       params.push(endDate);
+      sql += ` AND a.created_at <= $${params.length}`;
     }
 
-    baseQuery += ` ORDER BY a.created_at DESC LIMIT 200`;
+    sql += ` ORDER BY a.created_at DESC LIMIT 100`;
 
-    const logs = (await sql(baseQuery, params)) as AttendanceRecord[];
+    const result = await query(sql, params);
+
+    const logs: AttendanceRecord[] = result.rows.map((row) => ({
+      id: row.id,
+      employee_id: row.employee_id,
+      employee_name: row.employee_name || "",
+      employee_code: row.employee_code || "",
+      branch_name: row.branch_name || "",
+      action_type: row.action_type,
+      face_verified: Boolean(row.face_verified),
+      latitude: row.latitude ? Number(row.latitude) : null,
+      longitude: row.longitude ? Number(row.longitude) : null,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : "",
+    }));
+
     return { success: true, logs };
-  } catch (error: any) {
-    console.error("getAttendanceLogsAction error:", error);
-    return { success: false, logs: [], error: error.message };
+  } catch (err: any) {
+    console.error("Error fetching attendance logs:", err);
+    return { success: false, error: err.message || "فشل جلب سجلات الحضور" };
   }
 }
