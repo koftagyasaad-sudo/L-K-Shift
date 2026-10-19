@@ -10,13 +10,26 @@ export interface AttendanceRecordInput {
   faceVerified?: boolean;
   actionType?: "IN" | "OUT";
 
-  // تيسير قبول الكلمات بنمط snake_case لمنع أي تعارض في الأنواع
+  // مرونة لقبول التسميات بنمط snake_case
   employee_id?: string;
   branch_id?: string;
   type?: string;
   verified_by_face?: boolean;
   gps_lat?: number;
   gps_lng?: number;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  employee_id: string;
+  employee_name?: string;
+  employee_code?: string;
+  branch_name?: string;
+  action_type: string;
+  face_verified: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  created_at: string;
 }
 
 export async function recordAttendanceAction(input: AttendanceRecordInput) {
@@ -73,7 +86,7 @@ export async function getAttendanceLogsAction(filters?: {
     const sql = neon(process.env.DATABASE_URL!);
 
     if (!filters?.employeeId && !filters?.branchId && !filters?.startDate && !filters?.endDate) {
-      const logs = await sql`
+      const logs = (await sql`
         SELECT 
           a.id,
           a.employee_id,
@@ -90,7 +103,7 @@ export async function getAttendanceLogsAction(filters?: {
         LEFT JOIN branches b ON a.branch_id = b.id
         ORDER BY a.created_at DESC
         LIMIT 200
-      `;
+      `) as AttendanceRecord[];
       return { success: true, logs };
     }
 
@@ -134,7 +147,7 @@ export async function getAttendanceLogsAction(filters?: {
 
     baseQuery += ` ORDER BY a.created_at DESC LIMIT 200`;
 
-    const logs = await sql(baseQuery, params);
+    const logs = (await sql(baseQuery, params)) as AttendanceRecord[];
     return { success: true, logs };
   } catch (error: any) {
     console.error("getAttendanceLogsAction error:", error);
