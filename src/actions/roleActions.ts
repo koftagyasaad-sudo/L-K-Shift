@@ -114,6 +114,15 @@ export async function updateRoleAction(
   }
 }
 
+export async function saveRoleAction(
+  data: RoleData
+): Promise<{ success: boolean; role?: RoleData; error?: string }> {
+  if (data.id) {
+    return updateRoleAction(data.id, data);
+  }
+  return createRoleAction(data);
+}
+
 export async function deleteRoleAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
