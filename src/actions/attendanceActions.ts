@@ -5,7 +5,7 @@ import type { AttendanceRecordInput, AttendanceRecord, AttendanceFilterOptions }
 
 export async function recordAttendanceAction(
   input: AttendanceRecordInput
-): Promise<{ success: boolean; log?: AttendanceRecord; error?: string }> {
+): Promise<{ success: boolean; log?: AttendanceRecord; data?: AttendanceRecord; error?: string }> {
   try {
     const empId = input.employeeId || input.employee_id;
     const branchId = input.branchId || input.branch_id;
@@ -36,7 +36,7 @@ export async function recordAttendanceAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
     };
 
-    return { success: true, log };
+    return { success: true, log, data: log };
   } catch (err: any) {
     console.error("Error recording attendance:", err);
     return { success: false, error: err.message || "فشل تسجيل الحركة" };
@@ -45,7 +45,7 @@ export async function recordAttendanceAction(
 
 export async function getAttendanceLogsAction(
   options?: AttendanceFilterOptions
-): Promise<{ success: boolean; logs?: AttendanceRecord[]; error?: string }> {
+): Promise<{ success: boolean; logs?: AttendanceRecord[]; data?: AttendanceRecord[]; error?: string }> {
   try {
     let empId: string | undefined;
     let branchId: string | undefined;
@@ -108,7 +108,7 @@ export async function getAttendanceLogsAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : "",
     }));
 
-    return { success: true, logs };
+    return { success: true, logs, data: logs };
   } catch (err: any) {
     console.error("Error fetching attendance logs:", err);
     return { success: false, error: err.message || "فشل جلب سجلات الحضور" };
