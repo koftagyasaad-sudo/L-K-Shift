@@ -18,6 +18,7 @@ import {
 import { getEmployeesAction, saveEmployeeAction } from "@/actions/employeeActions";
 import { getBranchesAction } from "@/actions/branchActions";
 import { getRolesAction } from "@/actions/roleActions";
+import type { BranchData, RoleData } from "@/types";
 
 export default function EditEmployeePage() {
   const params = useParams();
@@ -28,8 +29,8 @@ export default function EditEmployeePage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
+  const [branches, setBranches] = useState<BranchData[]>([]);
+  const [roles, setRoles] = useState<RoleData[]>([]);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [formData, setFormData] = useState({
