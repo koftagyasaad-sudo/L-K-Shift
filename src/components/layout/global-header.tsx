@@ -15,7 +15,7 @@ interface Notification {
   type: "info" | "success" | "warning";
 }
 
-export default function Header() {
+export default function GlobalHeader() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [lang, setLang] = useState<"ar" | "en">("ar");
   const [notifOpen, setNotifOpen] = useState(false);
