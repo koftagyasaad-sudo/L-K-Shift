@@ -21,8 +21,8 @@ import {
   getBranchesAction,
   saveBranchAction,
   deleteBranchAction,
-  BranchData,
 } from "@/actions/branchActions";
+import type { BranchData } from "@/types";
 
 export default function BranchesPage() {
   const params = useParams();
@@ -35,7 +35,6 @@ export default function BranchesPage() {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -287,7 +286,7 @@ export default function BranchesPage() {
         </div>
       )}
 
-      {/* Add / Edit Modal */}
+      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
           <div className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-orange-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 relative space-y-4">
