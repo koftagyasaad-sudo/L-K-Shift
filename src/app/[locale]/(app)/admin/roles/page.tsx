@@ -1,222 +1,266 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
-import { 
-  ShieldCheck, Plus, Search, Edit, Trash2, Check, 
-  Building2, CheckCircle2, AlertCircle, Loader2 
+import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import {
+  ShieldCheck,
+  Plus,
+  Search,
+  Trash2,
+  Edit2,
+  Building2,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  X,
 } from "lucide-react";
-import { getRolesAction, saveRoleAction, deleteRoleAction, RoleData } from "@/actions/roleActions";
-import { getBranchesAction, BranchData } from "@/actions/branchActions";
+import {
+  getRolesAction,
+  saveRoleAction,
+  deleteRoleAction,
+} from "@/actions/roleActions";
+import { getBranchesAction } from "@/actions/branchActions";
+import type { RoleData, BranchData } from "@/types";
 
 const AVAILABLE_PERMISSIONS = [
-  { id: "all", label: "صلاحيات مطلقة (SUPER_ADMIN)" },
-  { id: "manage_branches", label: "إدارة الفروع وتعديلها" },
-  { id: "manage_employees", label: "إدارة الموظفين والرواتب" },
-  { id: "view_reports", label: "عرض وتقارير الحضور والغياب" },
-  { id: "approve_leaves", label: "الموافقة على طلبات الإجازات" },
+  { id: "view_attendance", labelAr: "عرض سجل الحضور", labelEn: "View Attendance" },
+  { id: "manage_leaves", labelAr: "إدارة طلبات الإجازات", labelEn: "Manage Leaves" },
+  { id: "manage_employees", labelAr: "إدارة الموظفين والرواتب", labelEn: "Manage Employees" },
+  { id: "manage_branches", labelAr: "إدارة الفروع والورديات", labelEn: "Manage Branches" },
+  { id: "manage_roles", labelAr: "إدارة الأدوار والصلاحيات", labelEn: "Manage Roles" },
 ];
 
 export default function RolesPage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || "ar";
+  const isAr = locale === "ar";
+
   const [roles, setRoles] = useState<RoleData[]>([]);
   const [branches, setBranches] = useState<BranchData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<RoleData | null>(null);
-  const [formData, setFormData] = useState<RoleData>({
-    id: "",
-    title: "",
-    permissions: [],
-    branch_ids: []
-  });
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const loadData = async () => {
+  const [formData, setFormData] = useState<RoleData>({
+    id: "",
+    name: "",
+    description: "",
+    permissions: [],
+    branch_ids: [],
+  });
+
+  const fetchAll = async () => {
     setLoading(true);
-    const [rolesRes, branchesRes] = await Promise.all([
-      getRolesAction(),
-      getBranchesAction()
-    ]);
-    if (rolesRes.success) setRoles(rolesRes.data);
-    if (branchesRes.success) setBranches(branchesRes.data);
-    setLoading(false);
+    try {
+      const [roleRes, branchRes] = await Promise.all([
+        getRolesAction(),
+        getBranchesAction(),
+      ]);
+
+      if (roleRes.success) setRoles(roleRes.roles || roleRes.data || []);
+      if (branchRes.success) setBranches(branchRes.branches || branchRes.data || []);
+    } catch (err) {
+      console.error("Failed to load roles page:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadData();
+    fetchAll();
   }, []);
 
   const handleOpenModal = (role?: RoleData) => {
+    setMessage(null);
     if (role) {
-      setEditingRole(role);
-      setFormData(role);
-    } else {
-      setEditingRole(null);
       setFormData({
-        id: "r-" + Date.now(),
-        title: "",
-        permissions: [],
-        branch_ids: []
+        id: role.id || "",
+        name: role.name || "",
+        description: role.description || "",
+        permissions: role.permissions || [],
+        branch_ids: role.branch_ids || [],
+      });
+    } else {
+      setFormData({
+        id: "",
+        name: "",
+        description: "",
+        permissions: ["view_attendance"],
+        branch_ids: [],
       });
     }
     setIsModalOpen(true);
   };
 
-  const togglePermission = (permId: string) => {
-    setFormData((prev) => {
-      const exists = prev.permissions.includes(permId);
-      return {
-        ...prev,
-        permissions: exists 
-          ? prev.permissions.filter((p) => p !== permId)
-          : [...prev.permissions, permId]
-      };
-    });
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const res = await saveRoleAction({
+        id: formData.id || undefined,
+        name: formData.name.trim(),
+        description: formData.description?.trim() || undefined,
+        permissions: formData.permissions,
+        branch_ids: formData.branch_ids,
+      });
+
+      if (res.success) {
+        setMessage({
+          type: "success",
+          text: isAr ? "تم حفظ الدور المسمى الوظيفي بنجاح!" : "Role saved successfully!",
+        });
+        setTimeout(() => {
+          setIsModalOpen(false);
+          fetchAll();
+        }, 900);
+      } else {
+        setMessage({
+          type: "error",
+          text: res.error || (isAr ? "حدث خطأ أثناء الحفظ" : "Failed to save role"),
+        });
+      }
+    } catch {
+      setMessage({
+        type: "error",
+        text: isAr ? "خطأ في الاتصال بالخادم" : "Server connection error",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggleBranch = (branchId: string) => {
-    setFormData((prev) => {
-      const exists = prev.branch_ids.includes(branchId);
-      return {
-        ...prev,
-        branch_ids: exists
-          ? prev.branch_ids.filter((b) => b !== branchId)
-          : [...prev.branch_ids, branchId]
-      };
-    });
-  };
-
-  const handleSave = () => {
-    if (!formData.title.trim()) {
-      setMessage({ type: "error", text: "يرجى كتابة المسمى الوظيفي للدور" });
+  const handleDelete = async (id: string) => {
+    if (!confirm(isAr ? "هل أنت متأكد من حذف هذا الدور؟" : "Are you sure you want to delete this role?")) {
       return;
     }
 
-    startTransition(async () => {
-      const res = await saveRoleAction(formData);
-      if (res.success) {
-        setMessage({ type: "success", text: "تم حفظ الدور والصلاحيات في نيون بنجاح" });
-        setIsModalOpen(false);
-        loadData();
-      } else {
-        setMessage({ type: "error", text: res.error || "فشل عملية الحفظ" });
-      }
-    });
-  };
-
-  const handleDelete = (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا الدور؟")) return;
-
-    startTransition(async () => {
+    try {
       const res = await deleteRoleAction(id);
       if (res.success) {
-        setMessage({ type: "success", text: "تم حذف الدور الوظيفي" });
-        loadData();
+        fetchAll();
       } else {
-        setMessage({ type: "error", text: res.error || "فشل الحذف" });
+        alert(res.error || (isAr ? "فشل حذف الدور" : "Failed to delete role"));
       }
-    });
+    } catch (err) {
+      console.error("Error deleting role:", err);
+    }
   };
 
+  const togglePermission = (permId: string) => {
+    const current = formData.permissions || [];
+    if (current.includes(permId)) {
+      setFormData({ ...formData, permissions: current.filter((p) => p !== permId) });
+    } else {
+      setFormData({ ...formData, permissions: [...current, permId] });
+    }
+  };
+
+  const toggleBranch = (bId: string) => {
+    const current = formData.branch_ids || [];
+    if (current.includes(bId)) {
+      setFormData({ ...formData, branch_ids: current.filter((b) => b !== bId) });
+    } else {
+      setFormData({ ...formData, branch_ids: [...current, bId] });
+    }
+  };
+
+  const filteredRoles = roles.filter((r) =>
+    !searchTerm || r.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-tr from-amber-500 to-orange-500 text-white rounded-xl shadow-md">
-            <ShieldCheck className="w-6 h-6" />
+    <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* Banner */}
+      <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-orange-500" />
+            <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+              {isAr ? "إدارة الأدوار والصلاحيات" : "Roles & Permissions"}
+            </h1>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">إدارة الأدوار والصلاحيات</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">ربط الأدوار بالفروع وتخصيص صلاحيات المستخدمين</p>
-          </div>
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+            {isAr
+              ? "تخصيص المسميات الوظيفية وصلاحيات التحكم وربطها بالفروع"
+              : "Define job roles, system permissions, and assigned branches"}
+          </p>
         </div>
 
         <button
           onClick={() => handleOpenModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium rounded-xl text-sm shadow-md transition-all active:scale-95"
+          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 transition active:scale-95"
         >
           <Plus className="w-4 h-4" />
-          <span>إضافة دور وظيفي جديد</span>
+          <span>{isAr ? "إضافة دور جديد" : "Add New Role"}</span>
         </button>
       </div>
 
-      {message && (
-        <div className={`p-4 rounded-xl flex items-center gap-3 text-sm ${
-          message.type === "success" 
-            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-            : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
-        }`}>
-          {message.type === "success" ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-          <span>{message.text}</span>
+      {/* Search */}
+      <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm">
+        <div className="relative max-w-md">
+          <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={isAr ? "ابحث باسم المسمى الوظيفي..." : "Search role name..."}
+            className="w-full ps-9 pe-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
         </div>
-      )}
+      </div>
 
-      {/* Roles Cards */}
+      {/* Grid */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
+        <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <p className="text-sm">جاري جلب الأدوار والصلاحيات...</p>
+          <span className="text-xs font-medium">{isAr ? "جاري تحميل الأدوار..." : "Loading roles..."}</span>
+        </div>
+      ) : filteredRoles.length === 0 ? (
+        <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-12 text-center text-zinc-400">
+          <ShieldCheck className="w-10 h-10 mx-auto text-zinc-300 dark:text-zinc-700 mb-2" />
+          <p className="text-sm font-semibold">{isAr ? "لا توجد أدوار مسجلة حالياً" : "No roles registered yet"}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {roles.map((role) => (
+          {filteredRoles.map((role) => (
             <div
               key={role.id}
-              className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm hover:border-orange-500/40 transition-all flex flex-col justify-between"
+              className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-5 shadow-lg shadow-orange-500/5 flex flex-col justify-between"
             >
-              <div className="space-y-4">
-                <div className="flex items-start justify-between">
-                  <h3 className="font-bold text-slate-900 dark:text-white text-base">{role.title}</h3>
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-orange-500/20">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{role.name}</h3>
+                      <p className="text-[11px] text-zinc-400 line-clamp-1">{role.description || (isAr ? "لا يوجد وصف" : "No description")}</p>
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenModal(role)}
-                      className="p-1.5 text-slate-500 hover:text-amber-600 transition-colors"
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-zinc-800 transition"
+                      title={isAr ? "تعديل" : "Edit"}
                     >
-                      <Edit className="w-4 h-4" />
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDelete(role.id)}
-                      className="p-1.5 text-slate-500 hover:text-red-600 transition-colors"
+                      onClick={() => role.id && handleDelete(role.id)}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-zinc-800 transition"
+                      title={isAr ? "حذف" : "Delete"}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  </div>
-                </div>
-
-                {/* Assigned Branches */}
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1.5">الفروع التابعة لها:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {role.branch_ids.length === 0 ? (
-                      <span className="text-xs text-slate-400">لا توجد فروع مخصصة</span>
-                    ) : (
-                      role.branch_ids.map((bId) => {
-                        const bName = branches.find((b) => b.id === bId)?.name || bId;
-                        return (
-                          <span key={bId} className="px-2 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 rounded-lg text-xs flex items-center gap-1">
-                            <Building2 className="w-3 h-3" />
-                            {bName}
-                          </span>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* Permissions Badges */}
-                <div>
-                  <span className="text-xs font-semibold text-slate-400 block mb-1.5">الصلاحيات الممنوحة:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {role.permissions.map((p) => {
-                      const label = AVAILABLE_PERMISSIONS.find((ap) => ap.id === p)?.label || p;
-                      return (
-                        <span key={p} className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md text-[11px]">
-                          {label}
-                        </span>
-                      );
-                    })}
                   </div>
                 </div>
               </div>
@@ -225,92 +269,141 @@ export default function RolesPage() {
         </div>
       )}
 
-      {/* Dynamic Modal for Add/Edit Role & Assign Branches */}
+      {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
-              {editingRole ? "تعديل الدور والصلاحيات" : "إنشاء دور وظيفي جديد"}
-            </h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-orange-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 relative space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+              <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-orange-500" />
+                <span>{formData.id ? (isAr ? "تعديل الدور" : "Edit Role") : (isAr ? "إضافة دور جديد" : "Add Role")}</span>
+              </h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-            <div className="space-y-4 text-xs">
+            <form onSubmit={handleSave} className="space-y-4">
+              {message && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                    message.type === "success"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+                >
+                  {message.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                  <span>{message.text}</span>
+                </div>
+              )}
+
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-1 font-semibold">المسمى الوظيفي *</label>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  {isAr ? "اسم الدور / المسمى الوظيفي" : "Role Name"} *
+                </label>
                 <input
                   type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="مثال: مشرف الفرع الرئيسي"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder={isAr ? "مثال: مدير فرع / مشرف وردية" : "e.g., Branch Manager"}
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
                 />
               </div>
 
-              {/* Dynamic Multi-Select Branches */}
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-2 font-semibold">تخصيص الفروع التابعة للدور (Multi-Select)</label>
-                <div className="grid grid-cols-1 gap-1.5 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 p-2 rounded-xl bg-slate-50 dark:bg-slate-800">
-                  {branches.map((b) => {
-                    const selected = formData.branch_ids.includes(b.id);
-                    return (
-                      <button
-                        type="button"
-                        key={b.id}
-                        onClick={() => toggleBranch(b.id)}
-                        className={`w-full flex items-center justify-between p-2 rounded-lg text-right transition-colors ${
-                          selected 
-                            ? "bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold" 
-                            : "hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Building2 className="w-3.5 h-3.5" />
-                          {b.name}
-                        </span>
-                        {selected && <Check className="w-4 h-4 text-amber-600" />}
-                      </button>
-                    );
-                  })}
-                </div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  {isAr ? "الوصف" : "Description"}
+                </label>
+                <textarea
+                  rows={2}
+                  value={formData.description || ""}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder={isAr ? "وصف مختصر للمسؤوليات..." : "Role responsibilities..."}
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
               </div>
 
-              {/* Permissions Selection */}
+              {/* Permissions List */}
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 mb-2 font-semibold">قائمة الصلاحيات</label>
-                <div className="space-y-2">
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
+                  {isAr ? "الصلاحيات المتاحة" : "Permissions"}
+                </label>
+                <div className="space-y-1.5">
                   {AVAILABLE_PERMISSIONS.map((perm) => {
-                    const checked = formData.permissions.includes(perm.id);
+                    const isChecked = (formData.permissions || []).includes(perm.id);
                     return (
-                      <label key={perm.id} className="flex items-center gap-2.5 cursor-pointer text-slate-800 dark:text-slate-200">
+                      <label
+                        key={perm.id}
+                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition ${
+                          isChecked
+                            ? "bg-orange-50/80 dark:bg-orange-950/40 border-orange-300 dark:border-orange-800 text-orange-900 dark:text-orange-200"
+                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        }`}
+                      >
                         <input
                           type="checkbox"
-                          checked={checked}
+                          checked={isChecked}
                           onChange={() => togglePermission(perm.id)}
-                          className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                          className="rounded text-orange-500 focus:ring-orange-400"
                         />
-                        <span>{perm.label}</span>
+                        <span>{isAr ? perm.labelAr : perm.labelEn}</span>
                       </label>
                     );
                   })}
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                إلغاء
-              </button>
-              <button
-                disabled={isPending}
-                onClick={handleSave}
-                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-medium rounded-xl text-xs shadow-md disabled:opacity-50"
-              >
-                {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                <span>حفظ الصلاحيات</span>
-              </button>
-            </div>
+              {/* Branches Multi-select */}
+              {branches.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2 flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-orange-500" />
+                    <span>{isAr ? "الفروع المخصصة لهذا الدور" : "Assigned Branches"}</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1">
+                    {branches.map((b) => {
+                      const isAssigned = (formData.branch_ids || []).includes(b.id || "");
+                      return (
+                        <button
+                          type="button"
+                          key={b.id}
+                          onClick={() => b.id && toggleBranch(b.id)}
+                          className={`p-2 rounded-xl text-xs font-medium border text-start transition ${
+                            isAssigned
+                              ? "bg-gradient-to-r from-orange-500 to-pink-500 text-white border-transparent shadow-xs"
+                              : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          {b.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                >
+                  {isAr ? "إلغاء" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || !formData.name.trim()}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isAr ? "حفظ الدور" : "Save Role"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
