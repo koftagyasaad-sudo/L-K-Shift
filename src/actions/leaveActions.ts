@@ -73,3 +73,37 @@ export async function createLeaveRequestAction(
     return { success: false, error: err.message || "فشل تقديم طلب الإجازة" };
   }
 }
+
+export async function updateLeaveStatusAction(
+  id: string,
+  status: string
+): Promise<{ success: boolean; leave?: LeaveRequestData; error?: string }> {
+  try {
+    const result = await query(
+      `UPDATE leave_requests SET status = $1 WHERE id = $2 RETURNING id, employee_id, recipient, leave_type, start_date, end_date, reason, status, created_at`,
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return { success: false, error: "طلب الإجازة غير موجود" };
+    }
+
+    const row = result.rows[0];
+    const leave: LeaveRequestData = {
+      id: row.id,
+      employee_id: row.employee_id,
+      recipient: row.recipient || "",
+      leave_type: row.leave_type,
+      start_date: row.start_date,
+      end_date: row.end_date,
+      reason: row.reason || "",
+      status: row.status,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    };
+
+    return { success: true, leave };
+  } catch (err: any) {
+    console.error("Error updating leave status:", err);
+    return { success: false, error: err.message || "فشل تحديث حالة الإجازة" };
+  }
+}
