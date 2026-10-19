@@ -6,6 +6,7 @@ import type { BranchData } from "@/types";
 export async function getBranchesAction(): Promise<{
   success: boolean;
   branches?: BranchData[];
+  data?: BranchData[];
   error?: string;
 }> {
   try {
@@ -27,7 +28,7 @@ export async function getBranchesAction(): Promise<{
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     }));
 
-    return { success: true, branches };
+    return { success: true, branches, data: branches };
   } catch (err: any) {
     console.error("Error fetching branches:", err);
     return { success: false, error: err.message || "فشل في جلب الفروع" };
@@ -36,7 +37,7 @@ export async function getBranchesAction(): Promise<{
 
 export async function getBranchByIdAction(
   id: string
-): Promise<{ success: boolean; branch?: BranchData; error?: string }> {
+): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
   try {
     const result = await query(
       "SELECT id, name, location, manager, phone, ext, address, radius_meters, latitude, longitude, created_at FROM branches WHERE id = $1",
@@ -62,7 +63,7 @@ export async function getBranchByIdAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, branch };
+    return { success: true, branch, data: branch };
   } catch (err: any) {
     console.error("Error fetching branch by id:", err);
     return { success: false, error: err.message || "فشل في جلب بيانات الفرع" };
@@ -71,7 +72,7 @@ export async function getBranchByIdAction(
 
 export async function createBranchAction(
   data: BranchData
-): Promise<{ success: boolean; branch?: BranchData; error?: string }> {
+): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
   try {
     const { name, location, manager, phone, ext, address, radius_meters, latitude, longitude } = data;
 
@@ -111,7 +112,7 @@ export async function createBranchAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, branch };
+    return { success: true, branch, data: branch };
   } catch (err: any) {
     console.error("Error creating branch:", err);
     return { success: false, error: err.message || "فشل في إنشاء الفرع" };
@@ -121,7 +122,7 @@ export async function createBranchAction(
 export async function updateBranchAction(
   id: string,
   data: BranchData
-): Promise<{ success: boolean; branch?: BranchData; error?: string }> {
+): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
   try {
     const { name, location, manager, phone, ext, address, radius_meters, latitude, longitude } = data;
 
@@ -167,7 +168,7 @@ export async function updateBranchAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, branch };
+    return { success: true, branch, data: branch };
   } catch (err: any) {
     console.error("Error updating branch:", err);
     return { success: false, error: err.message || "فشل في تحديث بيانات الفرع" };
@@ -176,7 +177,7 @@ export async function updateBranchAction(
 
 export async function saveBranchAction(
   data: BranchData
-): Promise<{ success: boolean; branch?: BranchData; error?: string }> {
+): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
   if (data.id) {
     return updateBranchAction(data.id, data);
   }
