@@ -10,7 +10,7 @@ export interface AttendanceRecordInput {
   faceVerified?: boolean;
   actionType?: "IN" | "OUT";
 
-  // مرونة لقبول التسميات بنمط snake_case
+  // دعم النمط المباشر و snake_case
   employee_id?: string;
   branch_id?: string;
   type?: string;
@@ -31,6 +31,15 @@ export interface AttendanceRecord {
   longitude?: number | null;
   created_at: string;
 }
+
+export type AttendanceFilterOptions =
+  | string
+  | {
+      employeeId?: string;
+      startDate?: string;
+      endDate?: string;
+      branchId?: string;
+    };
 
 export async function recordAttendanceAction(input: AttendanceRecordInput) {
   try {
@@ -76,16 +85,17 @@ export async function recordAttendanceAction(input: AttendanceRecordInput) {
   }
 }
 
-export async function getAttendanceLogsAction(filters?: {
-  employeeId?: string;
-  startDate?: string;
-  endDate?: string;
-  branchId?: string;
-}) {
+export async function getAttendanceLogsAction(filters?: AttendanceFilterOptions) {
   try {
     const sql = neon(process.env.DATABASE_URL!);
 
-    if (!filters?.employeeId && !filters?.branchId && !filters?.startDate && !filters?.endDate) {
+    // تحويل الفلتر إذا تم تمريره كـ string مباشرة
+    const normalizedFilters =
+      typeof filters === "string" ? { employeeId: filters } : filters || {};
+
+    const { employeeId, startDate, endDate, branchId } = normalizedFilters;
+
+    if (!employeeId && !branchId && !startDate && !endDate) {
       const logs = (await sql`
         SELECT 
           a.id,
@@ -128,21 +138,21 @@ export async function getAttendanceLogsAction(filters?: {
     const params: any[] = [];
     let idx = 1;
 
-    if (filters.employeeId) {
+    if (employeeId) {
       baseQuery += ` AND a.employee_id = $${idx++}`;
-      params.push(filters.employeeId);
+      params.push(employeeId);
     }
-    if (filters.branchId) {
+    if (branchId) {
       baseQuery += ` AND a.branch_id = $${idx++}`;
-      params.push(filters.branchId);
+      params.push(branchId);
     }
-    if (filters.startDate) {
+    if (startDate) {
       baseQuery += ` AND a.created_at >= $${idx++}`;
-      params.push(filters.startDate);
+      params.push(startDate);
     }
-    if (filters.endDate) {
+    if (endDate) {
       baseQuery += ` AND a.created_at <= $${idx++}`;
-      params.push(filters.endDate);
+      params.push(endDate);
     }
 
     baseQuery += ` ORDER BY a.created_at DESC LIMIT 200`;
