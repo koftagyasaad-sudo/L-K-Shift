@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  Bell, Sun, Moon, Globe, User, LogOut, Settings, 
+  Bell, Sun, Moon, User, LogOut, Settings, 
   MapPin, Camera, CheckCircle2, Circle, Check 
 } from "lucide-react";
 
@@ -21,9 +21,9 @@ export default function Header() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([
-    { id: "n1", title: "طلب إجازة جديد", message: "محمد علي قدم طلب إجازة سنوية", time: "منذ 5 دقائق", read: false, type: "info" },
-    { id: "n2", title: "تسجيل حضور", message: "فاطمة الشهري سجلت الحضور", time: "منذ 15 دقيقة", read: false, type: "success" },
-    { id: "n3", title: "تنبيه تأخير", message: "تأخر 3 موظفين عن الدوام", time: "منذ ساعة", read: true, type: "warning" }
+    { id: "n1", title: "طلب إجازة جديد", message: "محمد علي قدم طلب إجازة سنوية مرسلة للـ HR", time: "منذ 5 دقائق", read: false, type: "info" },
+    { id: "n2", title: "تسجيل حضور", message: "فاطمة الشهري سجلت الحضور بفرع جدة", time: "منذ 15 دقيقة", read: false, type: "success" },
+    { id: "n3", title: "تنبيه تأخير", message: "تأخر 2 موظفين عن الشفت اليوم", time: "منذ ساعة", read: true, type: "warning" }
   ]);
 
   const notifRef = useRef<HTMLDivElement>(null);
@@ -65,10 +65,6 @@ export default function Header() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const handleAttendance = () => {
-    alert("جاري التحقق من موقعك (3m GPS) وتفعيل الكاميرا للبصمة...");
-  };
-
   return (
     <header
       className="sticky top-0 z-30 h-14 flex items-center justify-between px-4"
@@ -80,12 +76,12 @@ export default function Header() {
         boxShadow: "0 2px 20px rgba(249,115,22,0.1)"
       }}
     >
-      {/* Right Side: User Dropdown */}
+      {/* Right Controls */}
       <div className="flex items-center gap-2">
         <div ref={userRef} className="relative">
           <button
             onClick={() => setUserOpen(!userOpen)}
-            className="flex items-center gap-2 px-2.5 py-1.5 bg-white/70 hover:bg-white/90 rounded-xl border border-orange-200/60 shadow-sm transition-all"
+            className="flex items-center gap-2 px-2.5 py-1.5 bg-white/80 hover:bg-white rounded-xl border border-orange-200 shadow-sm transition-all"
           >
             <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-pink-500 text-white rounded-lg flex items-center justify-center font-bold text-xs shadow-sm">
               س
@@ -117,29 +113,25 @@ export default function Header() {
           )}
         </div>
 
-        {/* Language Toggle */}
         <button
           onClick={toggleLang}
-          className="p-2 bg-white/70 hover:bg-white/90 rounded-xl border border-orange-200/60 shadow-sm transition-all"
-          title="تغيير اللغة"
+          className="p-2 bg-white/80 hover:bg-white rounded-xl border border-orange-200 shadow-sm transition-all"
         >
           <span className="text-xs font-bold text-slate-700">{lang === "ar" ? "EN" : "AR"}</span>
         </button>
 
-        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 bg-white/70 hover:bg-white/90 rounded-xl border border-orange-200/60 shadow-sm transition-all"
-          title="تبديل الوضع"
+          className="p-2 bg-white/80 hover:bg-white rounded-xl border border-orange-200 shadow-sm transition-all"
         >
           {theme === "light" ? <Moon className="w-4 h-4 text-slate-700" /> : <Sun className="w-4 h-4 text-amber-500" />}
         </button>
 
-        {/* Notifications */}
+        {/* Notifications Dropdown */}
         <div ref={notifRef} className="relative">
           <button
             onClick={() => setNotifOpen(!notifOpen)}
-            className="relative p-2 bg-white/70 hover:bg-white/90 rounded-xl border border-orange-200/60 shadow-sm transition-all"
+            className="relative p-2 bg-white/80 hover:bg-white rounded-xl border border-orange-200 shadow-sm transition-all"
           >
             <Bell className="w-4 h-4 text-slate-700" />
             {unreadCount > 0 && (
@@ -198,10 +190,10 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Center / Left: Attendance + System Status */}
+      {/* Left Controls: Attendance + System Badge */}
       <div className="flex items-center gap-2">
         <button
-          onClick={handleAttendance}
+          onClick={() => alert("جاري الاتصال بـ GPS للتحقق من النطاق (3m) والتقاط بصمة الوجه...")}
           className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition-all active:scale-95"
         >
           <MapPin className="w-3.5 h-3.5" />
