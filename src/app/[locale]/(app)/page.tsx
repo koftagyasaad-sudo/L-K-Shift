@@ -30,7 +30,6 @@ import {
   ArrowRight,
   ShieldCheck,
   Calendar,
-  UserCheck,
   X,
 } from "lucide-react";
 
@@ -371,7 +370,9 @@ export default function DashboardPage({
                       })}
                     </span>
                     {log.face_verified && (
-                      <ShieldCheck className="w-4 h-4 text-green-500" title="Face Verified" />
+                      <span title="Face Verified">
+                        <ShieldCheck className="w-4 h-4 text-green-500" />
+                      </span>
                     )}
                   </div>
                 </div>
