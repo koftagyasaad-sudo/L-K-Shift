@@ -1,13 +1,7 @@
 "use server";
 
 import { neon } from "@neondatabase/serverless";
-
-export interface BranchData {
-  id: string;
-  name: string;
-  location?: string;
-  created_at?: string;
-}
+import type { BranchData } from "@/types";
 
 export async function getBranchesAction() {
   try {
@@ -16,7 +10,6 @@ export async function getBranchesAction() {
       SELECT id, name, location, created_at FROM branches ORDER BY created_at DESC
     `) as BranchData[];
 
-    // إرجاع data و branches لتجنب أي تعارض في التسميات
     return { success: true, data: branches, branches };
   } catch (error: any) {
     console.error("getBranchesAction error:", error);
@@ -40,20 +33,22 @@ export async function getBranchByIdAction(id: string) {
   }
 }
 
-export async function saveBranchAction(data: { id?: string; name: string; location?: string }) {
+export async function saveBranchAction(data: BranchData) {
   try {
     const sql = neon(process.env.DATABASE_URL!);
+
+    const loc = data.location || data.address || null;
 
     if (data.id) {
       await sql`
         UPDATE branches
-        SET name = ${data.name}, location = ${data.location || null}
+        SET name = ${data.name}, location = ${loc}
         WHERE id = ${data.id}
       `;
     } else {
       await sql`
         INSERT INTO branches (name, location)
-        VALUES (${data.name}, ${data.location || null})
+        VALUES (${data.name}, ${loc})
       `;
     }
 
