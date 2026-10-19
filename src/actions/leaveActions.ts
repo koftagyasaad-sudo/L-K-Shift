@@ -6,6 +6,7 @@ import type { LeaveRequestData } from "@/types";
 export async function getLeaveRequestsAction(): Promise<{
   success: boolean;
   leaves?: LeaveRequestData[];
+  data?: LeaveRequestData[];
   error?: string;
 }> {
   try {
@@ -30,7 +31,7 @@ export async function getLeaveRequestsAction(): Promise<{
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     }));
 
-    return { success: true, leaves };
+    return { success: true, leaves, data: leaves };
   } catch (err: any) {
     console.error("Error fetching leave requests:", err);
     return { success: false, error: err.message || "فشل جلب طلبات الإجازة" };
@@ -39,7 +40,7 @@ export async function getLeaveRequestsAction(): Promise<{
 
 export async function createLeaveRequestAction(
   data: LeaveRequestData
-): Promise<{ success: boolean; leave?: LeaveRequestData; error?: string }> {
+): Promise<{ success: boolean; leave?: LeaveRequestData; data?: LeaveRequestData; error?: string }> {
   try {
     const { employee_id, recipient, leave_type, start_date, end_date, reason } = data;
 
@@ -67,7 +68,7 @@ export async function createLeaveRequestAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, leave };
+    return { success: true, leave, data: leave };
   } catch (err: any) {
     console.error("Error creating leave request:", err);
     return { success: false, error: err.message || "فشل تقديم طلب الإجازة" };
@@ -77,7 +78,7 @@ export async function createLeaveRequestAction(
 export async function updateLeaveStatusAction(
   id: string,
   status: string
-): Promise<{ success: boolean; leave?: LeaveRequestData; error?: string }> {
+): Promise<{ success: boolean; leave?: LeaveRequestData; data?: LeaveRequestData; error?: string }> {
   try {
     const result = await query(
       `UPDATE leave_requests SET status = $1 WHERE id = $2 RETURNING id, employee_id, recipient, leave_type, start_date, end_date, reason, status, created_at`,
@@ -101,7 +102,7 @@ export async function updateLeaveStatusAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, leave };
+    return { success: true, leave, data: leave };
   } catch (err: any) {
     console.error("Error updating leave status:", err);
     return { success: false, error: err.message || "فشل تحديث حالة الإجازة" };
