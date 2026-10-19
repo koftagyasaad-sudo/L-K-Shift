@@ -84,3 +84,6 @@ export interface LeaveRequestData {
   status?: string;
   created_at?: string;
 }
+
+// Type alias for full compatibility across components
+export type LeaveRequest = LeaveRequestData;
