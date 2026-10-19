@@ -6,6 +6,7 @@ import type { RoleData } from "@/types";
 export async function getRolesAction(): Promise<{
   success: boolean;
   roles?: RoleData[];
+  data?: RoleData[];
   error?: string;
 }> {
   try {
@@ -22,7 +23,7 @@ export async function getRolesAction(): Promise<{
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     }));
 
-    return { success: true, roles };
+    return { success: true, roles, data: roles };
   } catch (err: any) {
     console.error("Error fetching roles:", err);
     return { success: false, error: err.message || "فشل في جلب الأدوار" };
@@ -31,7 +32,7 @@ export async function getRolesAction(): Promise<{
 
 export async function createRoleAction(
   data: RoleData
-): Promise<{ success: boolean; role?: RoleData; error?: string }> {
+): Promise<{ success: boolean; role?: RoleData; data?: RoleData; error?: string }> {
   try {
     const { name, description, permissions, branch_ids } = data;
 
@@ -61,7 +62,7 @@ export async function createRoleAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, role };
+    return { success: true, role, data: role };
   } catch (err: any) {
     console.error("Error creating role:", err);
     return { success: false, error: err.message || "فشل في إنشاء الدور الوظيفي" };
@@ -71,7 +72,7 @@ export async function createRoleAction(
 export async function updateRoleAction(
   id: string,
   data: RoleData
-): Promise<{ success: boolean; role?: RoleData; error?: string }> {
+): Promise<{ success: boolean; role?: RoleData; data?: RoleData; error?: string }> {
   try {
     const { name, description, permissions, branch_ids } = data;
 
@@ -107,7 +108,7 @@ export async function updateRoleAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, role };
+    return { success: true, role, data: role };
   } catch (err: any) {
     console.error("Error updating role:", err);
     return { success: false, error: err.message || "فشل في تحديث الدور" };
@@ -116,7 +117,7 @@ export async function updateRoleAction(
 
 export async function saveRoleAction(
   data: RoleData
-): Promise<{ success: boolean; role?: RoleData; error?: string }> {
+): Promise<{ success: boolean; role?: RoleData; data?: RoleData; error?: string }> {
   if (data.id) {
     return updateRoleAction(data.id, data);
   }
