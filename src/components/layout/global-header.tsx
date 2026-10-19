@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   Bell, Sun, Moon, User, LogOut, Settings, 
   MapPin, Camera, CheckCircle2, Circle, Check 
@@ -16,8 +17,10 @@ interface Notification {
 }
 
 export default function GlobalHeader() {
+  const pathname = usePathname();
+  const router = useRouter();
+
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [lang, setLang] = useState<"ar" | "en">("ar");
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([
@@ -30,6 +33,7 @@ export default function GlobalHeader() {
   const userRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const currentLang = pathname?.startsWith("/en") ? "en" : "ar";
 
   useEffect(() => {
     const stored = localStorage.getItem("theme") as "light" | "dark" | null;
@@ -55,7 +59,17 @@ export default function GlobalHeader() {
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
 
-  const toggleLang = () => setLang(lang === "ar" ? "en" : "ar");
+  const toggleLang = () => {
+    const targetLang = currentLang === "ar" ? "en" : "ar";
+    const newPath = pathname ? pathname.replace(`/${currentLang}`, `/${targetLang}`) : `/${targetLang}`;
+    router.push(newPath);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("user_session");
+    setUserOpen(false);
+    router.push(`/${currentLang}/auth/login`);
+  };
 
   const markAsRead = (id: string) => {
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
@@ -76,8 +90,9 @@ export default function GlobalHeader() {
         boxShadow: "0 2px 20px rgba(249,115,22,0.1)"
       }}
     >
-      {/* Right Controls */}
+      {/* Right Section: User & System Switches */}
       <div className="flex items-center gap-2">
+        {/* Fixed User Dropdown Menu Positioning */}
         <div ref={userRef} className="relative">
           <button
             onClick={() => setUserOpen(!userOpen)}
@@ -92,8 +107,9 @@ export default function GlobalHeader() {
             </div>
           </button>
 
+          {/* Corrected position: left-0 so menu opens inside the screen */}
           {userOpen && (
-            <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-orange-100 overflow-hidden">
+            <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-orange-100 overflow-hidden z-50">
               <div className="p-3 bg-gradient-to-r from-orange-50 to-pink-50 border-b border-orange-100">
                 <p className="text-sm font-bold text-slate-800">سعد الكفتجي</p>
                 <p className="text-[11px] text-slate-500">saad@l-k-shift.com</p>
@@ -105,7 +121,10 @@ export default function GlobalHeader() {
                 <button className="w-full px-3 py-2 text-right text-xs text-slate-700 hover:bg-orange-50 flex items-center gap-2">
                   <Settings className="w-3.5 h-3.5" /> الإعدادات
                 </button>
-                <button className="w-full px-3 py-2 text-right text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-100">
+                <button
+                  onClick={handleLogout}
+                  className="w-full px-3 py-2 text-right text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-100 font-bold"
+                >
                   <LogOut className="w-3.5 h-3.5" /> تسجيل الخروج
                 </button>
               </div>
@@ -113,13 +132,16 @@ export default function GlobalHeader() {
           )}
         </div>
 
+        {/* Working Language Toggle */}
         <button
           onClick={toggleLang}
           className="p-2 bg-white/80 hover:bg-white rounded-xl border border-orange-200 shadow-sm transition-all"
+          title="تغيير اللغة"
         >
-          <span className="text-xs font-bold text-slate-700">{lang === "ar" ? "EN" : "AR"}</span>
+          <span className="text-xs font-bold text-slate-700">{currentLang === "ar" ? "EN" : "AR"}</span>
         </button>
 
+        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
           className="p-2 bg-white/80 hover:bg-white rounded-xl border border-orange-200 shadow-sm transition-all"
@@ -142,7 +164,7 @@ export default function GlobalHeader() {
           </button>
 
           {notifOpen && (
-            <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-orange-100 overflow-hidden">
+            <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-orange-100 overflow-hidden z-50">
               <div className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-50 to-pink-50 border-b border-orange-100">
                 <h3 className="text-sm font-bold text-slate-800">الإشعارات ({unreadCount})</h3>
                 {unreadCount > 0 && (
@@ -190,7 +212,7 @@ export default function GlobalHeader() {
         </div>
       </div>
 
-      {/* Left Controls: Attendance + System Badge */}
+      {/* Left Section: Quick Attendance & Online Badge */}
       <div className="flex items-center gap-2">
         <button
           onClick={() => alert("جاري الاتصال بـ GPS للتحقق من النطاق (3m) والتقاط بصمة الوجه...")}
