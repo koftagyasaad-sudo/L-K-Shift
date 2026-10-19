@@ -11,7 +11,7 @@ export interface EmployeeData {
   role_id: string;
   base_salary: number;
   work_hours: number;
-  monthly_leave_days: number; // الحقل الجديد: رصيد الإجازات الشهري
+  monthly_leave_days: number;
   attendance_status: string;
   createdAt?: string;
   branch_name?: string;
@@ -84,10 +84,13 @@ export async function getEmployeesAction(): Promise<{ success: boolean; data: Em
 export async function saveEmployeeAction(emp: EmployeeData): Promise<{ success: boolean; error?: string }> {
   try {
     const sql = getClient();
+    const branchId = emp.branch_id && emp.branch_id.trim() !== "" ? emp.branch_id : null;
+    const roleId = emp.role_id && emp.role_id.trim() !== "" ? emp.role_id : null;
+
     if (sql) {
       await sql`
         INSERT INTO employees (id, name, code, branch_id, role_id, base_salary, work_hours, monthly_leave_days, attendance_status)
-        VALUES (${emp.id}, ${emp.name}, ${emp.code}, ${emp.branch_id}, ${emp.role_id}, ${emp.base_salary}, ${emp.work_hours}, ${emp.monthly_leave_days}, ${emp.attendance_status})
+        VALUES (${emp.id}, ${emp.name}, ${emp.code}, ${branchId}, ${roleId}, ${emp.base_salary}, ${emp.work_hours}, ${emp.monthly_leave_days}, ${emp.attendance_status})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name,
           code = EXCLUDED.code,
