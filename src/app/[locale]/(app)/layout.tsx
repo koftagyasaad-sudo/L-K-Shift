@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import Sidebar from "../../../components/layout/Sidebar";
-import Header from "../../../components/layout/Header";
+import Sidebar from "@/components/layout/sidebar";
+import GlobalHeader from "@/components/layout/global-header";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         className="transition-all duration-300"
         style={{ marginRight: collapsed ? "4rem" : "15rem" }}
       >
-        <Header />
+        <GlobalHeader />
         <main className="min-h-[calc(100vh-3.5rem)]">
           {children}
         </main>
