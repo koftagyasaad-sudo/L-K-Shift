@@ -1,127 +1,85 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { neon } from "@neondatabase/serverless";
+import type { EmployeeData } from "@/types";
 
-export interface EmployeeData {
-  id: string;
-  name: string;
-  code: string;
-  branch_id: string;
-  role_id: string;
-  base_salary: number;
-  work_hours: number;
-  monthly_leave_days: number;
-  attendance_status: string;
-  createdAt?: string;
-  branch_name?: string;
-  role_title?: string;
-}
-
-const fallbackEmployees: EmployeeData[] = [
-  {
-    id: "e1",
-    name: "سعد الكفتجي",
-    code: "EMP-001",
-    branch_id: "b1",
-    role_id: "r1",
-    base_salary: 15000,
-    work_hours: 8,
-    monthly_leave_days: 2.5,
-    attendance_status: "حاضر",
-    branch_name: "الفرع الرئيسي - الرياض",
-    role_title: "صلاحيات مطلقة (SUPER_ADMIN)",
-    createdAt: new Date().toISOString()
-  }
-];
-
-function getClient() {
-  if (!process.env.DATABASE_URL) return null;
-  return neon(process.env.DATABASE_URL);
-}
-
-export async function getEmployeesAction(): Promise<{ success: boolean; data: EmployeeData[] }> {
+export async function getEmployeesAction() {
   try {
-    const sql = getClient();
-    if (!sql) return { success: true, data: fallbackEmployees };
-
-    const rows = await sql`
+    const sql = neon(process.env.DATABASE_URL!);
+    const employees = (await sql`
       SELECT 
-        e.id, e.name, e.code, e.branch_id, e.role_id, 
-        e.base_salary, e.work_hours, e.monthly_leave_days, e.attendance_status, 
-        e.created_at as "createdAt",
-        b.name as "branch_name",
-        r.title as "role_title"
+        e.id,
+        e.name,
+        e.employee_code,
+        e.branch_id,
+        e.role_id,
+        e.base_salary,
+        e.monthly_leave_days,
+        e.status,
+        b.name as branch_name,
+        r.name as role_name,
+        e.created_at
       FROM employees e
       LEFT JOIN branches b ON e.branch_id = b.id
       LEFT JOIN roles r ON e.role_id = r.id
       ORDER BY e.created_at DESC
-    `;
+    `) as EmployeeData[];
 
-    return {
-      success: true,
-      data: rows.map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        code: r.code,
-        branch_id: r.branch_id || "",
-        role_id: r.role_id || "",
-        base_salary: Number(r.base_salary) || 0,
-        work_hours: Number(r.work_hours) || 8,
-        monthly_leave_days: Number(r.monthly_leave_days) || 2,
-        attendance_status: r.attendance_status || "حاضر",
-        branch_name: r.branch_name || "غير محدد",
-        role_title: r.role_title || "مواطن/موظف",
-        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString()
-      }))
-    };
-  } catch (error) {
-    console.error("Neon getEmployeesAction Error:", error);
-    return { success: true, data: fallbackEmployees };
+    return { success: true, data: employees, employees };
+  } catch (error: any) {
+    console.error("getEmployeesAction error:", error);
+    return { success: false, data: [], employees: [], error: error.message };
   }
 }
 
-export async function saveEmployeeAction(emp: EmployeeData): Promise<{ success: boolean; error?: string }> {
+export async function saveEmployeeAction(data: EmployeeData) {
   try {
-    const sql = getClient();
-    const branchId = emp.branch_id && emp.branch_id.trim() !== "" ? emp.branch_id : null;
-    const roleId = emp.role_id && emp.role_id.trim() !== "" ? emp.role_id : null;
+    const sql = neon(process.env.DATABASE_URL!);
 
-    if (sql) {
+    // Normalize empty strings to null for PostgreSQL UUID FKs
+    const branchId = data.branch_id && data.branch_id.trim() !== "" ? data.branch_id : null;
+    const roleId = data.role_id && data.role_id.trim() !== "" ? data.role_id : null;
+    const salary = Number(data.base_salary) || 0;
+    const leaveDays = Number(data.monthly_leave_days) ?? 2;
+    const status = data.status || "active";
+
+    if (data.id) {
       await sql`
-        INSERT INTO employees (id, name, code, branch_id, role_id, base_salary, work_hours, monthly_leave_days, attendance_status)
-        VALUES (${emp.id}, ${emp.name}, ${emp.code}, ${branchId}, ${roleId}, ${emp.base_salary}, ${emp.work_hours}, ${emp.monthly_leave_days}, ${emp.attendance_status})
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          code = EXCLUDED.code,
-          branch_id = EXCLUDED.branch_id,
-          role_id = EXCLUDED.role_id,
-          base_salary = EXCLUDED.base_salary,
-          work_hours = EXCLUDED.work_hours,
-          monthly_leave_days = EXCLUDED.monthly_leave_days,
-          attendance_status = EXCLUDED.attendance_status
+        UPDATE employees
+        SET 
+          name = ${data.name},
+          employee_code = ${data.employee_code},
+          branch_id = ${branchId},
+          role_id = ${roleId},
+          base_salary = ${salary},
+          monthly_leave_days = ${leaveDays},
+          status = ${status}
+        WHERE id = ${data.id}
+      `;
+    } else {
+      await sql`
+        INSERT INTO employees (
+          name, employee_code, branch_id, role_id, base_salary, monthly_leave_days, status
+        ) VALUES (
+          ${data.name}, ${data.employee_code}, ${branchId}, ${roleId}, ${salary}, ${leaveDays}, ${status}
+        )
       `;
     }
 
-    revalidatePath("/[locale]/(app)/admin/employees", "page");
     return { success: true };
   } catch (error: any) {
-    console.error("Neon saveEmployeeAction Error:", error);
-    return { success: false, error: error?.message || "فشل حفظ الموظف" };
+    console.error("saveEmployeeAction error:", error);
+    return { success: false, error: error.message || "فشل حفظ بيانات الموظف" };
   }
 }
 
-export async function deleteEmployeeAction(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteEmployeeAction(id: string) {
   try {
-    const sql = getClient();
-    if (sql) {
-      await sql`DELETE FROM employees WHERE id = ${id}`;
-    }
-
-    revalidatePath("/[locale]/(app)/admin/employees", "page");
+    const sql = neon(process.env.DATABASE_URL!);
+    await sql`DELETE FROM employees WHERE id = ${id}`;
     return { success: true };
   } catch (error: any) {
-    console.error("Neon deleteEmployeeAction Error:", error);
-    return { success: false, error: error?.message || "فشل حذف الموظف" };
+    console.error("deleteEmployeeAction error:", error);
+    return { success: false, error: error.message || "فشل حذف الموظف" };
   }
 }
