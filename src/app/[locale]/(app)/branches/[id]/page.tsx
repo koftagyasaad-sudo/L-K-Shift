@@ -2,167 +2,185 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { 
-  Building2, ArrowRight, Play, Download, Phone, MapPin, 
-  CheckCircle2, Clock, Loader2 
+import {
+  Building2,
+  Clock,
+  ArrowRight,
+  ArrowLeft,
+  Users,
+  MapPin,
+  Calendar,
+  Download,
+  Loader2,
+  Play,
 } from "lucide-react";
-import { getBranchByIdAction, BranchData } from "@/actions/branchActions";
+import { getBranchByIdAction } from "@/actions/branchActions";
+import { getAttendanceLogsAction } from "@/actions/attendanceActions";
+import type { BranchData, AttendanceRecord } from "@/types";
 
 export default function BranchDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const branchId = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params.id[0] : "";
+  const locale = (params?.locale as string) || "ar";
+  const isAr = locale === "ar";
+  const branchId = params?.id as string;
 
   const [branch, setBranch] = useState<BranchData | null>(null);
+  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [shiftActive, setShiftActive] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadBranch() {
-      if (!branchId) return;
+    async function loadData() {
       setLoading(true);
-      const res = await getBranchByIdAction(branchId);
-      if (res.success && res.data) {
-        setBranch(res.data);
+      try {
+        const [bRes, attRes] = await Promise.all([
+          getBranchByIdAction(branchId),
+          getAttendanceLogsAction({ branchId }),
+        ]);
+
+        if (bRes.success && bRes.branch) {
+          setBranch(bRes.branch);
+        }
+        if (attRes.success && attRes.logs) {
+          setAttendanceLogs(attRes.logs);
+        }
+      } catch (err) {
+        console.error("Error loading branch details:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
-    loadBranch();
+
+    if (branchId) loadData();
   }, [branchId]);
 
-  const handleStartShift = () => {
-    setShiftActive(true);
-    setMessage("تم بدء شيفت العمل لهذا الفرع بنجاح وتسجيل الحضور الأولي.");
-    setTimeout(() => setMessage(null), 4000);
-  };
+  const exportCSV = () => {
+    if (!attendanceLogs.length) return;
+    const headers = isAr
+      ? ["الموظف", "نوع الحركة", "البصمة الموثقة", "التاريخ"]
+      : ["Employee", "Type", "Face Verified", "Date"];
 
-  const handleExportReport = () => {
-    if (!branch) return;
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + `اسم الفرع,مدير الفرع,الهاتف,التحويلة,العنوان\n`
-      + `"${branch.name}","${branch.manager}","${branch.phone}","${branch.ext}","${branch.address}"`;
+    const rows = attendanceLogs.map((l) => [
+      l.employee_name || "",
+      l.action_type,
+      l.face_verified ? "Yes" : "No",
+      new Date(l.created_at).toLocaleString(),
+    ]);
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `تقرير_فرع_${branch.name || "الفرع"}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `branch_attendance_${branchId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-slate-400">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 text-zinc-500">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-        <p className="text-sm">جاري تحميل تفاصيل الفرع من Neon...</p>
-      </div>
-    );
-  }
-
-  if (!branch) {
-    return (
-      <div className="p-8 text-center space-y-4">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white">الفرع غير موجود</h2>
-        <p className="text-xs text-slate-500">لم نتمكن من العثور على الفرع المطلوب في قاعدة البيانات.</p>
-        <Link href="/ar/admin/branches" className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-xs rounded-xl">
-          <ArrowRight className="w-4 h-4" />
-          <span>العودة لقائمة الفروع</span>
-        </Link>
+        <p className="text-sm font-medium">{isAr ? "جاري تحميل تفاصيل الفرع..." : "Loading branch details..."}</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Top Header Navigation */}
-      <div className="flex items-center justify-between">
-        <Link
-          href="/ar/admin/branches"
-          className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-orange-500 transition-colors"
+    <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* Top Controls */}
+      <div className="flex items-center justify-between gap-4">
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-orange-600 transition"
         >
-          <ArrowRight className="w-4 h-4" />
-          <span>العودة لجميع الفروع</span>
-        </Link>
+          {isAr ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
+          <span>{isAr ? "الرجوع للفروع" : "Back to Branches"}</span>
+        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-orange-50 transition"
+          >
+            <Download className="w-3.5 h-3.5 text-orange-500" />
+            <span>{isAr ? "تصدير CSV" : "Export CSV"}</span>
+          </button>
+
+          <button
+            onClick={() => alert(isAr ? "تم بدء وردية عمل جديدة لهذا الفرع" : "Shift started!")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-bold shadow-md hover:from-orange-600 hover:to-pink-600 transition"
+          >
+            <Play className="w-3.5 h-3.5" />
+            <span>{isAr ? "بدء وردية جديدة" : "Start Shift"}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Main Info Card */}
-      <div className="bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
-          <div className="flex items-center gap-4">
-            <div className="p-3.5 bg-gradient-to-tr from-orange-500 to-amber-500 text-white rounded-2xl shadow-md">
-              <Building2 className="w-7 h-7" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{branch.name}</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">المسؤول: {branch.manager || "غير محدد"}</p>
-            </div>
+      {/* Main Info */}
+      <div className="rounded-3xl border border-orange-200/80 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold text-lg shadow-md">
+            <Building2 className="w-6 h-6" />
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleStartShift}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-md transition-all active:scale-95 ${
-                shiftActive
-                  ? "bg-emerald-500 text-white"
-                  : "bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-90"
-              }`}
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>{shiftActive ? "الوردية نشطة الآن" : "بدء وردية جديدة"}</span>
-            </button>
-
-            <button
-              onClick={handleExportReport}
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-xs shadow-md transition-all active:scale-95"
-            >
-              <Download className="w-4 h-4" />
-              <span>تصدير تقرير الفرع</span>
-            </button>
+          <div>
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{branch?.name || (isAr ? "الفرع" : "Branch")}</h1>
+            <p className="text-xs text-zinc-500 flex items-center gap-1.5 mt-0.5">
+              <MapPin className="w-3.5 h-3.5 text-orange-500" />
+              <span>{branch?.location || branch?.address || (isAr ? "الموقع غير محدد" : "No location specified")}</span>
+            </p>
           </div>
         </div>
+      </div>
 
-        {message && (
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{message}</span>
+      {/* Logs Table */}
+      <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-xl overflow-hidden">
+        <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+          <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-orange-500" />
+            <span>{isAr ? "سجل حضور موظفي الفرع" : "Branch Fingerprint Logs"}</span>
+          </h3>
+          <span className="text-xs text-zinc-400 font-semibold">{attendanceLogs.length} {isAr ? "حركة" : "logs"}</span>
+        </div>
+
+        {attendanceLogs.length === 0 ? (
+          <div className="p-12 text-center text-zinc-400">
+            <Users className="w-8 h-8 mx-auto text-zinc-300 dark:text-zinc-700 mb-2" />
+            <p className="text-xs font-semibold">{isAr ? "لا توجد حركات حضور مسجلة لهذا الفرع" : "No attendance logs for this branch"}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-start border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-orange-50/50 dark:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400">
+                  <th className="p-3 text-start font-semibold">{isAr ? "الموظف" : "Employee"}</th>
+                  <th className="p-3 text-start font-semibold">{isAr ? "نوع الحركة" : "Action"}</th>
+                  <th className="p-3 text-start font-semibold">{isAr ? "بصمة الوجه" : "Face ID"}</th>
+                  <th className="p-3 text-start font-semibold">{isAr ? "التاريخ والوقت" : "Timestamp"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                {attendanceLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-orange-50/30 transition">
+                    <td className="p-3 font-bold text-zinc-900 dark:text-zinc-100">{log.employee_name || "—"}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${log.action_type === "IN" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {log.action_type === "IN" ? (isAr ? "دخول" : "IN") : (isAr ? "خروج" : "OUT")}
+                      </span>
+                    </td>
+                    <td className="p-3 font-semibold text-emerald-600">{log.face_verified ? (isAr ? "مطابق" : "Yes") : "—"}</td>
+                    <td className="p-3 font-mono text-[11px] text-zinc-500">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-
-        {/* Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
-            <span className="text-xs text-slate-400 flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5" />
-              رقم التواصل والتحويلة
-            </span>
-            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
-              {branch.phone || "---"} (داخلي: {branch.ext || "---"})
-            </p>
-          </div>
-
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
-            <span className="text-xs text-slate-400 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5" />
-              العنوان التوضيحي
-            </span>
-            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate">
-              {branch.address || "غير مسجل"}
-            </p>
-          </div>
-
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-1">
-            <span className="text-xs text-slate-400 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              تاريخ التسجيل
-            </span>
-            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">
-              {branch.createdAt ? new Date(branch.createdAt).toLocaleDateString("ar-SA") : "الآن"}
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );
