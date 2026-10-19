@@ -6,6 +6,7 @@ import type { EmployeeData } from "@/types";
 export async function getEmployeesAction(): Promise<{
   success: boolean;
   employees?: EmployeeData[];
+  data?: EmployeeData[];
   error?: string;
 }> {
   try {
@@ -32,7 +33,7 @@ export async function getEmployeesAction(): Promise<{
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     }));
 
-    return { success: true, employees };
+    return { success: true, employees, data: employees };
   } catch (err: any) {
     console.error("Error fetching employees:", err);
     return { success: false, error: err.message || "فشل في جلب بيانات الموظفين" };
@@ -41,7 +42,7 @@ export async function getEmployeesAction(): Promise<{
 
 export async function getEmployeeByIdAction(
   id: string
-): Promise<{ success: boolean; employee?: EmployeeData; error?: string }> {
+): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
   try {
     const result = await query(
       `SELECT e.id, e.name, e.employee_code, e.branch_id, e.role_id, e.base_salary, e.monthly_leave_days, e.status, e.created_at,
@@ -72,7 +73,7 @@ export async function getEmployeeByIdAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, employee };
+    return { success: true, employee, data: employee };
   } catch (err: any) {
     console.error("Error fetching employee by id:", err);
     return { success: false, error: err.message || "فشل في جلب الموظف" };
@@ -81,7 +82,7 @@ export async function getEmployeeByIdAction(
 
 export async function createEmployeeAction(
   data: EmployeeData
-): Promise<{ success: boolean; employee?: EmployeeData; error?: string }> {
+): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
   try {
     const { name, employee_code, branch_id, role_id, base_salary, monthly_leave_days, status } = data;
 
@@ -123,7 +124,7 @@ export async function createEmployeeAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, employee };
+    return { success: true, employee, data: employee };
   } catch (err: any) {
     console.error("Error creating employee:", err);
     return { success: false, error: err.message || "فشل في إضافة الموظف" };
@@ -133,7 +134,7 @@ export async function createEmployeeAction(
 export async function updateEmployeeAction(
   id: string,
   data: EmployeeData
-): Promise<{ success: boolean; employee?: EmployeeData; error?: string }> {
+): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
   try {
     const { name, employee_code, branch_id, role_id, base_salary, monthly_leave_days, status } = data;
 
@@ -178,7 +179,7 @@ export async function updateEmployeeAction(
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
-    return { success: true, employee };
+    return { success: true, employee, data: employee };
   } catch (err: any) {
     console.error("Error updating employee:", err);
     return { success: false, error: err.message || "فشل في تحديث بيانات الموظف" };
@@ -187,7 +188,7 @@ export async function updateEmployeeAction(
 
 export async function saveEmployeeAction(
   data: EmployeeData
-): Promise<{ success: boolean; employee?: EmployeeData; error?: string }> {
+): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
   if (data.id) {
     return updateEmployeeAction(data.id, data);
   }
