@@ -12,7 +12,7 @@ import {
   Loader2,
   Filter,
 } from "lucide-react";
-import { getAttendanceLogsAction, AttendanceRecord } from "@/actions/attendanceActions";
+import { getAttendanceLogsAction, type AttendanceRecord } from "@/actions/attendanceActions";
 
 export default function AttendancePage() {
   const params = useParams();
