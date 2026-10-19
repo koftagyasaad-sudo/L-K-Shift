@@ -41,13 +41,13 @@ export default function BranchDetailPage({
         ]);
 
         if (bRes.success && bRes.branch) {
-          setBranch(bRes.branch as BranchData);
+          setBranch(bRes.branch);
         } else {
           setError(bRes.error || "تعذر جلب بيانات الفرع");
         }
 
         if (attRes.success && attRes.logs) {
-          setAttendanceLogs(attRes.logs as AttendanceRecord[]);
+          setAttendanceLogs(attRes.logs);
         }
       } catch (err: any) {
         setError(err.message || "حدث خطأ غير متوقع");
@@ -97,7 +97,6 @@ export default function BranchDetailPage({
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 p-4 md:p-6" dir={isRtl ? "rtl" : "ltr"}>
-      {/* Top Navigation */}
       <div className="flex items-center justify-between">
         <Link
           href={`/${locale}/admin/branches`}
@@ -111,7 +110,6 @@ export default function BranchDetailPage({
         </span>
       </div>
 
-      {/* Header Card */}
       <div className="bg-gradient-to-r from-orange-500 to-pink-500 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3">
@@ -135,7 +133,6 @@ export default function BranchDetailPage({
         </div>
       </div>
 
-      {/* Info Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white/80 backdrop-blur-md rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-4">
@@ -186,7 +183,6 @@ export default function BranchDetailPage({
         </div>
       </div>
 
-      {/* Attendance History Section */}
       <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b pb-4">
           <div className="flex items-center gap-3">
