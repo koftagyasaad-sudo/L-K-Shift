@@ -1,155 +1,113 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { LogIn, Shield, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useState, use } from "react";
+import { useRouter } from "next/navigation";
+import { ShieldCheck, ArrowRight, Loader2 } from "lucide-react";
 
-export default function LoginPage() {
-  const params = useParams();
+export default function LoginPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = use(params);
+  const isRtl = locale === "ar";
   const router = useRouter();
-  const locale = (params?.locale as string) || "ar";
-  const isAr = locale === "ar";
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    try {
-      // مؤقتًا: تسجيل دخول مباشر للوحة التحكم
-      // لاحقًا يتم ربطه بـ Auth حقيقي (NextAuth / Neon)
-      if (!email.trim() || !password.trim()) {
-        setError(isAr ? "يرجى إدخال البريد وكلمة المرور" : "Please enter email and password");
+    setTimeout(() => {
+      // بيانات الدخول المطلوبة
+      if (username === "010" && password === "123456") {
+        // تسجيل الدخول محلياً للحماية
+        localStorage.setItem("isAuthenticated", "true");
+        localStorage.setItem(
+          "user",
+          JSON.stringify({ name: "Omar Abd Elhalim", role: "مدير النظام" })
+        );
+        router.push(`/${locale}`); // التوجيه للوحة التحكم مباشرة
+      } else {
+        setError(isRtl ? "بيانات الدخول غير صحيحة" : "Invalid credentials");
         setLoading(false);
-        return;
       }
-
-      // محاكاة نجاح تسجيل الدخول
-      await new Promise((r) => setTimeout(r, 600));
-      router.push(`/${locale}`);
-      router.refresh();
-    } catch {
-      setError(isAr ? "فشل تسجيل الدخول" : "Login failed");
-    } finally {
-      setLoading(false);
-    }
+    }, 1000);
   };
 
   return (
-    <div
-      dir={isAr ? "rtl" : "ltr"}
-      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-pink-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 p-4"
-    >
-      <div className="w-full max-w-md">
-        {/* Logo / Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 shadow-lg shadow-orange-500/30 mb-4">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-            L-K Shift
-          </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            {isAr ? "نظام إدارة الحضور والورديات" : "Attendance & Shift Management"}
-          </p>
+    <div className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden" dir={isRtl ? "rtl" : "ltr"}>
+      {/* خلفية زجاجية متحركة */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] animate-pulse"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-[100px] animate-pulse delay-1000"></div>
+
+      <div className="relative z-10 w-full max-w-md flex flex-col items-center">
+        {/* اللوجو */}
+        <div className="mb-6 flex flex-col items-center">
+          <img src="/Logo.png" alt="L-K Shift Logo" className="h-20 w-auto mb-4 drop-shadow-xl" />
+          <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
+          <p className="text-gray-400 text-sm mt-2">{isRtl ? "نظام إدارة الحضور والورديات" : "Attendance & Shift Management"}</p>
         </div>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-orange-200/60 dark:border-orange-500/20 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-xl shadow-orange-500/10 p-6 sm:p-8">
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-6 flex items-center gap-2">
-            <LogIn className="w-5 h-5 text-orange-500" />
-            {isAr ? "تسجيل الدخول" : "Sign In"}
-          </h2>
+        {/* كارد تسجيل الدخول الزجاجي */}
+        <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-8 rounded-[2rem] shadow-2xl">
+          <div className="flex items-center gap-3 mb-8">
+            <ShieldCheck className="w-6 h-6 text-orange-500" />
+            <h2 className="text-xl font-bold text-white">{isRtl ? "تسجيل الدخول" : "Login"}</h2>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm text-center font-medium">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                {isAr ? "البريد الإلكتروني" : "Email"}
-              </label>
+              <label className="block text-xs font-medium text-gray-400 mb-2">{isRtl ? "رقم الدخول" : "Username"}</label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={isAr ? "admin@example.com" : "admin@example.com"}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:border-orange-400 transition"
-                autoComplete="email"
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="010"
+                className="w-full px-5 py-3.5 bg-black/40 border border-white/10 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left"
                 dir="ltr"
               />
             </div>
 
-            {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                {isAr ? "كلمة المرور" : "Password"}
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2.5 pe-11 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:border-orange-400 transition"
-                  autoComplete="current-password"
-                  dir="ltr"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute top-1/2 -translate-y-1/2 end-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition"
-                  tabIndex={-1}
-                  aria-label={isAr ? "إظهار/إخفاء كلمة المرور" : "Toggle password"}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">{isRtl ? "كلمة المرور" : "Password"}</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••"
+                className="w-full px-5 py-3.5 bg-black/40 border border-white/10 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all text-left"
+                dir="ltr"
+              />
             </div>
 
-            {/* Error */}
-            {error && (
-              <div className="rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm px-4 py-2.5">
-                {error}
-              </div>
-            )}
-
-            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-semibold py-2.5 px-4 shadow-lg shadow-orange-500/25 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full mt-4 flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70"
             >
-              {loading ? (
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {isAr ? "جاري الدخول..." : "Signing in..."}
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  {isAr ? "دخول" : "Sign In"}
+                  {isRtl ? "دخول" : "Login"}
+                  <ArrowRight className={`w-4 h-4 ${isRtl ? "rotate-180" : ""}`} />
                 </>
               )}
             </button>
           </form>
 
-          {/* Hint */}
-          <p className="mt-6 text-center text-xs text-zinc-400 dark:text-zinc-500">
-            {isAr
-              ? "صلاحيات مطلقة للنظام — أدخل أي بريد وكلمة مرور للمتابعة"
-              : "Full system access — enter any email & password to continue"}
+          <p className="text-center text-xs text-gray-500 mt-6">
+            {isRtl ? "صلاحيات مطلقة للنظام — استخدم 010 و 123456" : "Full Admin Access — Use 010 & 123456"}
           </p>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-xs text-zinc-400 mt-6">
-          © {new Date().getFullYear()} L-K Shift
-        </p>
       </div>
     </div>
   );
