@@ -37,7 +37,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         borderLeft: "1px solid rgba(255,255,255,0.15)"
       }}
     >
-      {/* Logo + Toggle */}
+      {/* Logo Header */}
       <div className="flex items-center justify-between p-3.5 border-b border-white/15">
         {!collapsed && (
           <div className="flex items-center gap-2">
@@ -53,7 +53,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </button>
       </div>
 
-      {/* Navigation Items */}
+      {/* Navigation Links */}
       <nav className="p-2 space-y-1 mt-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -65,7 +65,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
                 ${isActive 
-                  ? "bg-white text-orange-600 shadow-md" 
+                  ? "bg-white text-orange-600 shadow-md font-bold" 
                   : "text-white/90 hover:bg-white/15"
                 }
                 ${collapsed ? "justify-center" : ""}
