@@ -1,83 +1,156 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, Building2, Users, ShieldCheck, 
-  ChevronRight, ChevronLeft, Clock
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  Shield,
+  Clock,
+  ClipboardCheck,
+  X,
 } from "lucide-react";
 
-interface SidebarProps {
-  collapsed: boolean;
-  onToggle: () => void;
-}
-
-const NAV_ITEMS = [
-  { href: "/ar", label: "لوحة التحكم الرئيسية", icon: LayoutDashboard },
-  { href: "/ar/admin/branches", label: "إدارة الفروع", icon: Building2 },
-  { href: "/ar/admin/employees", label: "بيانات الموظفين", icon: Users },
-  { href: "/ar/admin/attendance", label: "الحضور والانصراف", icon: Clock },
-  { href: "/ar/admin/roles", label: "الأدوار والصلاحيات", icon: ShieldCheck },
-];
-
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({
+  isOpen,
+  toggleSidebar,
+  locale,
+}: {
+  isOpen: boolean;
+  toggleSidebar: () => void;
+  locale: string;
+}) {
+  const isRtl = locale === "ar";
   const pathname = usePathname();
 
+  const links = [
+    {
+      href: `/${locale}`,
+      label: isRtl ? "لوحة التحكم" : "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      href: `/${locale}/attendance`,
+      label: isRtl ? "الحضور والانصراف" : "Attendance",
+      icon: Clock,
+    },
+    {
+      href: `/${locale}/admin/employees`,
+      label: isRtl ? "الموظفين" : "Employees",
+      icon: Users,
+    },
+    {
+      href: `/${locale}/admin/branches`,
+      label: isRtl ? "الفروع" : "Branches",
+      icon: Building2,
+    },
+    {
+      href: `/${locale}/admin/roles`,
+      label: isRtl ? "الأدوار" : "Roles",
+      icon: Shield,
+    },
+    {
+      href: `/${locale}/admin/attendance-review`,
+      label: isRtl ? "مراجعة الحضور" : "Attendance Review",
+      icon: ClipboardCheck,
+    },
+  ];
+
+  const isActive = (href: string) => {
+    if (href === `/${locale}`) {
+      return pathname === `/${locale}` || pathname === `/${locale}/`;
+    }
+    return pathname.startsWith(href);
+  };
+
   return (
-    <aside
-      className={`fixed top-0 right-0 h-screen z-40 transition-all duration-300 ease-in-out
-        ${collapsed ? "w-16" : "w-60"}
-      `}
-      style={{
-        background: "linear-gradient(180deg, rgba(249,115,22,0.95) 0%, rgba(236,72,153,0.9) 100%)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        boxShadow: "-4px 0 24px rgba(249,115,22,0.15)",
-        borderLeft: "1px solid rgba(255,255,255,0.15)"
-      }}
-    >
-      {/* Logo Header */}
-      <div className="flex items-center justify-between p-3.5 border-b border-white/15">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <h1 className="text-white font-bold text-lg tracking-tight">L-K-Shift</h1>
-            <ShieldCheck className="w-5 h-5 text-white" />
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
+
+      <aside
+        className={`
+          fixed lg:static inset-y-0 z-50 w-72 shrink-0
+          bg-gradient-to-b from-orange-500 via-orange-500 to-pink-500
+          text-white shadow-2xl
+          transition-transform duration-300 ease-in-out
+          ${isRtl ? "right-0" : "left-0"}
+          ${isOpen ? "translate-x-0" : isRtl ? "translate-x-full lg:translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          flex flex-col
+        `}
+        dir={isRtl ? "rtl" : "ltr"}
+      >
+        {/* Brand */}
+        <div className="flex items-center justify-between gap-3 px-5 h-16 border-b border-white/20">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src="/Logo.png"
+              alt="L-K Shift"
+              className="h-10 w-10 object-contain bg-white/20 rounded-xl p-1 backdrop-blur-md"
+            />
+            <div className="min-w-0">
+              <p className="font-black text-lg leading-tight truncate">L-K Shift</p>
+              <p className="text-[10px] text-white/80 truncate">
+                {isRtl ? "نظام الحضور والورديات" : "Attendance System"}
+              </p>
+            </div>
           </div>
-        )}
-        <button
-          onClick={onToggle}
-          className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors"
-        >
-          {collapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </button>
-      </div>
+          <button
+            onClick={toggleSidebar}
+            className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
+            type="button"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-      {/* Navigation Links */}
-      <nav className="p-2 space-y-1 mt-2">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href !== "/ar" && pathname?.startsWith(item.href));
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
+          {links.map((link) => {
+            const Icon = link.icon;
+            const active = isActive(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => {
+                  if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                    toggleSidebar();
+                  }
+                }}
+                className={`
+                  flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all
+                  ${
+                    active
+                      ? "bg-white text-orange-600 shadow-lg shadow-black/10"
+                      : "text-white/90 hover:bg-white/15"
+                  }
+                `}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="truncate">{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
-                ${isActive 
-                  ? "bg-white text-orange-600 shadow-md font-bold" 
-                  : "text-white/90 hover:bg-white/15"
-                }
-                ${collapsed ? "justify-center" : ""}
-              `}
-              title={collapsed ? item.label : ""}
-            >
-              <Icon className="w-5 h-5 shrink-0" />
-              {!collapsed && <span className="truncate">{item.label}</span>}
-            </Link>
-          );
-        })}
-      </nav>
-    </aside>
+        {/* Footer */}
+        <div className="p-4 border-t border-white/20">
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 text-center">
+            <p className="text-xs font-bold">Omar Abd Elhalim</p>
+            <p className="text-[10px] text-white/70 mt-0.5">
+              {isRtl ? "صلاحيات مطلقة للنظام" : "Full system access"}
+            </p>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
