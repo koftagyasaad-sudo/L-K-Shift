@@ -104,8 +104,7 @@ export default function GlobalHeader() {
   const toggleLanguage = () => {
     const nextLocale = isAr ? "en" : "ar";
     if (!pathname) return;
-    
-    // Replace the current locale prefix with the target locale
+
     const segments = pathname.split("/").filter(Boolean);
     if (segments.length > 0 && (segments[0] === "ar" || segments[0] === "en")) {
       segments[0] = nextLocale;
@@ -151,15 +150,14 @@ export default function GlobalHeader() {
     setCheckInMessage(null);
 
     try {
-      // Simulate Face ID / GPS verification delay
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
       const res = await recordAttendanceAction({
-        employee_id: employeeId.trim(),
-        type: checkInType,
-        verified_by_face: true,
-        gps_lat: 24.7136,
-        gps_lng: 46.6753,
+        employeeId: employeeId.trim(),
+        actionType: checkInType === "check_in" ? "IN" : "OUT",
+        faceVerified: true,
+        lat: 24.7136,
+        lng: 46.6753,
       });
 
       if (res.success) {
@@ -198,8 +196,6 @@ export default function GlobalHeader() {
         className="sticky top-0 z-40 w-full h-16 bg-gradient-to-r from-orange-500/15 via-white/80 to-pink-500/15 dark:from-zinc-900/90 dark:via-zinc-900/80 dark:to-orange-950/40 backdrop-blur-md border-b border-orange-200/50 dark:border-zinc-800 shadow-sm transition-all"
       >
         <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-4">
-          
-          {/* Right/Left Title or System Status Badge */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-100/80 dark:bg-orange-950/60 border border-orange-300/60 dark:border-orange-500/30 text-orange-800 dark:text-orange-300 text-xs font-semibold shadow-xs">
               <span className="relative flex h-2 w-2">
@@ -210,9 +206,7 @@ export default function GlobalHeader() {
             </div>
           </div>
 
-          {/* Quick Actions & User Profile */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick Check-in Button */}
             <button
               onClick={() => setShowQuickCheckInModal(true)}
               className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-medium shadow-md shadow-orange-500/20 transition active:scale-95"
@@ -221,7 +215,6 @@ export default function GlobalHeader() {
               <span>{isAr ? "تسجيل حضور سريع" : "Quick Check-in"}</span>
             </button>
 
-            {/* Language Switcher Button */}
             <button
               onClick={toggleLanguage}
               title={isAr ? "تغيير للغة الإنجليزية" : "Switch to Arabic"}
@@ -231,7 +224,6 @@ export default function GlobalHeader() {
               <span>{isAr ? "EN" : "عربي"}</span>
             </button>
 
-            {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
               title={isAr ? "تبديل المظهر" : "Toggle Theme"}
@@ -244,7 +236,6 @@ export default function GlobalHeader() {
               )}
             </button>
 
-            {/* Notifications Menu Container */}
             <div className="relative" ref={notifRef}>
               <button
                 onClick={() => setShowNotifications((v) => !v)}
@@ -258,7 +249,6 @@ export default function GlobalHeader() {
                 )}
               </button>
 
-              {/* Notifications Dropdown Popup */}
               {showNotifications && (
                 <div
                   dir={isAr ? "rtl" : "ltr"}
@@ -313,7 +303,6 @@ export default function GlobalHeader() {
               )}
             </div>
 
-            {/* User Profile Menu Container */}
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setShowUserMenu((v) => !v)}
@@ -333,7 +322,6 @@ export default function GlobalHeader() {
                 <ChevronDown className="w-3.5 h-3.5 text-zinc-400 hidden sm:block" />
               </button>
 
-              {/* User Menu Dropdown - left-0 alignment for perfect RTL overflow prevention */}
               {showUserMenu && (
                 <div
                   className="absolute left-0 mt-2 w-64 rounded-2xl border border-orange-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl p-2 z-50 animate-in fade-in duration-150"
@@ -372,12 +360,10 @@ export default function GlobalHeader() {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </header>
 
-      {/* Quick Attendance Modal */}
       {showQuickCheckInModal && (
         <div
           dir={isAr ? "rtl" : "ltr"}
@@ -407,7 +393,6 @@ export default function GlobalHeader() {
             </div>
 
             <form onSubmit={handleQuickCheckInSubmit} className="space-y-4 mt-4">
-              {/* Type Switch */}
               <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
                 <button
                   type="button"
@@ -433,7 +418,6 @@ export default function GlobalHeader() {
                 </button>
               </div>
 
-              {/* Employee ID Input */}
               <div>
                 <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                   {isAr ? "معرّف الموظف (UUID)" : "Employee ID (UUID)"}
@@ -448,7 +432,6 @@ export default function GlobalHeader() {
                 />
               </div>
 
-              {/* Verified Badge Simulated Status */}
               <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/40 text-[11px] text-orange-800 dark:text-orange-300 space-y-1">
                 <div className="flex items-center gap-1.5 font-semibold">
                   <MapPin className="w-3.5 h-3.5 text-orange-500" />
@@ -460,7 +443,6 @@ export default function GlobalHeader() {
                 </div>
               </div>
 
-              {/* Feedback Message */}
               {checkInMessage && (
                 <div
                   className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
@@ -474,7 +456,6 @@ export default function GlobalHeader() {
                 </div>
               )}
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={verifying || !employeeId.trim()}
