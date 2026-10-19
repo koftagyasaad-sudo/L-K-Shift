@@ -174,6 +174,15 @@ export async function updateBranchAction(
   }
 }
 
+export async function saveBranchAction(
+  data: BranchData
+): Promise<{ success: boolean; branch?: BranchData; error?: string }> {
+  if (data.id) {
+    return updateBranchAction(data.id, data);
+  }
+  return createBranchAction(data);
+}
+
 export async function deleteBranchAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
