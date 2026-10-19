@@ -8,13 +8,15 @@ import {
   Calendar,
   CheckCircle2,
   ShieldCheck,
+  MapPin,
   UserCheck,
   Loader2,
   Filter,
 } from "lucide-react";
-import { getAttendanceLogsAction, type AttendanceRecord } from "@/actions/attendanceActions";
+import { getAttendanceLogsAction } from "@/actions/attendanceActions";
+import type { AttendanceRecord } from "@/types";
 
-export default function AttendancePage() {
+export default function AttendanceReviewPage() {
   const params = useParams();
   const locale = (params?.locale as string) || "ar";
   const isAr = locale === "ar";
@@ -62,19 +64,19 @@ export default function AttendancePage() {
 
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Top Banner */}
+      {/* Banner */}
       <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Clock className="w-6 h-6 text-orange-500" />
             <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-              {isAr ? "سجل الحضور اليومي والورديات" : "Daily Attendance Logs"}
+              {isAr ? "سجل بصمات الحضور والإنصراف" : "Attendance & Fingerprint Review"}
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
             {isAr
-              ? "استعراض ومتابعة سجلات البصمة الحية وربطها بالموظفين"
-              : "Track fingerprint scans and daily employee attendance"}
+              ? "متابعة فورية للحركات المسجلة عبر البصمة والتحقق بالوجه"
+              : "Real-time monitoring of attendance logs & Face ID verification"}
           </p>
         </div>
 
@@ -84,18 +86,18 @@ export default function AttendancePage() {
           className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-semibold shadow-md shadow-orange-500/20 transition disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-          <span>{isAr ? "تحديث الآن" : "Refresh Now"}</span>
+          <span>{isAr ? "تحديث البيانات" : "Refresh Data"}</span>
         </button>
       </div>
 
-      {/* Stats Summary Bar */}
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-orange-600 dark:text-orange-400">
             <UserCheck className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "إجمالي البصمات" : "Total Scans"}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "إجمالي التسجيلات" : "Total Logs"}</p>
             <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{totalLogs}</p>
           </div>
         </div>
@@ -105,7 +107,7 @@ export default function AttendancePage() {
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "حاضرون اليوم" : "Present Today"}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "حركات الدخول" : "Check-in Count"}</p>
             <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{inLogsCount}</p>
           </div>
         </div>
@@ -115,13 +117,13 @@ export default function AttendancePage() {
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "بصمة الوجه الموثقة" : "Face ID Verified"}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "التحقق بالوجه (Face ID)" : "Face Verified"}</p>
             <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{faceVerifiedCount}</p>
           </div>
         </div>
       </div>
 
-      {/* Filter Row */}
+      {/* Search */}
       <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
@@ -129,7 +131,7 @@ export default function AttendancePage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={isAr ? "تصفية بالاسم، الكود أو الفرع..." : "Filter by name, code or branch..."}
+            placeholder={isAr ? "ابحث باسم الموظف، الكود، أو الفرع..." : "Search employee name, code, or branch..."}
             className="w-full ps-9 pe-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
         </div>
@@ -153,43 +155,46 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Table Section */}
+      {/* Table */}
       <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
-            <span className="text-xs">{isAr ? "جاري التحميل..." : "Loading..."}</span>
+            <span className="text-xs">{isAr ? "جاري تحميل سجل البصمات..." : "Loading fingerprint logs..."}</span>
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
             <Filter className="w-8 h-8 text-zinc-300 dark:text-zinc-700" />
-            <p className="text-sm font-medium">{isAr ? "لا توجد حركات حضور سابقة" : "No attendance logs recorded"}</p>
+            <p className="text-sm font-medium">{isAr ? "لا توجد سجلات متطابقة مع البحث" : "No matching attendance logs found"}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-start border-collapse">
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-orange-50/50 dark:bg-zinc-800/40 text-xs text-zinc-600 dark:text-zinc-400">
-                  <th className="p-4 text-start font-semibold">{isAr ? "اسم الموظف" : "Employee Name"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "الموظف" : "Employee"}</th>
                   <th className="p-4 text-start font-semibold">{isAr ? "الفرع" : "Branch"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "الحركة" : "Action"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "التحقق" : "Verification"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "وقت الحركة" : "Timestamp"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "نوع الحركة" : "Type"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "التحقق بـ Face ID" : "Face ID"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "الموقع الجغرافي" : "GPS Location"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "التاريخ والوقت" : "Date & Time"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 text-xs">
                 {filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-orange-50/30 dark:hover:bg-zinc-800/30 transition">
                     <td className="p-4">
-                      <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                        {log.employee_name || (isAr ? "موظف" : "Employee")}
-                      </p>
-                      {log.employee_code && (
-                        <span className="text-[10px] text-zinc-400 block">{log.employee_code}</span>
-                      )}
+                      <div>
+                        <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                          {log.employee_name || (isAr ? "غير معرّف" : "Unknown")}
+                        </p>
+                        {log.employee_code && (
+                          <span className="text-[10px] text-zinc-400 block">{log.employee_code}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-zinc-600 dark:text-zinc-300">
-                      {log.branch_name || (isAr ? "الفرع الرئيسي" : "Main Branch")}
+                      {log.branch_name || (isAr ? "غير محدد" : "Unspecified")}
                     </td>
                     <td className="p-4">
                       <span
@@ -206,10 +211,22 @@ export default function AttendancePage() {
                       {log.face_verified ? (
                         <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
                           <ShieldCheck className="w-4 h-4" />
-                          <span>{isAr ? "بصمة وجه" : "Face ID"}</span>
+                          <span>{isAr ? "مطابق" : "Verified"}</span>
                         </span>
                       ) : (
-                        <span className="text-zinc-400">{isAr ? "تلقائي" : "Auto"}</span>
+                        <span className="text-zinc-400">{isAr ? "عادي" : "Standard"}</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      {log.latitude && log.longitude ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium">
+                          <MapPin className="w-3.5 h-3.5" />
+                          <span>
+                            {log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">{isAr ? "غير متاح" : "N/A"}</span>
                       )}
                     </td>
                     <td className="p-4 text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">
