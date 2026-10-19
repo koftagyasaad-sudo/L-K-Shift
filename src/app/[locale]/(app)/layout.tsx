@@ -18,17 +18,17 @@ export default function AppLayout({
   const router = useRouter();
 
   useEffect(() => {
-    params.then((resolvedParams) => {
-      setLocale(resolvedParams.locale);
+    let mounted = true;
+    params.then((resolved) => {
+      if (mounted) setLocale(resolved.locale || "ar");
     });
 
-    // حماية لوحة التحكم
     const authStatus = localStorage.getItem("isAuthenticated");
-    if (!authStatus) {
-      setIsAuthenticated(false);
-    } else {
-      setIsAuthenticated(true);
-    }
+    if (mounted) setIsAuthenticated(authStatus === "true");
+
+    return () => {
+      mounted = false;
+    };
   }, [params]);
 
   useEffect(() => {
@@ -37,12 +37,15 @@ export default function AppLayout({
     }
   }, [isAuthenticated, locale, router]);
 
-  // شاشة تحميل لحين التأكد من تسجيل الدخول
   if (isAuthenticated === null || isAuthenticated === false) {
-    return <div className="min-h-screen bg-slate-900 flex items-center justify-center"></div>;
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+  const toggleSidebar = () => setSidebarOpen((v) => !v);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950 transition-colors overflow-hidden">
