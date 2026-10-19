@@ -1,56 +1,55 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-import {
-  Building2,
-  Plus,
-  Search,
-  MapPin,
-  Phone,
-  User,
-  Trash2,
-  Edit2,
-  ExternalLink,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  X,
-} from "lucide-react";
+import { useEffect, useState, use } from "react";
+import Link from "next/link";
 import {
   getBranchesAction,
   saveBranchAction,
   deleteBranchAction,
 } from "@/actions/branchActions";
 import type { BranchData } from "@/types";
+import {
+  Building2,
+  Plus,
+  Trash2,
+  Edit,
+  Eye,
+  MapPin,
+  Phone,
+  User,
+  Search,
+  Loader2,
+  X,
+  CheckCircle,
+} from "lucide-react";
 
-export default function BranchesPage() {
-  const params = useParams();
-  const router = useRouter();
-  const locale = (params?.locale as string) || "ar";
-  const isAr = locale === "ar";
+export default function AdminBranchesPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = use(params);
+  const isRtl = locale === "ar";
 
   const [branches, setBranches] = useState<BranchData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-
+  const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const [formData, setFormData] = useState<BranchData>({
-    id: "",
     name: "",
+    location: "",
     manager: "",
     phone: "",
     ext: "",
     address: "",
-    location: "",
+    radius_meters: 100,
   });
 
   const fetchBranches = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
       const res = await getBranchesAction();
       if (res.success) {
         setBranches(res.branches || res.data || []);
@@ -67,76 +66,62 @@ export default function BranchesPage() {
   }, []);
 
   const handleOpenModal = (branch?: BranchData) => {
-    setMessage(null);
     if (branch) {
-      setFormData({
-        id: branch.id || "",
-        name: branch.name || "",
-        manager: branch.manager || "",
-        phone: branch.phone || "",
-        ext: branch.ext || "",
-        address: branch.address || branch.location || "",
-        location: branch.location || "",
-      });
+      setFormData(branch);
     } else {
       setFormData({
-        id: "",
         name: "",
+        location: "",
         manager: "",
         phone: "",
         ext: "",
         address: "",
-        location: "",
+        radius_meters: 100,
       });
     }
+    setFormError("");
     setIsModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setFormError("");
+  };
 
-    setSaving(true);
-    setMessage(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name.trim()) {
+      setFormError(isRtl ? "اسم الفرع مطلوب" : "Branch name is required");
+      return;
+    }
+
+    setSubmitting(true);
+    setFormError("");
 
     try {
-      const res = await saveBranchAction({
-        id: formData.id || undefined,
-        name: formData.name.trim(),
-        location: formData.address || formData.location || undefined,
-        manager: formData.manager,
-        phone: formData.phone,
-        ext: formData.ext,
-        address: formData.address,
-      });
-
+      const res = await saveBranchAction(formData);
       if (res.success) {
-        setMessage({
-          type: "success",
-          text: isAr ? "تم حفظ بيانات الفرع بنجاح!" : "Branch saved successfully!",
-        });
-        setTimeout(() => {
-          setIsModalOpen(false);
-          fetchBranches();
-        }, 1000);
+        handleCloseModal();
+        fetchBranches();
       } else {
-        setMessage({
-          type: "error",
-          text: res.error || (isAr ? "حدث خطأ أثناء الحفظ" : "Failed to save branch"),
-        });
+        setFormError(res.error || "حدث خطأ أثناء حفظ الفرع");
       }
-    } catch {
-      setMessage({
-        type: "error",
-        text: isAr ? "خطأ في الاتصال بالخادم" : "Server error",
-      });
+    } catch (err: any) {
+      setFormError(err.message || "حدث خطأ أثناء الاتصال بالخادم");
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(isAr ? "هل أنت تأكد من حذف هذا الفرع؟" : "Are you sure you want to delete this branch?")) {
+  const handleDelete = async (id?: string) => {
+    if (!id) return;
+    if (
+      !confirm(
+        isRtl
+          ? "هل أنت تأكد من رغبتك في حذف هذا الفرع؟"
+          : "Are you sure you want to delete this branch?"
+      )
+    ) {
       return;
     }
 
@@ -145,248 +130,250 @@ export default function BranchesPage() {
       if (res.success) {
         fetchBranches();
       } else {
-        alert(res.error || (isAr ? "فشل حذف الفرع" : "Failed to delete branch"));
+        alert(res.error || "فشل حذف الفرع");
       }
-    } catch (err) {
-      console.error("Error deleting branch:", err);
+    } catch (err: any) {
+      alert(err.message || "خطأ أثناء الحذف");
     }
   };
 
-  const filteredBranches = branches.filter((b) => {
-    const matchesSearch =
-      !searchTerm ||
-      b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.location && b.location.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesSearch;
-  });
+  const filteredBranches = branches.filter(
+    (b) =>
+      b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (b.location && b.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (b.manager && b.manager.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Top Banner */}
-      <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-orange-500" />
-            <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-              {isAr ? "إدارة الفروع والمواقع" : "Branches & Locations Management"}
-            </h1>
+    <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-6" dir={isRtl ? "rtl" : "ltr"}>
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl shadow-md">
+            <Building2 className="w-7 h-7" />
           </div>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-            {isAr ? "إضافة وتعديل فروع الشركة ومتابعة حضور الموظفين بها" : "Add, update branches and manage employee attendance boundaries"}
-          </p>
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-gray-900">
+              {isRtl ? "إدارة الفروع" : "Branch Management"}
+            </h1>
+            <p className="text-xs text-gray-500 mt-1">
+              {isRtl ? "إضافة وتعديل فروع الشركة ونطاق الحضور الجغرافي" : "Manage company branches and geolocation limits"}
+            </p>
+          </div>
         </div>
 
         <button
           onClick={() => handleOpenModal()}
-          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 transition active:scale-95"
+          className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md hover:opacity-95 transition-all"
         >
-          <Plus className="w-4 h-4" />
-          <span>{isAr ? "إضافة فرع جديد" : "Add New Branch"}</span>
+          <Plus className="w-5 h-5" />
+          {isRtl ? "إضافة فرع جديد" : "Add New Branch"}
         </button>
       </div>
 
-      {/* Filter Row */}
-      <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
+      {/* Filter and Search */}
+      <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="relative">
+          <Search className="w-5 h-5 absolute top-3.5 right-3.5 text-gray-400" />
           <input
             type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={isAr ? "البحث باسم الفرع أو العنوان..." : "Search by branch name or address..."}
-            className="w-full ps-9 pe-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+            placeholder={isRtl ? "بحث باسم الفرع، الموقع، أو المدير..." : "Search by branch name, location, or manager..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
           />
         </div>
       </div>
 
-      {/* Branches Grid */}
+      {/* Branch Cards / Table Grid */}
       {loading ? (
-        <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <span className="text-xs font-medium">{isAr ? "جاري تحميل الفروع..." : "Loading branches..."}</span>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
         </div>
       ) : filteredBranches.length === 0 ? (
-        <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-12 text-center text-zinc-400">
-          <Building2 className="w-10 h-10 mx-auto text-zinc-300 dark:text-zinc-700 mb-2" />
-          <p className="text-sm font-semibold">{isAr ? "لا توجد فروع مسجلة حالياً" : "No branches registered yet"}</p>
+        <div className="text-center py-16 bg-white/50 rounded-3xl border border-dashed border-gray-200">
+          <Building2 className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+          <h3 className="font-bold text-gray-700">{isRtl ? "لا توجد فروع مسجلة" : "No branches found"}</h3>
+          <p className="text-xs text-gray-400 mt-1">{isRtl ? "قم بإنشاء فرع جديد للبدء" : "Create a new branch to get started"}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredBranches.map((branch) => (
             <div
               key={branch.id}
-              className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-5 shadow-lg shadow-orange-500/5 hover:border-orange-300 dark:hover:border-zinc-700 transition flex flex-col justify-between"
+              className="bg-white/80 backdrop-blur-md rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-orange-500/20">
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{branch.name}</h3>
-                      <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium">
-                        {isAr ? "فرع معتمد" : "Active Branch"}
-                      </span>
-                    </div>
-                  </div>
-
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold px-3 py-1 bg-orange-50 text-orange-600 rounded-full border border-orange-100">
+                    {branch.radius_meters || 100}m radius
+                  </span>
                   <div className="flex items-center gap-1">
+                    <Link
+                      href={`/${locale}/admin/branches/${branch.id}`}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                      title={isRtl ? "عرض التفاصيل" : "View Details"}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Link>
                     <button
                       onClick={() => handleOpenModal(branch)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-zinc-800 transition"
-                      title={isAr ? "تعديل" : "Edit"}
+                      className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"
+                      title={isRtl ? "تعديل" : "Edit"}
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => branch.id && handleDelete(branch.id)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-zinc-800 transition"
-                      title={isAr ? "حذف" : "Delete"}
+                      onClick={() => handleDelete(branch.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                      title={isRtl ? "حذف" : "Delete"}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                  {branch.manager && (
-                    <div className="flex items-center gap-2">
-                      <User className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                      <span>{branch.manager}</span>
-                    </div>
-                  )}
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">{branch.name}</h3>
+                  <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                    {branch.location || (isRtl ? "غير محدد" : "Not specified")}
+                  </p>
+                </div>
 
-                  {branch.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                      <span dir="ltr">{branch.phone}</span>
-                      {branch.ext && <span className="text-[10px] text-zinc-400">({isAr ? "تحويلة" : "Ext"}: {branch.ext})</span>}
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                    <span className="truncate">{branch.location || branch.address || (isAr ? "العنوان غير محدد" : "Address not specified")}</span>
+                <div className="pt-2 border-t border-gray-100 space-y-1.5 text-xs text-gray-600">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 flex items-center gap-1">
+                      <User className="w-3.5 h-3.5" />
+                      {isRtl ? "المدير:" : "Manager:"}
+                    </span>
+                    <span className="font-semibold text-gray-800">{branch.manager || "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 flex items-center gap-1">
+                      <Phone className="w-3.5 h-3.5" />
+                      {isRtl ? "الهاتف:" : "Phone:"}
+                    </span>
+                    <span className="font-semibold text-gray-800" dir="ltr">
+                      {branch.phone || "—"}
+                    </span>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end">
-                <button
-                  onClick={() => router.push(`/${locale}/admin/branches/${branch.id}`)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:underline"
-                >
-                  <span>{isAr ? "عرض تفاصيل الفرع والورديات" : "View Branch Details"}</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal Dialog */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-orange-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 relative space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
-              <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-orange-500" />
-                <span>{formData.id ? (isAr ? "تعديل بيانات الفرع" : "Edit Branch") : (isAr ? "إضافة فرع جديد" : "Add Branch")}</span>
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-4">
+              <h3 className="text-lg font-bold text-gray-900">
+                {formData.id
+                  ? isRtl
+                    ? "تعديل بيانات الفرع"
+                    : "Edit Branch"
+                  : isRtl
+                  ? "إضافة فرع جديد"
+                  : "Add New Branch"}
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                onClick={handleCloseModal}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              {message && (
-                <div
-                  className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
-                    message.type === "success"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-red-50 text-red-700 border border-red-200"
-                  }`}
-                >
-                  {message.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                  <span>{message.text}</span>
-                </div>
-              )}
+            {formError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+                {formError}
+              </div>
+            )}
 
+            <form onSubmit={handleSubmit} className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  {isAr ? "اسم الفرع" : "Branch Name"} *
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  {isRtl ? "اسم الفرع *" : "Branch Name *"}
                 </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder={isAr ? "مثال: الفرع الرئيسي - الرياض" : "e.g., Main Branch"}
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    {isAr ? "مدير الفرع" : "Branch Manager"}
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    {isRtl ? "الموقع الجغرافي" : "Location"}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.location || ""}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    {isRtl ? "مدير الفرع" : "Manager"}
                   </label>
                   <input
                     type="text"
                     value={formData.manager || ""}
                     onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                    placeholder={isAr ? "اسم مدير الفرع" : "Manager Name"}
-                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    {isAr ? "رقم الهاتف" : "Phone"}
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    {isRtl ? "رقم الهاتف" : "Phone"}
                   </label>
                   <input
                     type="text"
                     value={formData.phone || ""}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="0123456789"
-                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    {isRtl ? "نطاق الحضور (بالمتر)" : "GPS Radius (meters)"}
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.radius_meters || 100}
+                    onChange={(e) =>
+                      setFormData({ ...formData, radius_meters: Number(e.target.value) })
+                    }
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  {isAr ? "العنوان أو الموقع الجغرافي" : "Address / Location"}
-                </label>
-                <input
-                  type="text"
-                  value={formData.address || formData.location || ""}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value, location: e.target.value })}
-                  placeholder={isAr ? "شارع الملك فهد، الرياض" : "King Fahd Road, Riyadh"}
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-2">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                  onClick={handleCloseModal}
+                  className="px-5 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
                 >
-                  {isAr ? "إلغاء" : "Cancel"}
+                  {isRtl ? "إلغاء" : "Cancel"}
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !formData.name.trim()}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md transition disabled:opacity-50 flex items-center gap-1.5"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-pink-500 rounded-xl hover:opacity-90 transition-all shadow-md disabled:opacity-50"
                 >
-                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{isAr ? "حفظ الفرع" : "Save Branch"}</span>
+                  {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isRtl ? "حفظ البيانات" : "Save Changes"}
                 </button>
               </div>
             </form>
