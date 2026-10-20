@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar } from "@/components/layout/Sidebar";
 import { GlobalHeader } from "@/components/global-header";
 
 export default function AppLayout({
