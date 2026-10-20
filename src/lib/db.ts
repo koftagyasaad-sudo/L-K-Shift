@@ -1,8 +1,5 @@
 import { neon } from "@neondatabase/serverless";
 
-/**
- * Execute a SQL query against Neon Postgres with full build-time fallback safety.
- */
 export async function query(
   text: string,
   params: any[] = []
@@ -13,9 +10,7 @@ export async function query(
     process.env.NEON_DATABASE_URL;
 
   if (!connectionString) {
-    console.warn(
-      "DATABASE_URL is not defined in environment variables. Returning empty query result."
-    );
+    console.warn("DATABASE_URL not set. Returning empty query result for build safety.");
     return { rows: [], rowCount: 0 };
   }
 
@@ -23,10 +18,7 @@ export async function query(
     const sql = neon(connectionString);
     const result = (await sql(text, params)) as any[];
     const rows = Array.isArray(result) ? result : [];
-    return {
-      rows,
-      rowCount: rows.length,
-    };
+    return { rows, rowCount: rows.length };
   } catch (error: any) {
     console.error("Database Query Error:", error);
     throw new Error(error.message || "فشل تنفيذ الاستعلام في قاعدة البيانات");
