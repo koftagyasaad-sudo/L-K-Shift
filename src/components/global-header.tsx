@@ -70,7 +70,6 @@ export function GlobalHeader({
     }
   }, []);
 
-  // close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -112,9 +111,12 @@ export function GlobalHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 transition-colors">
+    <header
+      className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 transition-colors"
+      dir={isRtl ? "rtl" : "ltr"}
+    >
       <div className="flex items-center justify-between px-4 h-14 max-w-full">
-        {/* Left / Start */}
+        {/* Start side */}
         <div className="flex items-center gap-2">
           <button
             onClick={toggleSidebar}
@@ -133,7 +135,7 @@ export function GlobalHeader({
           </div>
         </div>
 
-        {/* Right / End — compact smart icons */}
+        {/* End side — compact icons */}
         <div className="flex items-center gap-1 sm:gap-1.5">
           <LanguageToggle currentLocale={locale} />
           <ThemeToggle />
@@ -151,7 +153,7 @@ export function GlobalHeader({
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-0.5 end-0.5 min-w-[14px] h-[14px] px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                <span className="absolute top-0.5 end-0.5 min-w-[14px] h-[14px] px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full border-2 border-white dark:border-slate-900 flex items-center justify-center leading-none">
                   {unreadCount}
                 </span>
               )}
@@ -159,11 +161,11 @@ export function GlobalHeader({
 
             {showNotifications && (
               <div
-                className={`absolute top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-50 overflow-hidden ${
-                  isRtl ? "start-0" : "end-0"
-                }`}
-                style={isRtl ? { left: 0 } : { right: 0 }}
-                dir={isRtl ? "rtl" : "ltr"}
+                className="absolute top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-50 overflow-hidden"
+                style={{
+                  insetInlineEnd: 0,
+                  insetInlineStart: "auto",
+                }}
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700">
                   <h4 className="text-sm font-bold text-gray-900 dark:text-white">
@@ -240,8 +242,10 @@ export function GlobalHeader({
             {showUserMenu && (
               <div
                 className="absolute top-full mt-2 w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 z-50 p-1.5"
-                style={isRtl ? { left: 0 } : { right: 0 }}
-                dir={isRtl ? "rtl" : "ltr"}
+                style={{
+                  insetInlineEnd: 0,
+                  insetInlineStart: "auto",
+                }}
               >
                 <button
                   onClick={handleLogout}
