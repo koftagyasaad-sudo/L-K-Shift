@@ -10,16 +10,22 @@ import {
   Clock,
   ClipboardCheck,
   X,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 
 export function Sidebar({
   isOpen,
   toggleSidebar,
   locale,
+  collapsed,
+  toggleCollapsed,
 }: {
   isOpen: boolean;
   toggleSidebar: () => void;
   locale: string;
+  collapsed: boolean;
+  toggleCollapsed: () => void;
 }) {
   const isRtl = locale === "ar";
   const pathname = usePathname();
@@ -64,8 +70,17 @@ export function Sidebar({
     return pathname.startsWith(href);
   };
 
+  const CollapseIcon = isRtl
+    ? collapsed
+      ? ChevronsLeft
+      : ChevronsRight
+    : collapsed
+      ? ChevronsRight
+      : ChevronsLeft;
+
   return (
     <>
+      {/* Mobile overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
@@ -75,41 +90,62 @@ export function Sidebar({
 
       <aside
         className={`
-          fixed lg:static inset-y-0 z-50 w-72 shrink-0
+          fixed lg:static inset-y-0 z-50 shrink-0
           bg-gradient-to-b from-orange-500 via-orange-500 to-pink-500
           text-white shadow-2xl
-          transition-transform duration-300 ease-in-out
+          transition-all duration-300 ease-in-out
           ${isRtl ? "right-0" : "left-0"}
-          ${isOpen ? "translate-x-0" : isRtl ? "translate-x-full lg:translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          ${collapsed ? "lg:w-20" : "lg:w-72"}
+          w-72
+          ${
+            isOpen
+              ? "translate-x-0"
+              : isRtl
+                ? "translate-x-full lg:translate-x-0"
+                : "-translate-x-full lg:translate-x-0"
+          }
           flex flex-col
         `}
         dir={isRtl ? "rtl" : "ltr"}
       >
-        <div className="flex items-center justify-between gap-3 px-5 h-16 border-b border-white/20">
-          <div className="flex items-center gap-3 min-w-0">
+        {/* Brand */}
+        <div className="flex items-center justify-between gap-2 px-3 h-16 border-b border-white/20">
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
             <img
               src="/Logo.png"
               alt="L-K Shift"
-              className="h-10 w-10 object-contain bg-white/20 rounded-xl p-1 backdrop-blur-md"
+              className="h-9 w-9 object-contain bg-white/20 rounded-xl p-1 backdrop-blur-md shrink-0"
             />
-            <div className="min-w-0">
-              <p className="font-black text-lg leading-tight truncate">L-K Shift</p>
+            {!collapsed && (
+              <div className="min-w-0 hidden lg:block">
+                <p className="font-black text-base leading-tight truncate">L-K Shift</p>
+                <p className="text-[10px] text-white/80 truncate">
+                  {isRtl ? "نظام الحضور والورديات" : "Attendance System"}
+                </p>
+              </div>
+            )}
+            {/* Mobile always show title */}
+            <div className="min-w-0 lg:hidden">
+              <p className="font-black text-base leading-tight truncate">L-K Shift</p>
               <p className="text-[10px] text-white/80 truncate">
                 {isRtl ? "نظام الحضور والورديات" : "Attendance System"}
               </p>
             </div>
           </div>
+
+          {/* Mobile close */}
           <button
             onClick={toggleSidebar}
-            className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
+            className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0"
             type="button"
             aria-label="Close sidebar"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
           {links.map((link) => {
             const Icon = link.icon;
             const active = isActive(link.href);
@@ -117,13 +153,15 @@ export function Sidebar({
               <Link
                 key={link.href}
                 href={link.href}
+                title={collapsed ? link.label : undefined}
                 onClick={() => {
                   if (typeof window !== "undefined" && window.innerWidth < 1024) {
                     toggleSidebar();
                   }
                 }}
                 className={`
-                  flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all
+                  flex items-center gap-3 rounded-2xl text-sm font-bold transition-all
+                  ${collapsed ? "lg:justify-center lg:px-0 lg:py-3 px-4 py-3" : "px-4 py-3"}
                   ${
                     active
                       ? "bg-white text-orange-600 shadow-lg shadow-black/10"
@@ -132,19 +170,29 @@ export function Sidebar({
                 `}
               >
                 <Icon className="w-5 h-5 shrink-0" />
-                <span className="truncate">{link.label}</span>
+                <span className={`truncate ${collapsed ? "lg:hidden" : ""}`}>
+                  {link.label}
+                </span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/20">
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 text-center">
-            <p className="text-xs font-bold">Omar Abd Elhalim</p>
-            <p className="text-[10px] text-white/70 mt-0.5">
-              {isRtl ? "صلاحيات مطلقة للنظام" : "Full system access"}
-            </p>
-          </div>
+        {/* Collapse toggle — desktop only */}
+        <div className="hidden lg:flex p-3 border-t border-white/20">
+          <button
+            onClick={toggleCollapsed}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl hover:bg-white/15 transition-colors text-white/90"
+            type="button"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <CollapseIcon className="w-5 h-5" />
+            {!collapsed && (
+              <span className="text-xs font-bold">
+                {isRtl ? "طي القائمة" : "Collapse"}
+              </span>
+            )}
+          </button>
         </div>
       </aside>
     </>
