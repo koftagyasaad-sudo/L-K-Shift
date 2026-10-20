@@ -1,106 +1,159 @@
-// src/app/api/attendance/check-out/route.ts
-
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, branches, attendanceLogs } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { attendanceLogs, branches, users } from "@/db/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { put } from "@vercel/blob";
-import { calculateDistanceMeters } from "@/lib/geo";
-import { getCairoDateString } from "@/lib/date";
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+function calculateDistanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371e3;
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * rad) *
+      Math.cos(lat2 * rad) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
-  const userId = Number(session.user.id);
-  const formData = await request.formData();
-  const photo = formData.get("photo") as File | null;
-  const latRaw = formData.get("lat") as string | null;
-  const lngRaw = formData.get("lng") as string | null;
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { userId, latitude, longitude, imageBase64 } = body;
 
-  if (!photo) {
-    return NextResponse.json({ error: "الصورة مطلوبة لتسجيل الانصراف" }, { status: 400 });
-  }
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "معرف الموظف مطلوب" },
+        { status: 400 }
+      );
+    }
 
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user?.primaryBranchId) {
-    return NextResponse.json({ error: "لا يوجد فرع مرتبط بحسابك" }, { status: 400 });
-  }
+    if (latitude === undefined || longitude === undefined) {
+      return NextResponse.json(
+        { success: false, error: "الموقع الجغرافي (GPS) مطلوب لإتمام التسجيل" },
+        { status: 400 }
+      );
+    }
 
-  const [branch] = await db.select().from(branches).where(eq(branches.id, user.primaryBranchId)).limit(1);
-  if (!branch) {
-    return NextResponse.json({ error: "الفرع غير موجود" }, { status: 404 });
-  }
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
-  const todayStr = getCairoDateString();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "الموظف غير موجود بالنظام" },
+        { status: 404 }
+      );
+    }
 
-  const [existing] = await db
-    .select()
-    .from(attendanceLogs)
-    .where(and(eq(attendanceLogs.userId, userId), eq(attendanceLogs.workDate, todayStr)))
-    .limit(1);
+    const [activeLog] = await db
+      .select()
+      .from(attendanceLogs)
+      .where(and(eq(attendanceLogs.userId, userId), isNull(attendanceLogs.checkOut)))
+      .limit(1);
 
-  if (!existing || !existing.checkInTime) {
-    return NextResponse.json({ error: "لم تسجل حضورك اليوم بعد" }, { status: 400 });
-  }
+    if (!activeLog) {
+      return NextResponse.json(
+        { success: false, error: "لا يوجد تسجيل حضور نشط لهذا الموظف" },
+        { status: 400 }
+      );
+    }
 
-  if (existing.checkOutTime) {
-    return NextResponse.json({ error: "تم تسجيل الانصراف بالفعل اليوم" }, { status: 400 });
-  }
+    const branchId = activeLog.branchId || user.branchId;
+    let distance: number | null = null;
 
-  let distance: number | null = null;
-  let lat: number | null = null;
-  let lng: number | null = null;
-  let approvalStatus: "AUTO_APPROVED" | "PENDING_REVIEW" = "PENDING_REVIEW";
+    if (branchId) {
+      const [branch] = await db
+        .select()
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1);
 
-  if (latRaw && lngRaw) {
-    const parsedLat = Number(latRaw);
-    const parsedLng = Number(lngRaw);
-    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
-      lat = parsedLat;
-      lng = parsedLng;
-      distance = calculateDistanceMeters(lat, lng, branch.latitude, branch.longitude);
-      if (distance <= branch.geofenceRadius) {
-        approvalStatus = "AUTO_APPROVED";
+      if (branch) {
+        const branchLat = parseFloat(branch.latitude);
+        const branchLng = parseFloat(branch.longitude);
+        const userLat = parseFloat(String(latitude));
+        const userLng = parseFloat(String(longitude));
+
+        if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
+          distance = calculateDistanceMeters(userLat, userLng, branchLat, branchLng);
+          const maxAllowedRadius = branch.radiusMeters || branch.geofenceRadius || 100;
+
+          if (distance > maxAllowedRadius) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `أنت خارج النطاق المسموح للفرع عند الانصراف. المسافة: ${Math.round(distance)} متر، الحد المسموح: ${maxAllowedRadius} متر`,
+                distance: Math.round(distance),
+                maxAllowedRadius,
+              },
+              { status: 400 }
+            );
+          }
+        }
       }
     }
+
+    let selfieUrl: string | null = null;
+    if (imageBase64) {
+      try {
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+          const buffer = Buffer.from(
+            imageBase64.replace(/^data:image\/\w+;base64,/, ""),
+            "base64"
+          );
+          const filename = `attendance/check-out-${userId}-${Date.now()}.jpg`;
+          const blob = await put(filename, buffer, {
+            access: "public",
+            contentType: "image/jpeg",
+          });
+          selfieUrl = blob.url;
+        } else {
+          selfieUrl = imageBase64;
+        }
+      } catch (uploadError) {
+        console.error("Selfie checkout upload failed, fallback to raw base64:", uploadError);
+        selfieUrl = imageBase64;
+      }
+    }
+
+    const now = new Date();
+    const [updatedLog] = await db
+      .update(attendanceLogs)
+      .set({
+        checkOut: now,
+        checkOutLatitude: String(latitude),
+        checkOutLongitude: String(longitude),
+        checkOutSelfieUrl: selfieUrl,
+        updatedAt: now,
+      })
+      .where(eq(attendanceLogs.id, activeLog.id))
+      .returning();
+
+    return NextResponse.json({
+      success: true,
+      message: "تم تسجيل الانصراف بنجاح",
+      data: updatedLog,
+      distance: distance !== null ? Math.round(distance) : null,
+    });
+  } catch (error) {
+    console.error("Check-out route error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "فشل في تسجيل الانصراف",
+      },
+      { status: 500 }
+    );
   }
-
-  const photoBuffer = await photo.arrayBuffer();
-  const fileName = `attendance/${userId}/${todayStr}-checkout-${Date.now()}.jpg`;
-  const blob = await put(fileName, photoBuffer, {
-    access: "public",
-    contentType: photo.type || "image/jpeg",
-  });
-
-  const checkOutTime = new Date();
-  const workedMinutes = Math.max(
-    Math.round((checkOutTime.getTime() - new Date(existing.checkInTime).getTime()) / 60000),
-    0
-  );
-
-  await db
-    .update(attendanceLogs)
-    .set({
-      checkOutTime,
-      checkOutLat: lat,
-      checkOutLng: lng,
-      checkOutDistance: distance,
-      checkOutMethod: "GPS",
-      checkOutPhotoUrl: blob.url,
-      checkOutApprovalStatus: approvalStatus,
-      actualWorkedMinutes: workedMinutes,
-    })
-    .where(eq(attendanceLogs.id, existing.id));
-
-  return NextResponse.json({
-    success: true,
-    approvalStatus,
-    distance: distance !== null ? Math.round(distance) : null,
-    allowedRadius: branch.geofenceRadius,
-    workedMinutes,
-  });
 }
