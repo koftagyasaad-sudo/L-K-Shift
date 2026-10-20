@@ -1,7 +1,28 @@
 "use server";
 
-import { query } from "@/lib/db";
+import { db } from "@/db";
+import { branches } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
 import type { BranchData } from "@/types";
+
+function parseLatLngFromUrl(url?: string): { lat: number; lng: number } {
+  const defaultCoords = { lat: 30.0444, lng: 31.2357 }; // القاهرة
+  if (!url) return defaultCoords;
+
+  try {
+    const match =
+      url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+      url.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/) ||
+      url.match(/ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
+
+    if (match && match[1] && match[2]) {
+      return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+    }
+  } catch {
+    /* ignore */
+  }
+  return defaultCoords;
+}
 
 export async function getBranchesAction(): Promise<{
   success: boolean;
@@ -10,191 +31,107 @@ export async function getBranchesAction(): Promise<{
   error?: string;
 }> {
   try {
-    const result = await query(
-      "SELECT id, name, location, manager, phone, ext, address, radius_meters, latitude, longitude, created_at FROM branches ORDER BY name ASC"
-    );
+    const rows = await db.select().from(branches).orderBy(desc(branches.createdAt));
 
-    const branches: BranchData[] = result.rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      location: row.location || "",
-      manager: row.manager || "",
-      phone: row.phone || "",
-      ext: row.ext || "",
-      address: row.address || "",
-      radius_meters: row.radius_meters ? Number(row.radius_meters) : 100,
-      latitude: row.latitude ? Number(row.latitude) : 0,
-      longitude: row.longitude ? Number(row.longitude) : 0,
-      created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    const result: BranchData[] = rows.map((b) => ({
+      id: String(b.id),
+      name: b.nameAr || b.nameEn,
+      nameEn: b.nameEn,
+      location: b.address || `${b.latitude}, ${b.longitude}`,
+      address: b.address || "",
+      radius_meters: b.geofenceRadius ?? 100,
+      latitude: b.latitude,
+      longitude: b.longitude,
     }));
 
-    return { success: true, branches, data: branches };
+    return { success: true, branches: result, data: result };
   } catch (err: any) {
     console.error("Error fetching branches:", err);
-    return { success: false, error: err.message || "فشل في جلب الفروع" };
-  }
-}
-
-export async function getBranchByIdAction(
-  id: string
-): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
-  try {
-    const result = await query(
-      "SELECT id, name, location, manager, phone, ext, address, radius_meters, latitude, longitude, created_at FROM branches WHERE id = $1",
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return { success: false, error: "الفرع غير موجود" };
-    }
-
-    const row = result.rows[0];
-    const branch: BranchData = {
-      id: row.id,
-      name: row.name,
-      location: row.location || "",
-      manager: row.manager || "",
-      phone: row.phone || "",
-      ext: row.ext || "",
-      address: row.address || "",
-      radius_meters: row.radius_meters ? Number(row.radius_meters) : 100,
-      latitude: row.latitude ? Number(row.latitude) : 0,
-      longitude: row.longitude ? Number(row.longitude) : 0,
-      created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
-    };
-
-    return { success: true, branch, data: branch };
-  } catch (err: any) {
-    console.error("Error fetching branch by id:", err);
-    return { success: false, error: err.message || "فشل في جلب بيانات الفرع" };
-  }
-}
-
-export async function createBranchAction(
-  data: BranchData
-): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
-  try {
-    const { name, location, manager, phone, ext, address, radius_meters, latitude, longitude } = data;
-
-    if (!name || name.trim() === "") {
-      return { success: false, error: "اسم الفرع مطلوب" };
-    }
-
-    const result = await query(
-      `INSERT INTO branches (name, location, manager, phone, ext, address, radius_meters, latitude, longitude)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING id, name, location, manager, phone, ext, address, radius_meters, latitude, longitude, created_at`,
-      [
-        name,
-        location || null,
-        manager || null,
-        phone || null,
-        ext || null,
-        address || null,
-        radius_meters || 100,
-        latitude || null,
-        longitude || null,
-      ]
-    );
-
-    const row = result.rows[0];
-    const branch: BranchData = {
-      id: row.id,
-      name: row.name,
-      location: row.location || "",
-      manager: row.manager || "",
-      phone: row.phone || "",
-      ext: row.ext || "",
-      address: row.address || "",
-      radius_meters: row.radius_meters ? Number(row.radius_meters) : 100,
-      latitude: row.latitude ? Number(row.latitude) : 0,
-      longitude: row.longitude ? Number(row.longitude) : 0,
-      created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
-    };
-
-    return { success: true, branch, data: branch };
-  } catch (err: any) {
-    console.error("Error creating branch:", err);
-    return { success: false, error: err.message || "فشل في إنشاء الفرع" };
-  }
-}
-
-export async function updateBranchAction(
-  id: string,
-  data: BranchData
-): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
-  try {
-    const { name, location, manager, phone, ext, address, radius_meters, latitude, longitude } = data;
-
-    if (!name || name.trim() === "") {
-      return { success: false, error: "اسم الفرع مطلوب" };
-    }
-
-    const result = await query(
-      `UPDATE branches
-       SET name = $1, location = $2, manager = $3, phone = $4, ext = $5, address = $6, radius_meters = $7, latitude = $8, longitude = $9
-       WHERE id = $10
-       RETURNING id, name, location, manager, phone, ext, address, radius_meters, latitude, longitude, created_at`,
-      [
-        name,
-        location || null,
-        manager || null,
-        phone || null,
-        ext || null,
-        address || null,
-        radius_meters || 100,
-        latitude || null,
-        longitude || null,
-        id,
-      ]
-    );
-
-    if (result.rows.length === 0) {
-      return { success: false, error: "الفرع غير موجود" };
-    }
-
-    const row = result.rows[0];
-    const branch: BranchData = {
-      id: row.id,
-      name: row.name,
-      location: row.location || "",
-      manager: row.manager || "",
-      phone: row.phone || "",
-      ext: row.ext || "",
-      address: row.address || "",
-      radius_meters: row.radius_meters ? Number(row.radius_meters) : 100,
-      latitude: row.latitude ? Number(row.latitude) : 0,
-      longitude: row.longitude ? Number(row.longitude) : 0,
-      created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
-    };
-
-    return { success: true, branch, data: branch };
-  } catch (err: any) {
-    console.error("Error updating branch:", err);
-    return { success: false, error: err.message || "فشل في تحديث بيانات الفرع" };
+    return { success: false, error: err.message || "فشل في جلب بيانات الفروع" };
   }
 }
 
 export async function saveBranchAction(
   data: BranchData
-): Promise<{ success: boolean; branch?: BranchData; data?: BranchData; error?: string }> {
-  if (data.id) {
-    return updateBranchAction(data.id, data);
+): Promise<{ success: boolean; branch?: BranchData; error?: string }> {
+  try {
+    const nameAr = (data.name || "").trim();
+    if (!nameAr) {
+      return { success: false, error: "اسم الفرع مطلوب" };
+    }
+
+    const { lat, lng } = parseLatLngFromUrl(data.location);
+    const finalLat = data.latitude || lat;
+    const finalLng = data.longitude || lng;
+    const radius = Number(data.radius_meters || 100);
+
+    if (data.id) {
+      const branchId = Number(data.id);
+      const [updated] = await db
+        .update(branches)
+        .set({
+          nameAr,
+          nameEn: data.nameEn || nameAr,
+          address: data.address || data.location || null,
+          latitude: finalLat,
+          longitude: finalLng,
+          geofenceRadius: radius,
+          updatedAt: new Date(),
+        })
+        .where(eq(branches.id, branchId))
+        .returning();
+
+      return {
+        success: true,
+        branch: {
+          id: String(updated.id),
+          name: updated.nameAr,
+          radius_meters: updated.geofenceRadius,
+        },
+      };
+    }
+
+    const [created] = await db
+      .insert(branches)
+      .values({
+        nameAr,
+        nameEn: data.nameEn || nameAr,
+        type: "BRANCH",
+        address: data.address || data.location || null,
+        latitude: finalLat,
+        longitude: finalLng,
+        geofenceRadius: radius,
+        qrSecretKey: `secret_qr_${Date.now()}`,
+        qrRefreshSec: 60,
+        isActive: true,
+      })
+      .returning();
+
+    return {
+      success: true,
+      branch: {
+        id: String(created.id),
+        name: created.nameAr,
+        radius_meters: created.geofenceRadius,
+      },
+    };
+  } catch (err: any) {
+    console.error("Error saving branch:", err);
+    return { success: false, error: err.message || "فشل في حفظ بيانات الفرع" };
   }
-  return createBranchAction(data);
 }
 
 export async function deleteBranchAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const result = await query("DELETE FROM branches WHERE id = $1 RETURNING id", [id]);
-    if (result.rows.length === 0) {
-      return { success: false, error: "الفرع غير موجود أو تم حذفه مسبقاً" };
-    }
+    const branchId = Number(id);
+    if (!branchId) return { success: false, error: "معرف فرع غير صالح" };
+
+    await db.delete(branches).where(eq(branches.id, branchId));
     return { success: true };
   } catch (err: any) {
     console.error("Error deleting branch:", err);
-    return { success: false, error: err.message || "فشل في حذف الفرع" };
+    return { success: false, error: err.message || "تعذر حذف الفرع لوجود موظفين مرتبطيين به" };
   }
 }
