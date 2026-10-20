@@ -29,10 +29,10 @@ function parseCoordinate(value: unknown): number | null {
 }
 
 /**
+ * NOT exported — "use server" files can only export async actions.
  * Extract lat/lng from common Google Maps URL formats.
- * Supports: @lat,lng | ?q=lat,lng | !3dlat!4dlng | /place/.../@lat,lng
  */
-export function extractCoordsFromMapUrl(url?: string | null): {
+function extractCoordsFromMapUrl(url?: string | null): {
   lat: number | null;
   lng: number | null;
 } {
@@ -87,7 +87,10 @@ function resolveRadius(data: BranchData): number {
 function resolveNames(data: BranchData): { nameAr: string; nameEn: string } {
   const nameAr = (data.nameAr || data.name || data.nameEn || "").trim();
   const nameEn = (data.nameEn || data.name || data.nameAr || nameAr).trim();
-  return { nameAr: nameAr || "فرع", nameEn: nameEn || nameAr || "Branch" };
+  return {
+    nameAr: nameAr || "فرع",
+    nameEn: nameEn || nameAr || "Branch",
+  };
 }
 
 export async function getBranchesAction() {
@@ -102,7 +105,7 @@ export async function getBranchesAction() {
     return {
       success: false as const,
       error: error instanceof Error ? error.message : "Failed to fetch branches",
-      data: [] as typeof branches.$inferSelect[],
+      data: [] as (typeof branches.$inferSelect)[],
     };
   }
 }
@@ -110,7 +113,11 @@ export async function getBranchesAction() {
 export async function getBranchByIdAction(id: string) {
   try {
     if (!id) {
-      return { success: false as const, error: "Branch id is required", data: null };
+      return {
+        success: false as const,
+        error: "Branch id is required",
+        data: null,
+      };
     }
 
     const [branch] = await db
@@ -120,7 +127,11 @@ export async function getBranchByIdAction(id: string) {
       .limit(1);
 
     if (!branch) {
-      return { success: false as const, error: "Branch not found", data: null };
+      return {
+        success: false as const,
+        error: "Branch not found",
+        data: null,
+      };
     }
 
     return { success: true as const, data: branch };
@@ -226,7 +237,6 @@ export async function deleteBranchAction(id: string) {
       return { success: false as const, error: "Branch id is required" };
     }
 
-    // Prevent delete if employees are still assigned
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(users)
