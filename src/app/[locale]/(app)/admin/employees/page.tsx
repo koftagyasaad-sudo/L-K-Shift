@@ -19,6 +19,8 @@ import {
   FileText,
   X,
   Download,
+  Phone,
+  Lock,
 } from "lucide-react";
 import {
   getEmployeesAction,
@@ -48,11 +50,13 @@ export default function EmployeesPage() {
   const [formData, setFormData] = useState({
     id: "",
     name: "",
+    phone: "",
+    password: "",
     employee_code: "",
     branch_id: "",
     role_id: "",
     base_salary: 0,
-    monthly_leave_days: 2,
+    monthly_leave_days: 21,
     status: "active",
   });
 
@@ -91,22 +95,26 @@ export default function EmployeesPage() {
       setFormData({
         id: emp.id || "",
         name: emp.name || "",
+        phone: (emp as any).phone || emp.employee_code || "",
+        password: "",
         employee_code: emp.employee_code || "",
         branch_id: emp.branch_id || "",
         role_id: emp.role_id || "",
         base_salary: Number(emp.base_salary) || 0,
-        monthly_leave_days: Number(emp.monthly_leave_days) || 2,
+        monthly_leave_days: Number(emp.monthly_leave_days) || 21,
         status: emp.status || "active",
       });
     } else {
       setFormData({
         id: "",
         name: "",
+        phone: "",
+        password: "123456",
         employee_code: "",
         branch_id: "",
         role_id: "",
         base_salary: 0,
-        monthly_leave_days: 2,
+        monthly_leave_days: 21,
         status: "active",
       });
     }
@@ -115,7 +123,14 @@ export default function EmployeesPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.employee_code.trim()) return;
+    if (!formData.name.trim() || !formData.phone.trim()) return;
+    if (!formData.id && !formData.password.trim()) {
+      setMessage({
+        type: "error",
+        text: isAr ? "كلمة المرور مطلوبة للموظف الجديد" : "Password is required for new employee",
+      });
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -124,13 +139,15 @@ export default function EmployeesPage() {
       const res = await saveEmployeeAction({
         id: formData.id || undefined,
         name: formData.name.trim(),
-        employee_code: formData.employee_code.trim(),
+        phone: formData.phone.trim(),
+        password: formData.password.trim() || undefined,
+        employee_code: (formData.employee_code || formData.phone).trim(),
         branch_id: formData.branch_id || null,
         role_id: formData.role_id || null,
         base_salary: formData.base_salary,
         monthly_leave_days: formData.monthly_leave_days,
         status: formData.status,
-      });
+      } as any);
 
       if (res.success) {
         setMessage({
@@ -175,11 +192,12 @@ export default function EmployeesPage() {
 
   const exportExcel = () => {
     const headers = isAr
-      ? ["الاسم", "الكود", "الفرع", "الدور", "الراتب", "أيام الإجازة", "الحالة"]
-      : ["Name", "Code", "Branch", "Role", "Salary", "Leave Days", "Status"];
+      ? ["الاسم", "التليفون", "الكود", "الفرع", "الدور", "الراتب", "أيام الإجازة", "الحالة"]
+      : ["Name", "Phone", "Code", "Branch", "Role", "Salary", "Leave Days", "Status"];
 
     const rows = filteredEmployees.map((e) => [
       e.name,
+      (e as any).phone || "",
       e.employee_code,
       e.branch_name || "",
       e.role_name || "",
@@ -207,6 +225,7 @@ export default function EmployeesPage() {
     return (
       e.name?.toLowerCase().includes(q) ||
       e.employee_code?.toLowerCase().includes(q) ||
+      (e as any).phone?.toLowerCase?.().includes(q) ||
       e.branch_name?.toLowerCase().includes(q) ||
       e.role_name?.toLowerCase().includes(q)
     );
@@ -214,7 +233,6 @@ export default function EmployeesPage() {
 
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Banner */}
       <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -225,8 +243,8 @@ export default function EmployeesPage() {
           </div>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
             {isAr
-              ? "إضافة وتعديل الموظفين وربطهم بالفروع والأدوار وأيام الإجازة"
-              : "Add & edit employees, assign branches, roles and monthly leave days"}
+              ? "أضف موظفاً برقم تليفونه وباسورد وفرعه — رقم التليفون هو حساب الدخول"
+              : "Add employee with phone, password & branch — phone is the login ID"}
           </p>
         </div>
 
@@ -248,7 +266,6 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Search */}
       <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm">
         <div className="relative max-w-md">
           <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
@@ -256,13 +273,12 @@ export default function EmployeesPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={isAr ? "بحث بالاسم، الكود، الفرع أو الدور..." : "Search name, code, branch or role..."}
+            placeholder={isAr ? "بحث بالاسم، التليفون، الكود، الفرع..." : "Search name, phone, code, branch..."}
             className="w-full ps-9 pe-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
         </div>
       </div>
 
-      {/* Table */}
       <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-xl overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
@@ -280,10 +296,11 @@ export default function EmployeesPage() {
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-orange-50/50 dark:bg-zinc-800/40 text-xs text-zinc-600 dark:text-zinc-400">
                   <th className="p-4 text-start font-semibold">{isAr ? "الموظف" : "Employee"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "التليفون" : "Phone"}</th>
                   <th className="p-4 text-start font-semibold">{isAr ? "الفرع" : "Branch"}</th>
                   <th className="p-4 text-start font-semibold">{isAr ? "الدور" : "Role"}</th>
                   <th className="p-4 text-start font-semibold">{isAr ? "الراتب" : "Salary"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "إجازة شهرية" : "Leave Days"}</th>
+                  <th className="p-4 text-start font-semibold">{isAr ? "إجازة" : "Leave"}</th>
                   <th className="p-4 text-start font-semibold">{isAr ? "الحالة" : "Status"}</th>
                   <th className="p-4 text-start font-semibold">{isAr ? "إجراءات" : "Actions"}</th>
                 </tr>
@@ -295,16 +312,19 @@ export default function EmployeesPage() {
                       <p className="font-bold text-zinc-900 dark:text-zinc-100">{emp.name}</p>
                       <span className="text-[10px] text-zinc-400 block">{emp.employee_code}</span>
                     </td>
+                    <td className="p-4 text-zinc-600 dark:text-zinc-300 font-mono" dir="ltr">
+                      {(emp as any).phone || "—"}
+                    </td>
                     <td className="p-4 text-zinc-600 dark:text-zinc-300">
                       <span className="inline-flex items-center gap-1">
                         <Building2 className="w-3 h-3 text-orange-500" />
-                        {emp.branch_name || (isAr ? "—" : "—")}
+                        {emp.branch_name || "—"}
                       </span>
                     </td>
                     <td className="p-4 text-zinc-600 dark:text-zinc-300">
                       <span className="inline-flex items-center gap-1">
                         <Briefcase className="w-3 h-3 text-orange-500" />
-                        {emp.role_name || (isAr ? "—" : "—")}
+                        {emp.role_name || "—"}
                       </span>
                     </td>
                     <td className="p-4 text-zinc-700 dark:text-zinc-200 font-semibold">
@@ -324,7 +344,7 @@ export default function EmployeesPage() {
                             : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700"
                         }`}
                       >
-                        {emp.status === "active" ? (isAr ? "نشط" : "Active") : (isAr ? "غير نشط" : "Inactive")}
+                        {emp.status === "active" ? (isAr ? "نشط" : "Active") : isAr ? "غير نشط" : "Inactive"}
                       </span>
                     </td>
                     <td className="p-4">
@@ -367,7 +387,6 @@ export default function EmployeesPage() {
         )}
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
           <div className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-orange-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 relative space-y-4 max-h-[90vh] overflow-y-auto">
@@ -425,14 +444,53 @@ export default function EmployeesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    {isAr ? "كود الموظف" : "Employee Code"} *
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
+                    <Phone className="w-3 h-3 text-orange-500" />
+                    {isAr ? "رقم التليفون (دخول)" : "Phone (Login ID)"} *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    dir="ltr"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="01xxxxxxxxx"
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-orange-500" />
+                    {formData.id
+                      ? isAr
+                        ? "باسورد جديد (اختياري)"
+                        : "New password (optional)"
+                      : isAr
+                        ? "كلمة المرور"
+                        : "Password"}{" "}
+                    {!formData.id && "*"}
                   </label>
                   <input
                     type="text"
-                    required
+                    dir="ltr"
+                    required={!formData.id}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={formData.id ? (isAr ? "اتركه فارغ للإبقاء" : "Leave empty to keep") : "123456"}
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    {isAr ? "كود الموظف" : "Employee Code"}
+                  </label>
+                  <input
+                    type="text"
                     value={formData.employee_code}
                     onChange={(e) => setFormData({ ...formData, employee_code: e.target.value })}
+                    placeholder={isAr ? "اختياري — افتراضي رقم التليفون" : "Optional — defaults to phone"}
                     className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
                   />
                 </div>
@@ -461,7 +519,7 @@ export default function EmployeesPage() {
                     onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
                     className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
                   >
-                    <option value="">{isAr ? "-- بدون فرع --" : "-- No Branch --"}</option>
+                    <option value="">{isAr ? "-- اختر الفرع --" : "-- Select branch --"}</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name}
@@ -492,7 +550,7 @@ export default function EmployeesPage() {
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-orange-500" />
-                    {isAr ? "أيام الإجازة الشهرية" : "Monthly Leave Days"}
+                    {isAr ? "أيام الإجازة السنوية" : "Annual Leave Days"}
                   </label>
                   <input
                     type="number"
@@ -520,6 +578,12 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
+              <div className="rounded-xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 p-3 text-[11px] text-orange-800 dark:text-orange-200">
+                {isAr
+                  ? "الموظف يسجّل الدخول برقم التليفون + كلمة المرور. الافتراضي للإضافة الجديدة: 123456"
+                  : "Employee logs in with phone + password. Default password for new hires: 123456"}
+              </div>
+
               <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-2">
                 <button
                   type="button"
@@ -530,7 +594,7 @@ export default function EmployeesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !formData.name.trim() || !formData.employee_code.trim()}
+                  disabled={saving || !formData.name.trim() || !formData.phone.trim()}
                   className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md transition disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
