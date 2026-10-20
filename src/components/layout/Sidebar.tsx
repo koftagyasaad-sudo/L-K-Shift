@@ -1,97 +1,154 @@
 "use client";
 
-import React, { useState } from "react";
-import { useParams } from "next/navigation";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Menu, Bell, Search } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  Shield,
+  Clock,
+  ClipboardCheck,
+  X,
+} from "lucide-react";
 
-export default function AppLayout({
-  children,
+export function Sidebar({
+  isOpen,
+  toggleSidebar,
+  locale,
 }: {
-  children: React.ReactNode;
+  isOpen: boolean;
+  toggleSidebar: () => void;
+  locale: string;
 }) {
-  const params = useParams();
-  const locale = (params?.locale as string) || "en";
   const isRtl = locale === "ar";
+  const pathname = usePathname();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const links = [
+    {
+      href: `/${locale}`,
+      label: isRtl ? "لوحة التحكم" : "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      href: `/${locale}/attendance`,
+      label: isRtl ? "الحضور والانصراف" : "Attendance",
+      icon: Clock,
+    },
+    {
+      href: `/${locale}/admin/employees`,
+      label: isRtl ? "الموظفين" : "Employees",
+      icon: Users,
+    },
+    {
+      href: `/${locale}/admin/branches`,
+      label: isRtl ? "الفروع" : "Branches",
+      icon: Building2,
+    },
+    {
+      href: `/${locale}/admin/roles`,
+      label: isRtl ? "الأدوار" : "Roles",
+      icon: Shield,
+    },
+    {
+      href: `/${locale}/admin/attendance-review`,
+      label: isRtl ? "مراجعة الحضور" : "Attendance Review",
+      icon: ClipboardCheck,
+    },
+  ];
 
-  const toggleSidebar = () => {
-    setSidebarOpen((prev) => !prev);
+  const isActive = (href: string) => {
+    if (href === `/${locale}`) {
+      return pathname === `/${locale}` || pathname === `/${locale}/`;
+    }
+    return pathname.startsWith(href);
   };
 
   return (
-    <div
-      className="flex h-screen overflow-hidden bg-gray-50"
-      dir={isRtl ? "rtl" : "ltr"}
-    >
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        toggleSidebar={toggleSidebar}
-        locale={locale}
-      />
+    <>
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+          onClick={toggleSidebar}
+        />
+      )}
 
-      {/* Main Content Area */}
-      <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Top Bar */}
-        <header className="flex items-center justify-between h-16 px-4 md:px-6 bg-white border-b border-gray-200 shadow-sm shrink-0">
-          {/* Left Side - Menu Toggle */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleSidebar}
-              className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
-              type="button"
-              aria-label="Toggle sidebar"
-            >
-              <Menu className="w-5 h-5 text-gray-600" />
-            </button>
-
-            {/* Search Bar */}
-            <div className="hidden md:flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-2 w-72">
-              <Search className="w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder={isRtl ? "بحث..." : "Search..."}
-                className="bg-transparent text-sm text-gray-700 outline-none w-full placeholder:text-gray-400"
-              />
+      <aside
+        className={`
+          fixed lg:static inset-y-0 z-50 w-72 shrink-0
+          bg-gradient-to-b from-orange-500 via-orange-500 to-pink-500
+          text-white shadow-2xl
+          transition-transform duration-300 ease-in-out
+          ${isRtl ? "right-0" : "left-0"}
+          ${isOpen ? "translate-x-0" : isRtl ? "translate-x-full lg:translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          flex flex-col
+        `}
+        dir={isRtl ? "rtl" : "ltr"}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 h-16 border-b border-white/20">
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src="/Logo.png"
+              alt="L-K Shift"
+              className="h-10 w-10 object-contain bg-white/20 rounded-xl p-1 backdrop-blur-md"
+            />
+            <div className="min-w-0">
+              <p className="font-black text-lg leading-tight truncate">L-K Shift</p>
+              <p className="text-[10px] text-white/80 truncate">
+                {isRtl ? "نظام الحضور والورديات" : "Attendance System"}
+              </p>
             </div>
           </div>
+          <button
+            onClick={toggleSidebar}
+            className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
+            type="button"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-          {/* Right Side - Actions */}
-          <div className="flex items-center gap-3">
-            {/* Notifications */}
-            <button
-              className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
-              type="button"
-              aria-label="Notifications"
-            >
-              <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-            </button>
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
+          {links.map((link) => {
+            const Icon = link.icon;
+            const active = isActive(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => {
+                  if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                    toggleSidebar();
+                  }
+                }}
+                className={`
+                  flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all
+                  ${
+                    active
+                      ? "bg-white text-orange-600 shadow-lg shadow-black/10"
+                      : "text-white/90 hover:bg-white/15"
+                  }
+                `}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="truncate">{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-            {/* User Avatar */}
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm">
-                O
-              </div>
-              <div className="hidden md:block">
-                <p className="text-sm font-bold text-gray-800 leading-tight">
-                  Omar
-                </p>
-                <p className="text-[10px] text-gray-500 leading-tight">
-                  {isRtl ? "مدير النظام" : "Admin"}
-                </p>
-              </div>
-            </div>
+        <div className="p-4 border-t border-white/20">
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 text-center">
+            <p className="text-xs font-bold">Omar Abd Elhalim</p>
+            <p className="text-[10px] text-white/70 mt-0.5">
+              {isRtl ? "صلاحيات مطلقة للنظام" : "Full system access"}
+            </p>
           </div>
-        </header>
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+        </div>
+      </aside>
+    </>
   );
 }
+
+export default Sidebar;
