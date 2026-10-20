@@ -1,24 +1,33 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { saveOfflineAttendance, syncOfflineAttendance } from "@/lib/offline-sync";
 
 interface Branch {
   id: number;
   nameAr: string;
   latitude: number;
   longitude: number;
-  geofenceRadius: number; // النطاق المسموح به بالأمتار
+  geofenceRadius: number;
 }
 
 interface CheckInOutProps {
   userId?: number;
   branch?: Branch;
   locale?: "ar" | "en";
+  initialType?: "CHECK_IN" | "CHECK_OUT" | null;
   onSuccess?: () => void;
+  onClose?: () => void;
 }
 
-export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess }: CheckInOutProps) {
+export function CheckInOutWidget({
+  userId,
+  branch,
+  locale = "ar",
+  initialType = null,
+  onSuccess,
+  onClose,
+}: CheckInOutProps) {
+  const isAr = locale === "ar";
   const [loading, setLoading] = useState<boolean>(false);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
@@ -27,13 +36,11 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
   const [distance, setDistance] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [mode, setMode] = useState<"CAMERA" | "LOCATION_ONLY">("CAMERA");
-  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [activeType, setActiveType] = useState<"CHECK_IN" | "CHECK_OUT">(initialType || "CHECK_IN");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // قيم افتراضية للفرع في حالة عدم تمرير الفرع كـ prop
   const activeBranch: Branch = branch || {
     id: 1,
     nameAr: "الفرع الرئيسي",
@@ -42,34 +49,6 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
     geofenceRadius: 100,
   };
 
-  // مراجعة حالة الاتصال بالإنترنت ومزامنة البيانات المعلقة تلقائيًا
-  useEffect(() => {
-    setIsOnline(navigator.onLine);
-
-    const handleOnline = async () => {
-      setIsOnline(true);
-      const res = await syncOfflineAttendance();
-      if (res.syncedCount > 0) {
-        setSuccessMessage(`تمت مزامنة ${res.syncedCount} سجلات حضور معلقة بنجاح ✅`);
-      }
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    syncOfflineAttendance();
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  // حساب المسافة بالأمتار (Haversine Formula)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371e3;
     const φ1 = (lat1 * Math.PI) / 180;
@@ -85,11 +64,10 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
     return Math.round(R * c);
   };
 
-  // جلب الموقع الجغرافي للمستخدم
   const getCurrentLocation = (): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error("خاصية تحديد الموقع الجغرافي غير مدعومة في جهازك"));
+        reject(new Error(isAr ? "خاصية GPS غير مدعومة في جهازك" : "Geolocation not supported"));
         return;
       }
 
@@ -104,9 +82,9 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
           resolve({ lat, lng });
         },
         (error) => {
-          let errText = "فشل الحصول على الموقع الجغرافي";
+          let errText = isAr ? "فشل الحصول على موقع الـ GPS" : "Failed to get location";
           if (error.code === error.PERMISSION_DENIED) {
-            errText = "رجاءً قم بتفعيل صلاحية الموقع (GPS) في المتصفح";
+            errText = isAr ? "يرجى تفعيل إذن استخدام الـ GPS في المتصفح" : "GPS permission denied";
           }
           reject(new Error(errText));
         },
@@ -115,12 +93,11 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
     });
   };
 
-  // تشغيل الكاميرا
   const startCamera = async () => {
     setErrorMessage(null);
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("الكاميرا تتطلب الاتصال الآمن (HTTPS) أو غير مدعومة في هذا المتصفح");
+        throw new Error(isAr ? "الكاميرا تتطلب الاتصال الآمن (HTTPS)" : "HTTPS required for camera");
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -135,12 +112,11 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
       }
       setCameraActive(true);
     } catch (err: any) {
-      setErrorMessage(err.message || "عذرًا، تعذر فتح الكاميرا. تحقق من الصلاحيات");
+      setErrorMessage(err.message || (isAr ? "تعذر فتح الكاميرا" : "Camera access failed"));
       setCameraActive(false);
     }
   };
 
-  // إيقاف الكاميرا
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -149,7 +125,6 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
     setCameraActive(false);
   };
 
-  // التقاط صورة
   const takePhoto = () => {
     if (!videoRef.current) return;
     const canvas = document.createElement("canvas");
@@ -164,11 +139,10 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
           setPhotoPreview(URL.createObjectURL(blob));
           stopCamera();
         }
-      }, "image/jpeg", 0.8);
+      }, "image/jpeg", 0.85);
     }
   };
 
-  // إعادة الالتقاط
   const resetPhoto = () => {
     setPhotoBlob(null);
     setPhotoPreview(null);
@@ -176,233 +150,176 @@ export function CheckInOutWidget({ userId = 1, branch, locale = "ar", onSuccess 
   };
 
   useEffect(() => {
+    startCamera();
+    getCurrentLocation().catch(() => {});
     return () => {
       stopCamera();
     };
   }, []);
 
-  // تحويل Blob إلى Base64 للحفظ الأوفلاين
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  // تنفيذ تسجيل الحضور / الانصراف
-  const handleAttendance = async (type: "CHECK_IN" | "CHECK_OUT") => {
+  const handleAttendanceSubmit = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    if (!photoBlob) {
+      setErrorMessage(isAr ? "يرجى التقاط صورة الوجه أولاً" : "Please take a live photo first");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const loc = await getCurrentLocation();
-      const currentDist = calculateDistance(loc.lat, loc.lng, activeBranch.latitude, activeBranch.longitude);
-
-      if (currentDist > activeBranch.geofenceRadius) {
-        throw new Error(
-          `أنت خارج نطاق الفرع المسموح به! المسافة الحالية: ${currentDist} متر (المسموح به حتى ${activeBranch.geofenceRadius} متر)`
-        );
-      }
-
-      if (mode === "CAMERA" && !photoBlob) {
-        throw new Error("برجاء التقاط صورة وجهك أولاً لإتمام التسجيل");
-      }
-
-      if (!navigator.onLine) {
-        let photoBase64: string | undefined = undefined;
-        if (photoBlob) {
-          photoBase64 = await blobToBase64(photoBlob);
-        }
-
-        await saveOfflineAttendance({
-          userId,
-          branchId: activeBranch.id,
-          type,
-          latitude: loc.lat.toString(),
-          longitude: loc.lng.toString(),
-          timestamp: new Date().toISOString(),
-          photoBase64,
-          mode,
-        });
-
-        setSuccessMessage("تم حفظ التسجيل محليًا (أوفلاين) 📶 وسيتزامن تلقائيًا عند توفر الإنترنت");
-        setPhotoBlob(null);
-        setPhotoPreview(null);
-        if (onSuccess) onSuccess();
-        return;
-      }
+      const endpoint = activeType === "CHECK_IN" ? "/api/attendance/check-in" : "/api/attendance/check-out";
 
       const formData = new FormData();
-      formData.append("userId", userId.toString());
-      formData.append("branchId", activeBranch.id.toString());
-      formData.append("type", type);
-      formData.append("latitude", loc.lat.toString());
-      formData.append("longitude", loc.lng.toString());
-      formData.append("distanceMeter", currentDist.toString());
-      formData.append("mode", mode);
+      formData.append("photo", photoBlob, `selfie_${Date.now()}.jpg`);
+      formData.append("lat", loc.lat.toString());
+      formData.append("lng", loc.lng.toString());
 
-      if (photoBlob) {
-        formData.append("photo", photoBlob, `attendance_${userId}_${Date.now()}.jpg`);
-      }
-
-      const response = await fetch("/api/attendance", {
+      const res = await fetch(endpoint, {
         method: "POST",
         body: formData,
       });
 
-      const result = await response.json();
+      const result = await res.json();
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || "حدث خطأ أثناء تسجيل الحضور");
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || (isAr ? "فشل التسجيل" : "Registration failed"));
       }
 
-      setSuccessMessage(
-        type === "CHECK_IN" ? "تم تسجيل الحضور بنجاح ✅" : "تم تسجيل الانصراف بنجاح ✅"
-      );
-      setPhotoBlob(null);
-      setPhotoPreview(null);
+      const msg = activeType === "CHECK_IN" 
+        ? (isAr ? "تم تسجيل الحضور بنجاح ✅" : "Check-in successful ✅")
+        : (isAr ? "تم تسجيل الانصراف بنجاح ✅" : "Check-out successful ✅");
 
-      if (onSuccess) onSuccess();
+      setSuccessMessage(msg);
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+        if (onClose) onClose();
+      }, 1200);
     } catch (err: any) {
-      setErrorMessage(err.message || "تعذر إكمال العملية");
+      setErrorMessage(err.message || (isAr ? "حدث خطأ غير متوقع" : "Unexpected error occurred"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-5 bg-white dark:bg-slate-900 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 text-right dir-rtl max-w-md mx-auto">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-          تسجيل الحضور - {activeBranch.nameAr}
-        </h3>
-        <span
-          className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-            isOnline ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-          }`}
-        >
-          {isOnline ? "متصل بالإنترنت 🟢" : "أوفلاين 🟡"}
-        </span>
+    <div className="p-5 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-gray-100 dark:border-slate-800 text-start dir-rtl max-w-md w-full mx-auto space-y-4">
+      <div className="flex justify-between items-center pb-2 border-b dark:border-slate-800">
+        <div>
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">
+            {activeType === "CHECK_IN" ? (isAr ? "تسجيل حضور" : "Check In") : (isAr ? "تسجيل انصراف" : "Check Out")}
+          </h3>
+          <p className="text-[11px] text-gray-500">{activeBranch.nameAr}</p>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800">
+            ✕
+          </button>
+        )}
       </div>
 
-      <div className="flex gap-2 mb-4">
+      {/* نوع الحركة */}
+      <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => {
-            setMode("CAMERA");
-            startCamera();
-          }}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition ${
-            mode === "CAMERA"
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300"
+          onClick={() => setActiveType("CHECK_IN")}
+          className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
+            activeType === "CHECK_IN"
+              ? "bg-green-600 text-white shadow-md"
+              : "bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300"
           }`}
         >
-          📷 بالكاميرا
+          {isAr ? "تسجيل حضور" : "Check In"}
         </button>
         <button
           type="button"
-          onClick={() => {
-            setMode("LOCATION_ONLY");
-            stopCamera();
-          }}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition ${
-            mode === "LOCATION_ONLY"
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300"
+          onClick={() => setActiveType("CHECK_OUT")}
+          className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${
+            activeType === "CHECK_OUT"
+              ? "bg-red-600 text-white shadow-md"
+              : "bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300"
           }`}
         >
-          📍 باللوكيشن فقط
+          {isAr ? "تسجيل انصراف" : "Check Out"}
         </button>
       </div>
 
-      {mode === "CAMERA" && (
-        <div className="relative mb-4 bg-slate-900 rounded-lg overflow-hidden h-64 flex items-center justify-center border">
-          {photoPreview ? (
-            <img src={photoPreview} alt="معاينة الصورة" className="w-full h-full object-cover" />
-          ) : (
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
-            />
-          )}
+      {/* معاينة الكاميرا */}
+      <div className="relative bg-black rounded-2xl overflow-hidden h-56 flex items-center justify-center border border-gray-200 dark:border-slate-800">
+        {photoPreview ? (
+          <img src={photoPreview} alt="Live Selfie" className="w-full h-full object-cover" />
+        ) : (
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
+          />
+        )}
 
-          {!cameraActive && !photoPreview && (
-            <button
-              type="button"
-              onClick={startCamera}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow hover:bg-blue-700 transition"
-            >
-              فتح الكاميرا
-            </button>
-          )}
-        </div>
-      )}
+        {!cameraActive && !photoPreview && (
+          <button
+            type="button"
+            onClick={startCamera}
+            className="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl shadow hover:bg-orange-600 transition"
+          >
+            {isAr ? "فتح الكاميرا" : "Open Camera"}
+          </button>
+        )}
+      </div>
 
-      {mode === "CAMERA" && (
-        <div className="mb-4">
-          {cameraActive && !photoPreview && (
-            <button
-              type="button"
-              onClick={takePhoto}
-              className="w-full py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition"
-            >
-              التقاط الصورة
-            </button>
-          )}
-          {photoPreview && (
-            <button
-              type="button"
-              onClick={resetPhoto}
-              className="w-full py-2 bg-slate-600 text-white font-semibold rounded-lg hover:bg-slate-700 transition"
-            >
-              إعادة التقاط الصورة
-            </button>
-          )}
-        </div>
-      )}
+      {/* زري الالتقاط والإعادة */}
+      <div>
+        {cameraActive && !photoPreview && (
+          <button
+            type="button"
+            onClick={takePhoto}
+            className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-bold rounded-xl hover:opacity-95 transition shadow-sm"
+          >
+            {isAr ? "التقاط صورة لايف 📸" : "Take Live Photo 📸"}
+          </button>
+        )}
+        {photoPreview && (
+          <button
+            type="button"
+            onClick={resetPhoto}
+            className="w-full py-2 bg-gray-600 text-white text-xs font-semibold rounded-xl hover:bg-gray-700 transition"
+          >
+            {isAr ? "إعادة التقاط الصورة" : "Retake Photo"}
+          </button>
+        )}
+      </div>
 
+      {/* المسافة */}
       {distance !== null && (
-        <div className="text-xs mb-4 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-          المسافة بينك وبين الفرع: <span className="font-bold">{distance} متر</span> (المسموح: حتى{" "}
-          {activeBranch.geofenceRadius} متر)
+        <div className="text-[11px] p-2.5 rounded-xl bg-orange-50 dark:bg-orange-500/10 text-orange-800 dark:text-orange-200 border border-orange-200/50">
+          {isAr ? "المسافة للفرع:" : "Distance to branch:"} <span className="font-bold">{distance} {isAr ? "متر" : "m"}</span>
+          {" "}({isAr ? "النطاق:" : "Allowed:"} {activeBranch.geofenceRadius} {isAr ? "متر" : "m"})
         </div>
       )}
 
       {errorMessage && (
-        <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400 rounded-lg">
+        <div className="p-3 text-xs text-red-600 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200">
           {errorMessage}
         </div>
       )}
       {successMessage && (
-        <div className="mb-4 p-3 text-sm text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-400 rounded-lg">
+        <div className="p-3 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200">
           {successMessage}
         </div>
       )}
 
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={() => handleAttendance("CHECK_IN")}
-          disabled={loading}
-          className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 disabled:opacity-50 transition shadow"
-        >
-          {loading ? "جاري الحفظ..." : "تسجيل حضور"}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleAttendance("CHECK_OUT")}
-          disabled={loading}
-          className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 disabled:opacity-50 transition shadow"
-        >
-          {loading ? "جاري الحفظ..." : "تسجيل انصراف"}
-        </button>
-      </div>
+      {/* زر الحفظ التفاعلي */}
+      <button
+        type="button"
+        onClick={handleAttendanceSubmit}
+        disabled={loading || !photoBlob}
+        className="w-full py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-bold rounded-xl shadow-lg disabled:opacity-50 transition active:scale-98"
+      >
+        {loading ? (isAr ? "جاري التحقق والارسال..." : "Verifying & Sending...") : (isAr ? "إرسال حركات الحضور الان" : "Submit Attendance")}
+      </button>
     </div>
   );
 }
