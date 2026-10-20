@@ -13,6 +13,7 @@ export default function AppLayout({
   params: Promise<{ locale: string }>;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [locale, setLocale] = useState("ar");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
@@ -25,6 +26,14 @@ export default function AppLayout({
 
     const authStatus = localStorage.getItem("isAuthenticated");
     if (mounted) setIsAuthenticated(authStatus === "true");
+
+    // restore collapsed state
+    try {
+      const saved = localStorage.getItem("sidebarCollapsed");
+      if (mounted && saved === "true") setSidebarCollapsed(true);
+    } catch {
+      /* ignore */
+    }
 
     return () => {
       mounted = false;
@@ -47,9 +56,30 @@ export default function AppLayout({
 
   const toggleSidebar = () => setSidebarOpen((v) => !v);
 
+  const toggleCollapsed = () => {
+    setSidebarCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("sidebarCollapsed", String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-slate-950 transition-colors overflow-hidden">
-      <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} locale={locale} />
+    <div
+      className="flex h-screen bg-gray-50 dark:bg-slate-950 transition-colors overflow-hidden"
+      dir={locale === "ar" ? "rtl" : "ltr"}
+    >
+      <Sidebar
+        isOpen={sidebarOpen}
+        toggleSidebar={toggleSidebar}
+        locale={locale}
+        collapsed={sidebarCollapsed}
+        toggleCollapsed={toggleCollapsed}
+      />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <GlobalHeader toggleSidebar={toggleSidebar} locale={locale} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 scroll-smooth">
