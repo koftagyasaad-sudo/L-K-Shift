@@ -1,316 +1,237 @@
 "use server";
 
-import { hash } from "bcryptjs";
-import { eq, desc } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  users,
-  branches,
-  customRoles,
-  customRoleAssignments,
-} from "@/db/schema";
-import type { EmployeeData } from "@/types";
+import { users, branches, customRoles, customRoleAssignments } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
+import { nanoid } from "nanoid";
 
-function mapUserToEmployee(row: {
-  id: number;
-  fullNameAr: string;
-  fullNameEn: string | null;
+export type EmployeeFormData = {
+  id?: string;
+  name: string;
   phone: string;
-  employeeNumber: string | null;
-  primaryBranchId: number | null;
-  jobRole: string;
-  monthlySalary: string | null;
-  annualLeaveDays: number;
-  isActive: boolean;
-  createdAt: Date;
-  branchName?: string | null;
-  roleId?: number | null;
-  roleName?: string | null;
-}): EmployeeData {
-  return {
-    id: String(row.id),
-    name: row.fullNameAr,
-    employee_code: row.employeeNumber || row.phone,
-    phone: row.phone,
-    branch_id: row.primaryBranchId ? String(row.primaryBranchId) : null,
-    role_id: row.roleId ? String(row.roleId) : null,
-    base_salary: row.monthlySalary ? Number(row.monthlySalary) : 0,
-    monthly_leave_days: row.annualLeaveDays ?? 21,
-    status: row.isActive ? "active" : "inactive",
-    branch_name: row.branchName || "",
-    role_name: row.roleName || row.jobRole || "",
-    created_at: row.createdAt ? new Date(row.createdAt).toISOString() : undefined,
-  } as EmployeeData;
-}
+  password?: string;
+  role?: string;
+  branchId?: string | null;
+  department?: string | null;
+  jobTitle?: string | null;
+  hourlyRate?: number | string | null;
+  monthlySalary?: number | string | null;
+  isActive?: boolean;
+  roleId?: string | null;
+};
 
-export async function getEmployeesAction(): Promise<{
-  success: boolean;
-  employees?: EmployeeData[];
-  data?: EmployeeData[];
-  error?: string;
-}> {
+export async function getEmployeesAction() {
   try {
-    const allUsers = await db.select().from(users).orderBy(desc(users.createdAt));
+    const allUsers = await db
+      .select()
+      .from(users)
+      .orderBy(desc(users.createdAt));
+
     const allBranches = await db.select().from(branches);
     const allRoles = await db.select().from(customRoles);
     const allAssignments = await db.select().from(customRoleAssignments);
 
-    const branchMap = new Map(allBranches.map((b) => [b.id, b.nameAr || b.nameEn]));
-    const roleMap = new Map(allRoles.map((r) => [r.id, r.nameAr || r.name]));
-    const userRoleMap = new Map<number, number>();
+    const branchMap = new Map(
+      allBranches.map((b) => [b.id, b.nameAr || b.nameEn])
+    );
+    const roleMap = new Map(
+      allRoles.map((r) => [r.id, r.nameAr || r.nameEn])
+    );
+
+    const userRoleMap = new Map<string, string>();
     for (const a of allAssignments) {
-      if (!userRoleMap.has(a.userId)) userRoleMap.set(a.userId, a.roleId);
+      if (!userRoleMap.has(a.userId)) {
+        userRoleMap.set(a.userId, a.roleId);
+      }
     }
 
-    const employees = allUsers.map((u) => {
-      const roleId = userRoleMap.get(u.id) ?? null;
-      return mapUserToEmployee({
+    const formatted = allUsers.map((u) => {
+      const assignedRoleId = userRoleMap.get(u.id);
+      return {
         ...u,
-        branchName: u.primaryBranchId ? branchMap.get(u.primaryBranchId) || null : null,
-        roleId,
-        roleName: roleId ? roleMap.get(roleId) || null : u.jobRole,
-      });
+        branchName: u.branchId ? branchMap.get(u.branchId) || null : null,
+        customRoleId: assignedRoleId || null,
+        customRoleName: assignedRoleId ? roleMap.get(assignedRoleId) || null : null,
+      };
     });
 
-    return { success: true, employees, data: employees };
-  } catch (err: any) {
-    console.error("Error fetching employees:", err);
-    return { success: false, error: err.message || "فشل في جلب بيانات الموظفين" };
+    return { success: true as const, data: formatted };
+  } catch (error) {
+    console.error("getEmployeesAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to fetch employees",
+      data: [],
+    };
   }
 }
 
-export async function getEmployeeByIdAction(
-  id: string
-): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
+export async function createEmployeeAction(data: EmployeeFormData) {
   try {
-    const userId = Number(id);
-    if (!userId) return { success: false, error: "معرّف غير صالح" };
-
-    const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (rows.length === 0) return { success: false, error: "الموظف غير موجود" };
-
-    const u = rows[0];
-    let branchName: string | null = null;
-    if (u.primaryBranchId) {
-      const b = await db.select().from(branches).where(eq(branches.id, u.primaryBranchId)).limit(1);
-      branchName = b[0]?.nameAr || b[0]?.nameEn || null;
+    if (!data.name || !data.phone) {
+      return { success: false as const, error: "Name and phone are required" };
     }
 
-    const assignment = await db
+    const cleanPhone = data.phone.trim();
+
+    const [existing] = await db
       .select()
-      .from(customRoleAssignments)
-      .where(eq(customRoleAssignments.userId, u.id))
+      .from(users)
+      .where(eq(users.phone, cleanPhone))
       .limit(1);
 
-    let roleId: number | null = null;
-    let roleName: string | null = u.jobRole;
-    if (assignment[0]) {
-      roleId = assignment[0].roleId;
-      const r = await db.select().from(customRoles).where(eq(customRoles.id, roleId)).limit(1);
-      roleName = r[0]?.nameAr || r[0]?.name || roleName;
+    if (existing) {
+      return { success: false as const, error: "Phone number already exists" };
     }
 
-    const employee = mapUserToEmployee({
-      ...u,
-      branchName,
-      roleId,
-      roleName,
-    });
+    const rawPassword = data.password || "123456";
+    const passwordHash = await bcrypt.hash(rawPassword, 10);
+    const newUserId = data.id || nanoid();
 
-    return { success: true, employee, data: employee };
-  } catch (err: any) {
-    console.error("Error fetching employee by id:", err);
-    return { success: false, error: err.message || "فشل في جلب الموظف" };
-  }
-}
-
-export async function createEmployeeAction(
-  data: EmployeeData & { phone?: string; password?: string }
-): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
-  try {
-    const name = (data.name || "").trim();
-    const phone = (data.phone || data.employee_code || "").trim();
-    const employeeCode = (data.employee_code || phone).trim();
-    const password = (data.password || "123456").trim();
-
-    if (!name) return { success: false, error: "اسم الموظف مطلوب" };
-    if (!phone) return { success: false, error: "رقم التليفون مطلوب (يُستخدم لتسجيل الدخول)" };
-    if (password.length < 4) return { success: false, error: "كلمة المرور قصيرة جداً" };
-
-    const existing = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
-    if (existing.length > 0) {
-      return { success: false, error: "رقم التليفون مستخدم بالفعل" };
-    }
-
-    const branchId = data.branch_id && String(data.branch_id).trim() !== ""
-      ? Number(data.branch_id)
-      : null;
-
-    const roleId = data.role_id && String(data.role_id).trim() !== ""
-      ? Number(data.role_id)
-      : null;
-
-    let jobRole = "موظف";
-    if (roleId) {
-      const r = await db.select().from(customRoles).where(eq(customRoles.id, roleId)).limit(1);
-      if (r[0]) jobRole = r[0].nameAr || r[0].name;
-    }
-
-    const passwordHash = await hash(password, 10);
-
-    const [created] = await db
+    const [createdUser] = await db
       .insert(users)
       .values({
-        fullNameAr: name,
-        fullNameEn: null,
-        phone,
-        employeeNumber: employeeCode,
+        id: newUserId,
+        name: data.name.trim(),
+        phone: cleanPhone,
         passwordHash,
-        systemRole: "EMPLOYEE",
-        jobRole,
-        primaryBranchId: branchId && !Number.isNaN(branchId) ? branchId : null,
-        managementRole: "NONE",
-        isActive: (data.status || "active") === "active",
-        salaryType: "MONTHLY",
-        monthlySalary: String(data.base_salary ?? 0),
-        annualLeaveDays: Number(data.monthly_leave_days ?? 21),
-        workingHoursPerDay: 8,
-        workingDaysPerMonth: 26,
-        verificationMode: "QR_GPS",
+        role: data.role || "employee",
+        branchId: data.branchId || null,
+        department: data.department || null,
+        jobTitle: data.jobTitle || null,
+        hourlyRate: data.hourlyRate ? String(data.hourlyRate) : null,
+        monthlySalary: data.monthlySalary ? String(data.monthlySalary) : null,
+        isActive: data.isActive ?? true,
       })
       .returning();
 
-    if (roleId && !Number.isNaN(roleId)) {
+    if (data.roleId) {
       await db.insert(customRoleAssignments).values({
-        userId: created.id,
-        roleId,
+        id: nanoid(),
+        userId: newUserId,
+        roleId: data.roleId,
       });
     }
 
-    const employee = mapUserToEmployee({
-      ...created,
-      branchName: null,
-      roleId,
-      roleName: jobRole,
-    });
-
-    return { success: true, employee, data: employee };
-  } catch (err: any) {
-    console.error("Error creating employee:", err);
-    return { success: false, error: err.message || "فشل في إضافة الموظف" };
+    revalidatePath("/admin/employees");
+    return { success: true as const, data: createdUser };
+  } catch (error) {
+    console.error("createEmployeeAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to create employee",
+    };
   }
 }
 
-export async function updateEmployeeAction(
-  id: string,
-  data: EmployeeData & { phone?: string; password?: string }
-): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
+export async function updateEmployeeAction(id: string, data: Partial<EmployeeFormData>) {
   try {
-    const userId = Number(id);
-    if (!userId) return { success: false, error: "معرّف غير صالح" };
-
-    const name = (data.name || "").trim();
-    const phone = (data.phone || data.employee_code || "").trim();
-    const employeeCode = (data.employee_code || phone).trim();
-
-    if (!name) return { success: false, error: "اسم الموظف مطلوب" };
-    if (!phone) return { success: false, error: "رقم التليفون مطلوب" };
-
-    const current = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (current.length === 0) return { success: false, error: "الموظف غير موجود" };
-
-    const phoneOwner = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
-    if (phoneOwner.length > 0 && phoneOwner[0].id !== userId) {
-      return { success: false, error: "رقم التليفون مستخدم لموظف آخر" };
+    if (!id) {
+      return { success: false as const, error: "Employee id is required" };
     }
 
-    const branchId = data.branch_id && String(data.branch_id).trim() !== ""
-      ? Number(data.branch_id)
-      : null;
-
-    const roleId = data.role_id && String(data.role_id).trim() !== ""
-      ? Number(data.role_id)
-      : null;
-
-    let jobRole = current[0].jobRole || "موظف";
-    if (roleId) {
-      const r = await db.select().from(customRoles).where(eq(customRoles.id, roleId)).limit(1);
-      if (r[0]) jobRole = r[0].nameAr || r[0].name;
-    }
-
-    const patch: Record<string, unknown> = {
-      fullNameAr: name,
-      phone,
-      employeeNumber: employeeCode,
-      jobRole,
-      primaryBranchId: branchId && !Number.isNaN(branchId) ? branchId : null,
-      isActive: (data.status || "active") === "active",
-      monthlySalary: String(data.base_salary ?? 0),
-      annualLeaveDays: Number(data.monthly_leave_days ?? 21),
+    const updatePayload: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
-    if (data.password && String(data.password).trim().length >= 4) {
-      patch.passwordHash = await hash(String(data.password).trim(), 10);
+    if (data.name !== undefined) updatePayload.name = data.name.trim();
+    if (data.phone !== undefined) updatePayload.phone = data.phone.trim();
+    if (data.role !== undefined) updatePayload.role = data.role;
+    if (data.branchId !== undefined) updatePayload.branchId = data.branchId || null;
+    if (data.department !== undefined) updatePayload.department = data.department || null;
+    if (data.jobTitle !== undefined) updatePayload.jobTitle = data.jobTitle || null;
+    if (data.hourlyRate !== undefined)
+      updatePayload.hourlyRate = data.hourlyRate ? String(data.hourlyRate) : null;
+    if (data.monthlySalary !== undefined)
+      updatePayload.monthlySalary = data.monthlySalary ? String(data.monthlySalary) : null;
+    if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
+
+    if (data.password && data.password.trim().length > 0) {
+      updatePayload.passwordHash = await bcrypt.hash(data.password.trim(), 10);
     }
 
-    const [updated] = await db
+    const [updatedUser] = await db
       .update(users)
-      .set(patch as any)
-      .where(eq(users.id, userId))
+      .set(updatePayload)
+      .where(eq(users.id, id))
       .returning();
 
-    // reset role assignment
-    await db.delete(customRoleAssignments).where(eq(customRoleAssignments.userId, userId));
-    if (roleId && !Number.isNaN(roleId)) {
-      await db.insert(customRoleAssignments).values({ userId, roleId });
+    if (!updatedUser) {
+      return { success: false as const, error: "Employee not found" };
     }
 
-    const employee = mapUserToEmployee({
-      ...updated,
-      branchName: null,
-      roleId,
-      roleName: jobRole,
-    });
+    if (data.roleId !== undefined) {
+      await db
+        .delete(customRoleAssignments)
+        .where(eq(customRoleAssignments.userId, id));
 
-    return { success: true, employee, data: employee };
-  } catch (err: any) {
-    console.error("Error updating employee:", err);
-    return { success: false, error: err.message || "فشل في تحديث بيانات الموظف" };
-  }
-}
-
-export async function saveEmployeeAction(
-  data: EmployeeData & { phone?: string; password?: string }
-): Promise<{ success: boolean; employee?: EmployeeData; data?: EmployeeData; error?: string }> {
-  if (data.id) {
-    return updateEmployeeAction(String(data.id), data);
-  }
-  return createEmployeeAction(data);
-}
-
-export async function deleteEmployeeAction(
-  id: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const userId = Number(id);
-    if (!userId) return { success: false, error: "معرّف غير صالح" };
-
-    // clean relations first
-    await db.delete(customRoleAssignments).where(eq(customRoleAssignments.userId, userId));
-
-    const deleted = await db.delete(users).where(eq(users.id, userId)).returning();
-    if (deleted.length === 0) {
-      return { success: false, error: "الموظف غير موجود" };
+      if (data.roleId) {
+        await db.insert(customRoleAssignments).values({
+          id: nanoid(),
+          userId: id,
+          roleId: data.roleId,
+        });
+      }
     }
-    return { success: true };
-  } catch (err: any) {
-    console.error("Error deleting employee:", err);
+
+    revalidatePath("/admin/employees");
+    return { success: true as const, data: updatedUser };
+  } catch (error) {
+    console.error("updateEmployeeAction error:", error);
     return {
-      success: false,
-      error:
-        err.message ||
-        "فشل في حذف الموظف (قد يكون مرتبط بسجلات حضور — عطّله بدلاً من الحذف)",
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to update employee",
+    };
+  }
+}
+
+export async function deleteEmployeeAction(id: string) {
+  try {
+    if (!id) {
+      return { success: false as const, error: "Employee id is required" };
+    }
+
+    const [deleted] = await db
+      .delete(users)
+      .where(eq(users.id, id))
+      .returning();
+
+    if (!deleted) {
+      return { success: false as const, error: "Employee not found" };
+    }
+
+    revalidatePath("/admin/employees");
+    return { success: true as const, data: deleted };
+  } catch (error) {
+    console.error("deleteEmployeeAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to delete employee",
+    };
+  }
+}
+
+export async function toggleEmployeeStatusAction(id: string, isActive: boolean) {
+  try {
+    const [updated] = await db
+      .update(users)
+      .set({ isActive, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+
+    if (!updated) {
+      return { success: false as const, error: "Employee not found" };
+    }
+
+    revalidatePath("/admin/employees");
+    return { success: true as const, data: updated };
+  } catch (error) {
+    console.error("toggleEmployeeStatusAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to toggle status",
     };
   }
 }
