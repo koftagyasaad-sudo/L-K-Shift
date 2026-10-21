@@ -1,124 +1,481 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
+import {
+  getBranchesAction,
+  saveBranchAction,
+  deleteBranchAction,
+  toggleBranchStatusAction,
+  BranchData,
+} from "@/actions/branchActions";
+import {
+  Building2,
+  Plus,
+  Search,
+  MapPin,
+  Users,
+  Edit,
+  Trash2,
+  Power,
+  Loader2,
+  ExternalLink,
+  X,
+  Save,
+  Eye,
+} from "lucide-react";
 import Link from "next/link";
-import { getBranchesAction, saveBranchAction, deleteBranchAction } from "@/actions/branchActions";
-import type { BranchData } from "@/types";
-import { Building2, Plus, Trash2, Edit, Eye, MapPin, Phone, User, Search, Loader2, X, Map } from "lucide-react";
+import { toast } from "sonner";
 
-export default function AdminBranchesPage({ params }: { params: Promise<{ locale: string }> }) {
-  const { locale } = use(params);
-  const isRtl = locale === "ar";
+interface PageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
 
-  const [branches, setBranches] = useState<BranchData[]>([]);
+export default function AdminBranchesPage({ params }: PageProps) {
+  const resolvedParams = use(params);
+  const { locale } = resolvedParams;
+
+  const [branches, setBranches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState("");
+  const [editingBranch, setEditingBranch] = useState<any | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Form State
   const [formData, setFormData] = useState<BranchData>({
-    name: "", location: "", manager: "", phone: "", ext: "", address: "", radius_meters: 100,
+    nameAr: "",
+    nameEn: "",
+    address: "",
+    latitude: "24.7136",
+    longitude: "46.6753",
+    geofenceRadius: 100,
+    isActive: true,
   });
 
-  const fetchBranches = async () => {
+  const loadBranches = async () => {
     try {
       setLoading(true);
       const res = await getBranchesAction();
-      if (res.success) setBranches(res.branches || res.data || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+      if (res.success && Array.isArray(res.data)) {
+        setBranches(res.data);
+      } else {
+        setBranches([]);
+      }
+    } catch (err) {
+      console.error("Failed to load branches:", err);
+      toast.error("حدث خطأ أثناء تحميل قائمة الفروع");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchBranches(); }, []);
+  useEffect(() => {
+    loadBranches();
+  }, []);
 
-  const handleOpenModal = (branch?: BranchData) => {
-    if (branch) setFormData(branch);
-    else setFormData({ name: "", location: "", manager: "", phone: "", ext: "", address: "", radius_meters: 100 });
-    setFormError("");
+  const handleOpenCreateModal = () => {
+    setEditingBranch(null);
+    setFormData({
+      nameAr: "",
+      nameEn: "",
+      address: "",
+      latitude: "24.7136",
+      longitude: "46.6753",
+      geofenceRadius: 100,
+      isActive: true,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (branch: any) => {
+    setEditingBranch(branch);
+    setFormData({
+      id: branch.id,
+      nameAr: branch.nameAr || "",
+      nameEn: branch.nameEn || "",
+      address: branch.address || "",
+      latitude: branch.latitude || "24.7136",
+      longitude: branch.longitude || "46.6753",
+      geofenceRadius: branch.geofenceRadius || branch.radiusMeters || 100,
+      isActive: branch.isActive ?? true,
+    });
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return setFormError(isRtl ? "اسم الفرع مطلوب" : "Branch name required");
-    setSubmitting(true); setFormError("");
+    if (!formData.nameAr && !formData.nameEn) {
+      toast.error("يرجى إدخال اسم الفرع");
+      return;
+    }
+
+    setSaving(true);
     try {
       const res = await saveBranchAction(formData);
-      if (res.success) { setIsModalOpen(false); fetchBranches(); }
-      else setFormError(res.error || "خطأ");
-    } catch (err: any) { setFormError(err.message); } finally { setSubmitting(false); }
+      if (res.success) {
+        toast.success(
+          editingBranch ? "تم تحديث بيانات الفرع بنجاح" : "تم إضافة الفرع بنجاح"
+        );
+        setIsModalOpen(false);
+        loadBranches();
+      } else {
+        toast.error(res.error || "فشل حفظ بيانات الفرع");
+      }
+    } catch (err) {
+      toast.error("حدث خطأ أثناء الحفظ");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = async (id?: string) => {
-    if (!id || !confirm(isRtl ? "تأكيد الحذف؟" : "Confirm delete?")) return;
-    const res = await deleteBranchAction(id);
-    if (res.success) fetchBranches(); else alert(res.error);
+  const handleToggleStatus = async (branch: any) => {
+    try {
+      const newStatus = !branch.isActive;
+      const res = await toggleBranchStatusAction(branch.id, newStatus);
+      if (res.success) {
+        toast.success(newStatus ? "تم تفعيل الفرع" : "تم تعطيل الفرع");
+        setBranches((prev) =>
+          prev.map((b) => (b.id === branch.id ? { ...b, isActive: newStatus } : b))
+        );
+      } else {
+        toast.error(res.error || "فشل تغيير حالة الفرع");
+      }
+    } catch (err) {
+      toast.error("حدث خطأ أثناء تغيير الحالة");
+    }
   };
 
-  const filteredBranches = branches.filter((b) => b.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const handleDelete = async (id: string) => {
+    if (!confirm("هل أنت تأكد من رغبتك في حذف هذا الفرع؟")) return;
+
+    try {
+      const res = await deleteBranchAction(id);
+      if (res.success) {
+        toast.success("تم حذف الفرع بنجاح");
+        setBranches((prev) => prev.filter((b) => b.id !== id));
+      } else {
+        toast.error(res.error || "تعذر حذف الفرع");
+      }
+    } catch (err) {
+      toast.error("حدث خطأ أثناء عملية الحذف");
+    }
+  };
+
+  const isRtl = locale === "ar";
+  const filteredBranches = branches.filter((b) => {
+    const q = searchQuery.toLowerCase();
+    const nameAr = (b.nameAr || "").toLowerCase();
+    const nameEn = (b.nameEn || "").toLowerCase();
+    const address = (b.address || "").toLowerCase();
+    return nameAr.includes(q) || nameEn.includes(q) || address.includes(q);
+  });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6" dir={isRtl ? "rtl" : "ltr"}>
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-3xl border border-gray-100 dark:border-slate-700 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl"><Building2 className="w-7 h-7" /></div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white">{isRtl ? "إدارة الفروع" : "Branches"}</h1>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Building2 className="h-6 w-6 text-primary" />
+            إدارة الفروع
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            إضافة وتعديل الفروع وتحديد النطاقات الجغرافية لتسجيل الحضور
+          </p>
         </div>
-        <button onClick={() => handleOpenModal()} className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md">
-          <Plus className="w-5 h-5" /> {isRtl ? "إضافة فرع" : "Add Branch"}
+        <button
+          onClick={handleOpenCreateModal}
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="h-4 w-4 me-2" />
+          إضافة فرع جديد
         </button>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBranches.map((branch) => (
-          <div key={branch.id} className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold px-3 py-1 bg-orange-50 dark:bg-orange-500/10 text-orange-600 rounded-full">{branch.radius_meters}m</span>
-              <div className="flex gap-1 text-gray-400">
-                <button onClick={() => handleOpenModal(branch)} className="p-2 hover:text-orange-500"><Edit className="w-4 h-4" /></button>
-                <button onClick={() => handleDelete(branch.id)} className="p-2 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{branch.name}</h3>
-              <p className="text-xs text-gray-500 mt-1 line-clamp-1">{branch.location || (isRtl ? "غير محدد" : "Not specified")}</p>
-            </div>
-          </div>
-        ))}
+      {/* Search Bar */}
+      <div className="relative max-w-md">
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="البحث باسم الفرع أو العنوان..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full h-10 ps-9 pe-4 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        />
       </div>
 
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b dark:border-slate-800 pb-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{formData.id ? (isRtl ? "تعديل" : "Edit") : (isRtl ? "إضافة" : "Add")}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white"><X className="w-5 h-5" /></button>
+      {/* Content */}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : filteredBranches.length === 0 ? (
+        <div className="p-8 text-center rounded-xl border bg-card text-muted-foreground space-y-3">
+          <Building2 className="h-12 w-12 mx-auto text-muted-foreground/50" />
+          <p className="text-base font-medium">لا يوجد فروع مضافة حالياً</p>
+          <p className="text-sm text-muted-foreground">
+            قم بالضغط على "إضافة فرع جديد" لإضافة أول فرع في النظام.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredBranches.map((branch) => (
+            <div
+              key={branch.id}
+              className="rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col justify-between space-y-4"
+            >
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-2 border-b pb-3">
+                  <div>
+                    <h3 className="font-bold text-lg leading-tight">
+                      {isRtl ? branch.nameAr : branch.nameEn || branch.nameAr}
+                    </h3>
+                    {branch.nameEn && isRtl && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {branch.nameEn}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      branch.isActive
+                        ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                        : "bg-red-500/10 text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {branch.isActive ? "نشط" : "غير نشط"}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="truncate">
+                      {branch.address || "عنوان الفرع غير محدد"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span>نصف قطر النطاق:</span>
+                    <span className="font-semibold text-foreground">
+                      {branch.geofenceRadius || branch.radiusMeters || 100} متر
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span>الإحداثيات:</span>
+                    <span className="font-mono text-foreground">
+                      {branch.latitude?.slice(0, 7)}, {branch.longitude?.slice(0, 7)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between border-t pt-3 gap-1">
+                <div className="flex items-center gap-1">
+                  <Link
+                    href={`/${locale}/admin/branches/${branch.id}`}
+                    className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="عرض التفاصيل"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Link>
+
+                  <button
+                    onClick={() => handleOpenEditModal(branch)}
+                    className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title="تعديل"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleStatus(branch)}
+                    className={`p-2 rounded-md transition-colors ${
+                      branch.isActive
+                        ? "hover:bg-red-50 text-muted-foreground hover:text-red-600"
+                        : "hover:bg-green-50 text-muted-foreground hover:text-green-600"
+                    }`}
+                    title={branch.isActive ? "تعطيل" : "تفعيل"}
+                  >
+                    <Power className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => handleDelete(branch.id)}
+                  className="p-2 rounded-md hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                  title="حذف"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-              <div>
-                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">{isRtl ? "اسم الفرع *" : "Name *"}</label>
-                <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white" />
-              </div>
+          ))}
+        </div>
+      )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">{isRtl ? "نطاق GPS (متر)" : "GPS Radius"}</label>
-                  <input type="number" value={formData.radius_meters || 100} onChange={(e) => setFormData({ ...formData, radius_meters: Number(e.target.value) })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white" />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">{isRtl ? "رابط خرائط جوجل" : "Maps URL"}</label>
-                  <input type="text" placeholder="https://maps.google.com/..." value={formData.location || ""} onChange={(e) => setFormData({ ...formData, location: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-gray-900 dark:text-white" />
-                </div>
-              </div>
-
-              <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white py-3 rounded-xl font-bold mt-4">
-                {submitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (isRtl ? "حفظ البيانات" : "Save")}
+      {/* Add / Edit Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-background rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-border">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-bold">
+                {editingBranch ? "تعديل بيانات الفرع" : "إضافة فرع جديد"}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-muted text-muted-foreground"
+              >
+                <X className="h-5 w-5" />
               </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">
+                    الاسم بالعربية *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nameAr || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nameAr: e.target.value })
+                    }
+                    placeholder="فرع الرياض"
+                    className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">
+                    الاسم بالإنجليزية
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nameEn || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nameEn: e.target.value })
+                    }
+                    placeholder="Riyadh Branch"
+                    className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">العنوان التفصيلي</label>
+                <input
+                  type="text"
+                  value={formData.address || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address: e.target.value })
+                  }
+                  placeholder="طريق الملك فهد، العليا، الرياض"
+                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">
+                    خط العرض (Latitude) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.latitude || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, latitude: e.target.value })
+                    }
+                    placeholder="24.7136"
+                    className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold">
+                    خط الطول (Longitude) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.longitude || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, longitude: e.target.value })
+                    }
+                    placeholder="46.6753"
+                    className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">
+                  نصف قطر النطاق الجغرافي (بالمتر) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="10"
+                  max="5000"
+                  value={formData.geofenceRadius || 100}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      geofenceRadius: parseInt(e.target.value) || 100,
+                      radiusMeters: parseInt(e.target.value) || 100,
+                    })
+                  }
+                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                <span className="text-xs font-semibold">تفعيل الفرع</span>
+                <input
+                  type="checkbox"
+                  checked={formData.isActive ?? true}
+                  onChange={(e) =>
+                    setFormData({ ...formData, isActive: e.target.checked })
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-input text-xs font-medium hover:bg-muted"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 inline-flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      جاري الحفظ...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-3.5 w-3.5" />
+                      حفظ الفرع
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         </div>
