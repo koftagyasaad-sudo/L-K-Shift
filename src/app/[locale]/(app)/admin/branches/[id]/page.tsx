@@ -8,17 +8,6 @@ import {
 } from "@/actions/branchActions";
 import { getEmployeesAction } from "@/actions/employeeActions";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
   ArrowRight,
   Building2,
   MapPin,
@@ -141,17 +130,16 @@ export default function AdminBranchDetailsPage({ params }: PageProps) {
   if (error || !branch) {
     return (
       <div className="container mx-auto p-6 space-y-4">
-        <Button variant="outline" asChild className="mb-4">
-          <Link href={`/${locale}/admin/branches`}>
-            <BackIcon className="h-4 w-4 me-2" />
-            العودة إلى الفروع
-          </Link>
-        </Button>
-        <Card className="border-destructive">
-          <CardContent className="pt-6 text-center text-destructive">
-            {error || "الفرع غير موجود"}
-          </CardContent>
-        </Card>
+        <Link
+          href={`/${locale}/admin/branches`}
+          className="inline-flex items-center px-4 py-2 rounded-lg border border-input bg-background hover:bg-accent text-sm font-medium mb-4"
+        >
+          <BackIcon className="h-4 w-4 me-2" />
+          العودة إلى الفروع
+        </Link>
+        <div className="p-6 rounded-xl border border-destructive/50 bg-destructive/10 text-center text-destructive font-medium">
+          {error || "الفرع غير موجود"}
+        </div>
       </div>
     );
   }
@@ -160,11 +148,12 @@ export default function AdminBranchDetailsPage({ params }: PageProps) {
     <div className="container mx-auto p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" asChild>
-            <Link href={`/${locale}/admin/branches`}>
-              <BackIcon className="h-4 w-4" />
-            </Link>
-          </Button>
+          <Link
+            href={`/${locale}/admin/branches`}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-input bg-background hover:bg-accent transition-colors"
+          >
+            <BackIcon className="h-4 w-4" />
+          </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
               {isRtl ? branch.nameAr : branch.nameEn}
@@ -175,7 +164,7 @@ export default function AdminBranchDetailsPage({ params }: PageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-1">
+          <span className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5" />
             {employeeCount} موظف
           </span>
@@ -184,134 +173,167 @@ export default function AdminBranchDetailsPage({ params }: PageProps) {
 
       <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+          <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-6 space-y-4">
+            <div className="border-b pb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-primary" />
                 البيانات الأساسية للفرع
-              </CardTitle>
-              <CardDescription>أسماء الفرع والعنوان التفصيلي</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nameAr">الاسم بالعربية *</Label>
-                  <Input
-                    id="nameAr"
-                    value={nameAr}
-                    onChange={(e) => setNameAr(e.target.value)}
-                    required
-                    placeholder="فرع الرياض الرئيسي"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nameEn">الاسم بالإنجليزية</Label>
-                  <Input
-                    id="nameEn"
-                    value={nameEn}
-                    onChange={(e) => setNameEn(e.target.value)}
-                    placeholder="Riyadh Main Branch"
-                  />
-                </div>
-              </div>
-
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                أسماء الفرع والعنوان التفصيلي
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="address">العنوان التفصيلي</Label>
-                <Input
-                  id="address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="طريق الملك فهد، العليا، الرياض"
+                <label htmlFor="nameAr" className="text-sm font-medium leading-none">
+                  الاسم بالعربية *
+                </label>
+                <input
+                  id="nameAr"
+                  type="text"
+                  value={nameAr}
+                  onChange={(e) => setNameAr(e.target.value)}
+                  required
+                  placeholder="فرع الرياض الرئيسي"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
-            </CardContent>
-          </Card>
+              <div className="space-y-2">
+                <label htmlFor="nameEn" className="text-sm font-medium leading-none">
+                  الاسم بالإنجليزية
+                </label>
+                <input
+                  id="nameEn"
+                  type="text"
+                  value={nameEn}
+                  onChange={(e) => setNameEn(e.target.value)}
+                  placeholder="Riyadh Main Branch"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </div>
+            </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+            <div className="space-y-2 pt-2">
+              <label htmlFor="address" className="text-sm font-medium leading-none">
+                العنوان التفصيلي
+              </label>
+              <input
+                id="address"
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="طريق الملك فهد، العليا، الرياض"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-6 space-y-4">
+            <div className="border-b pb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-primary" />
                 الموقع الجغرافي ونطاق البصمة (Geofence)
-              </CardTitle>
-              <CardDescription>إحداثيات GPS ونصف قطر النطاق المسموح لتسجيل الحضور</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="latitude">خط العرض (Latitude) *</Label>
-                  <Input
-                    id="latitude"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                    required
-                    placeholder="24.7136"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="longitude">خط الطول (Longitude) *</Label>
-                  <Input
-                    id="longitude"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                    required
-                    placeholder="46.6753"
-                  />
-                </div>
-              </div>
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                إحداثيات GPS ونصف قطر النطاق المسموح لتسجيل الحضور
+              </p>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="geofenceRadius">نصف قطر النطاق الجغرافي (بالمتر) *</Label>
-                <Input
-                  id="geofenceRadius"
-                  type="number"
-                  value={geofenceRadius}
-                  onChange={(e) => setGeofenceRadius(e.target.value)}
+                <label htmlFor="latitude" className="text-sm font-medium leading-none">
+                  خط العرض (Latitude) *
+                </label>
+                <input
+                  id="latitude"
+                  type="text"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
                   required
-                  min="10"
-                  max="5000"
+                  placeholder="24.7136"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
-                <p className="text-xs text-muted-foreground">
-                  المسافة القصوى المسموح بها للموظف للتبصيم بعيداً عن مركز الفرع.
-                </p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="space-y-2">
+                <label htmlFor="longitude" className="text-sm font-medium leading-none">
+                  خط الطول (Longitude) *
+                </label>
+                <input
+                  id="longitude"
+                  type="text"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  required
+                  placeholder="46.6753"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label htmlFor="geofenceRadius" className="text-sm font-medium leading-none">
+                نصف قطر النطاق الجغرافي (بالمتر) *
+              </label>
+              <input
+                id="geofenceRadius"
+                type="number"
+                value={geofenceRadius}
+                onChange={(e) => setGeofenceRadius(e.target.value)}
+                required
+                min="10"
+                max="5000"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              <p className="text-xs text-muted-foreground">
+                المسافة القصوى المسموح بها للموظف للتبصيم بعيداً عن مركز الفرع.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">حالة الفرع والحفظ</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                <div className="space-y-0.5">
-                  <Label className="text-base">تفعيل الفرع</Label>
-                  <p className="text-xs text-muted-foreground">
-                    السماح للموظفين بالتبصيم في هذا الفرع
-                  </p>
-                </div>
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={setIsActive}
-                />
-              </div>
+          <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-6 space-y-6">
+            <h2 className="text-lg font-semibold border-b pb-3">حالة الفرع والحفظ</h2>
 
-              <Button type="submit" disabled={saving} className="w-full">
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 me-2 animate-spin" />
-                    جاري الحفظ...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 me-2" />
-                    حفظ التغييرات
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+            <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+              <div className="space-y-0.5">
+                <label className="text-base font-medium cursor-pointer" htmlFor="isActiveToggle">
+                  تفعيل الفرع
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  السماح للموظفين بالتبصيم في هذا الفرع
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  id="isActiveToggle"
+                  type="checkbox"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 me-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 me-2" />
+                  حفظ التغييرات
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
     </div>
