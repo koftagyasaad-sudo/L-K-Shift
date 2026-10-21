@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { nanoid } from "nanoid";
 
 export type BranchData = {
+  id?: string;
   name?: string;
   nameAr?: string;
   nameEn?: string;
@@ -28,10 +29,6 @@ function parseCoordinate(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/**
- * NOT exported — "use server" files can only export async actions.
- * Extract lat/lng from common Google Maps URL formats.
- */
 function extractCoordsFromMapUrl(url?: string | null): {
   lat: number | null;
   lng: number | null;
@@ -72,7 +69,6 @@ function resolveCoords(data: BranchData): { lat: number; lng: number } {
     if (lng === null) lng = fromUrl.lng;
   }
 
-  // Safe defaults so NOT NULL columns never fail insert/update
   return {
     lat: lat ?? 24.7136,
     lng: lng ?? 46.6753,
@@ -81,15 +77,15 @@ function resolveCoords(data: BranchData): { lat: number; lng: number } {
 
 function resolveRadius(data: BranchData): number {
   const r = parseCoordinate(data.radiusMeters ?? data.geofenceRadius);
-  return r !== null && r > 0 ? r : 100;
+  return r !== null && r > 0 ? Math.round(r) : 100;
 }
 
 function resolveNames(data: BranchData): { nameAr: string; nameEn: string } {
   const nameAr = (data.nameAr || data.name || data.nameEn || "").trim();
   const nameEn = (data.nameEn || data.name || data.nameAr || nameAr).trim();
   return {
-    nameAr: nameAr || "فرع",
-    nameEn: nameEn || nameAr || "Branch",
+    nameAr: nameAr || "فرع جديد",
+    nameEn: nameEn || nameAr || "New Branch",
   };
 }
 
@@ -148,10 +144,6 @@ export async function getBranchByIdAction(id: string) {
 export async function createBranchAction(data: BranchData) {
   try {
     const { nameAr, nameEn } = resolveNames(data);
-    if (!nameAr && !nameEn) {
-      return { success: false as const, error: "Branch name is required" };
-    }
-
     const { lat: finalLat, lng: finalLng } = resolveCoords(data);
     const radius = resolveRadius(data);
     const address = data.address || data.location || data.mapUrl || null;
@@ -160,7 +152,7 @@ export async function createBranchAction(data: BranchData) {
     const [created] = await db
       .insert(branches)
       .values({
-        id: nanoid(),
+        id: data.id || nanoid(),
         nameAr,
         nameEn,
         address,
@@ -231,6 +223,13 @@ export async function updateBranchAction(id: string, data: BranchData) {
   }
 }
 
+export async function saveBranchAction(data: BranchData) {
+  if (data.id) {
+    return updateBranchAction(data.id, data);
+  }
+  return createBranchAction(data);
+}
+
 export async function deleteBranchAction(id: string) {
   try {
     if (!id) {
@@ -245,7 +244,7 @@ export async function deleteBranchAction(id: string) {
     if (count > 0) {
       return {
         success: false as const,
-        error: `Cannot delete branch: ${count} employee(s) still assigned`,
+        error: `Cannot delete branch: ${count} employee(s) still assigned to this branch`,
       };
     }
 
@@ -291,7 +290,7 @@ export async function toggleBranchStatusAction(id: string, isActive: boolean) {
     console.error("toggleBranchStatusAction error:", error);
     return {
       success: false as const,
-      error: error instanceof Error ? error.message : "Failed to toggle branch",
+      error: error instanceof Error ? error.message : "Failed to toggle branch status",
     };
   }
 }
