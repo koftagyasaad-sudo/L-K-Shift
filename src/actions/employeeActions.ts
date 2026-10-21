@@ -10,17 +10,41 @@ import { nanoid } from "nanoid";
 export type EmployeeFormData = {
   id?: string;
   name: string;
-  phone: string;
+  phone?: string;
+  employee_code?: string; // Alias for backward compatibility
   password?: string;
   role?: string;
   branchId?: string | null;
+  branch_id?: string | null; // Alias for backward compatibility
   department?: string | null;
   jobTitle?: string | null;
   hourlyRate?: number | string | null;
   monthlySalary?: number | string | null;
+  monthly_salary?: number | string | null; // Alias for backward compatibility
+  base_salary?: number | string | null; // Alias for backward compatibility
   isActive?: boolean;
   roleId?: string | null;
+  role_id?: string | null; // Alias for backward compatibility
 };
+
+function normalizeEmployeeInput(data: EmployeeFormData) {
+  const cleanName = (data.name || "").trim();
+  const cleanPhone = (data.phone || data.employee_code || "").trim();
+  const branchId = data.branchId ?? data.branch_id ?? null;
+  const roleId = data.roleId ?? data.role_id ?? null;
+  const salaryRaw = data.monthlySalary ?? data.monthly_salary ?? data.base_salary ?? null;
+  const monthlySalary = salaryRaw !== null && salaryRaw !== undefined ? String(salaryRaw) : null;
+  const hourlyRate = data.hourlyRate !== null && data.hourlyRate !== undefined ? String(data.hourlyRate) : null;
+
+  return {
+    cleanName,
+    cleanPhone,
+    branchId,
+    roleId,
+    monthlySalary,
+    hourlyRate,
+  };
+}
 
 export async function getEmployeesAction() {
   try {
@@ -51,6 +75,8 @@ export async function getEmployeesAction() {
       const assignedRoleId = userRoleMap.get(u.id);
       return {
         ...u,
+        phone: u.phone,
+        employee_code: u.phone,
         branchName: u.branchId ? branchMap.get(u.branchId) || null : null,
         customRoleId: assignedRoleId || null,
         customRoleName: assignedRoleId ? roleMap.get(assignedRoleId) || null : null,
@@ -94,7 +120,13 @@ export async function getEmployeeByIdAction(id: string) {
       success: true as const,
       data: {
         ...user,
+        phone: user.phone,
+        employee_code: user.phone,
         roleId: assignment ? assignment.roleId : null,
+        role_id: assignment ? assignment.roleId : null,
+        branch_id: user.branchId,
+        base_salary: user.monthlySalary,
+        monthly_salary: user.monthlySalary,
       },
     };
   } catch (error) {
@@ -109,11 +141,12 @@ export async function getEmployeeByIdAction(id: string) {
 
 export async function createEmployeeAction(data: EmployeeFormData) {
   try {
-    if (!data.name || !data.phone) {
-      return { success: false as const, error: "Name and phone are required" };
-    }
+    const { cleanName, cleanPhone, branchId, roleId, monthlySalary, hourlyRate } =
+      normalizeEmployeeInput(data);
 
-    const cleanPhone = data.phone.trim();
+    if (!cleanName || !cleanPhone) {
+      return { success: false as const, error: "Name and phone (login ID) are required" };
+    }
 
     const [existing] = await db
       .select()
@@ -122,7 +155,7 @@ export async function createEmployeeAction(data: EmployeeFormData) {
       .limit(1);
 
     if (existing) {
-      return { success: false as const, error: "Phone number already exists" };
+      return { success: false as const, error: "Phone number / Employee Code already exists" };
     }
 
     const rawPassword = data.password || "123456";
@@ -133,24 +166,24 @@ export async function createEmployeeAction(data: EmployeeFormData) {
       .insert(users)
       .values({
         id: newUserId,
-        name: data.name.trim(),
+        name: cleanName,
         phone: cleanPhone,
         passwordHash,
         role: data.role || "employee",
-        branchId: data.branchId || null,
+        branchId,
         department: data.department || null,
         jobTitle: data.jobTitle || null,
-        hourlyRate: data.hourlyRate ? String(data.hourlyRate) : null,
-        monthlySalary: data.monthlySalary ? String(data.monthlySalary) : null,
+        hourlyRate,
+        monthlySalary,
         isActive: data.isActive ?? true,
       })
       .returning();
 
-    if (data.roleId) {
+    if (roleId) {
       await db.insert(customRoleAssignments).values({
         id: nanoid(),
         userId: newUserId,
-        roleId: data.roleId,
+        roleId,
       });
     }
 
@@ -171,20 +204,26 @@ export async function updateEmployeeAction(id: string, data: Partial<EmployeeFor
       return { success: false as const, error: "Employee id is required" };
     }
 
+    const cleanName = data.name ? data.name.trim() : undefined;
+    const cleanPhone = data.phone || data.employee_code ? (data.phone || data.employee_code)!.trim() : undefined;
+    const branchId = data.branchId !== undefined ? data.branchId : data.branch_id !== undefined ? data.branch_id : undefined;
+    const roleId = data.roleId !== undefined ? data.roleId : data.role_id !== undefined ? data.role_id : undefined;
+    const salaryRaw = data.monthlySalary !== undefined ? data.monthlySalary : data.monthly_salary !== undefined ? data.monthly_salary : data.base_salary;
+    const monthlySalary = salaryRaw !== undefined ? (salaryRaw ? String(salaryRaw) : null) : undefined;
+
     const updatePayload: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
-    if (data.name !== undefined) updatePayload.name = data.name.trim();
-    if (data.phone !== undefined) updatePayload.phone = data.phone.trim();
+    if (cleanName !== undefined) updatePayload.name = cleanName;
+    if (cleanPhone !== undefined) updatePayload.phone = cleanPhone;
     if (data.role !== undefined) updatePayload.role = data.role;
-    if (data.branchId !== undefined) updatePayload.branchId = data.branchId || null;
+    if (branchId !== undefined) updatePayload.branchId = branchId || null;
     if (data.department !== undefined) updatePayload.department = data.department || null;
     if (data.jobTitle !== undefined) updatePayload.jobTitle = data.jobTitle || null;
     if (data.hourlyRate !== undefined)
       updatePayload.hourlyRate = data.hourlyRate ? String(data.hourlyRate) : null;
-    if (data.monthlySalary !== undefined)
-      updatePayload.monthlySalary = data.monthlySalary ? String(data.monthlySalary) : null;
+    if (monthlySalary !== undefined) updatePayload.monthlySalary = monthlySalary;
     if (data.isActive !== undefined) updatePayload.isActive = data.isActive;
 
     if (data.password && data.password.trim().length > 0) {
@@ -201,16 +240,16 @@ export async function updateEmployeeAction(id: string, data: Partial<EmployeeFor
       return { success: false as const, error: "Employee not found" };
     }
 
-    if (data.roleId !== undefined) {
+    if (roleId !== undefined) {
       await db
         .delete(customRoleAssignments)
         .where(eq(customRoleAssignments.userId, id));
 
-      if (data.roleId) {
+      if (roleId) {
         await db.insert(customRoleAssignments).values({
           id: nanoid(),
           userId: id,
-          roleId: data.roleId,
+          roleId,
         });
       }
     }
