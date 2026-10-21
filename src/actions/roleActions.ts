@@ -1,100 +1,205 @@
 "use server";
 
 import { db } from "@/db";
-import { customRoles } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import type { RoleData } from "@/types";
+import { customRoles, customRoleAssignments } from "@/db/schema";
+import { eq, desc, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { nanoid } from "nanoid";
 
-export async function getRolesAction(): Promise<{
-  success: boolean;
-  roles?: RoleData[];
-  data?: RoleData[];
-  error?: string;
-}> {
+export type RoleData = {
+  id?: string;
+  name?: string;
+  nameAr?: string;
+  nameEn?: string;
+  description?: string;
+  permissions?: string[];
+  branch_ids?: string[];
+};
+
+export async function getRolesAction() {
   try {
-    const rows = await db.select().from(customRoles).orderBy(desc(customRoles.createdAt));
+    const rows = await db
+      .select()
+      .from(customRoles)
+      .orderBy(desc(customRoles.createdAt));
 
     const result: RoleData[] = rows.map((r) => ({
       id: String(r.id),
-      name: r.nameAr || r.name,
+      name: r.nameAr || r.nameEn,
+      nameAr: r.nameAr,
+      nameEn: r.nameEn,
       description: "",
-      permissions: Array.isArray(r.permissions) ? (r.permissions as string[]) : [],
+      permissions: Array.isArray(r.permissions)
+        ? (r.permissions as string[])
+        : [],
       branch_ids: [],
     }));
 
-    return { success: true, roles: result, data: result };
-  } catch (err: any) {
-    console.error("Error fetching roles:", err);
-    return { success: false, error: err.message || "فشل في جلب الأدوار والصلاحيات" };
+    return { success: true as const, data: result };
+  } catch (error) {
+    console.error("getRolesAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to fetch roles",
+      data: [] as RoleData[],
+    };
   }
 }
 
-export async function saveRoleAction(
-  data: RoleData
-): Promise<{ success: boolean; role?: RoleData; error?: string }> {
+export async function getRoleByIdAction(id: string) {
   try {
-    const name = (data.name || "").trim();
-    if (!name) return { success: false, error: "اسم المسمى الوظيفي مطلوب" };
-
-    const perms = Array.isArray(data.permissions) ? data.permissions : [];
-
-    if (data.id) {
-      const roleId = Number(data.id);
-      const [updated] = await db
-        .update(customRoles)
-        .set({
-          name: name,
-          nameAr: name,
-          permissions: perms, // Drizzle يحوله تلقائياً لـ JSONB صحيح
-        })
-        .where(eq(customRoles.id, roleId))
-        .returning();
-
-      return {
-        success: true,
-        role: {
-          id: String(updated.id),
-          name: updated.nameAr,
-          permissions: Array.isArray(updated.permissions) ? (updated.permissions as string[]) : [],
-        },
-      };
+    if (!id) {
+      return { success: false as const, error: "Role id is required", data: null };
     }
+
+    const [role] = await db
+      .select()
+      .from(customRoles)
+      .where(eq(customRoles.id, id))
+      .limit(1);
+
+    if (!role) {
+      return { success: false as const, error: "Role not found", data: null };
+    }
+
+    const formatted: RoleData = {
+      id: String(role.id),
+      name: role.nameAr || role.nameEn,
+      nameAr: role.nameAr,
+      nameEn: role.nameEn,
+      description: "",
+      permissions: Array.isArray(role.permissions)
+        ? (role.permissions as string[])
+        : [],
+      branch_ids: [],
+    };
+
+    return { success: true as const, data: formatted };
+  } catch (error) {
+    console.error("getRoleByIdAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to fetch role",
+      data: null,
+    };
+  }
+}
+
+export async function createRoleAction(data: RoleData) {
+  try {
+    const nameAr = (data.nameAr || data.name || "").trim();
+    const nameEn = (data.nameEn || data.name || nameAr).trim();
+
+    if (!nameAr && !nameEn) {
+      return { success: false as const, error: "Role name is required" };
+    }
+
+    const permissionsArray = Array.isArray(data.permissions)
+      ? data.permissions
+      : [];
 
     const [created] = await db
       .insert(customRoles)
       .values({
-        name: name,
-        nameAr: name,
-        permissions: perms, // Drizzle يحوله تلقائياً لـ JSONB صحيح
-        isSystem: false,
+        id: data.id || nanoid(),
+        nameAr: nameAr || nameEn,
+        nameEn: nameEn || nameAr,
+        permissions: permissionsArray,
       })
       .returning();
 
+    revalidatePath("/admin/roles");
+    return { success: true as const, data: created };
+  } catch (error) {
+    console.error("createRoleAction error:", error);
     return {
-      success: true,
-      role: {
-        id: String(created.id),
-        name: created.nameAr,
-        permissions: Array.isArray(created.permissions) ? (created.permissions as string[]) : [],
-      },
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to create role",
     };
-  } catch (err: any) {
-    console.error("Error saving role:", err);
-    return { success: false, error: err.message || "فشل في حفظ الدور" };
   }
 }
 
-export async function deleteRoleAction(
-  id: string
-): Promise<{ success: boolean; error?: string }> {
+export async function updateRoleAction(id: string, data: RoleData) {
   try {
-    const roleId = Number(id);
-    if (!roleId) return { success: false, error: "معرف دور غير صالح" };
+    if (!id) {
+      return { success: false as const, error: "Role id is required" };
+    }
 
-    await db.delete(customRoles).where(eq(customRoles.id, roleId));
-    return { success: true };
-  } catch (err: any) {
-    console.error("Error deleting role:", err);
-    return { success: false, error: err.message || "فشل في حذف الدور" };
+    const nameAr = (data.nameAr || data.name || "").trim();
+    const nameEn = (data.nameEn || data.name || nameAr).trim();
+
+    const updatePayload: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (nameAr) updatePayload.nameAr = nameAr;
+    if (nameEn) updatePayload.nameEn = nameEn;
+    if (Array.isArray(data.permissions)) {
+      updatePayload.permissions = data.permissions;
+    }
+
+    const [updated] = await db
+      .update(customRoles)
+      .set(updatePayload)
+      .where(eq(customRoles.id, id))
+      .returning();
+
+    if (!updated) {
+      return { success: false as const, error: "Role not found" };
+    }
+
+    revalidatePath("/admin/roles");
+    return { success: true as const, data: updated };
+  } catch (error) {
+    console.error("updateRoleAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to update role",
+    };
+  }
+}
+
+export async function saveRoleAction(data: RoleData) {
+  if (data.id) {
+    return updateRoleAction(data.id, data);
+  }
+  return createRoleAction(data);
+}
+
+export async function deleteRoleAction(id: string) {
+  try {
+    if (!id) {
+      return { success: false as const, error: "Role id is required" };
+    }
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(customRoleAssignments)
+      .where(eq(customRoleAssignments.roleId, id));
+
+    if (count > 0) {
+      return {
+        success: false as const,
+        error: `Cannot delete role: assigned to ${count} employee(s)`,
+      };
+    }
+
+    const [deleted] = await db
+      .delete(customRoles)
+      .where(eq(customRoles.id, id))
+      .returning();
+
+    if (!deleted) {
+      return { success: false as const, error: "Role not found" };
+    }
+
+    revalidatePath("/admin/roles");
+    return { success: true as const, data: deleted };
+  } catch (error) {
+    console.error("deleteRoleAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to delete role",
+    };
   }
 }
