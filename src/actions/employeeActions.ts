@@ -68,6 +68,45 @@ export async function getEmployeesAction() {
   }
 }
 
+export async function getEmployeeByIdAction(id: string) {
+  try {
+    if (!id) {
+      return { success: false as const, error: "Employee id is required", data: null };
+    }
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (!user) {
+      return { success: false as const, error: "Employee not found", data: null };
+    }
+
+    const [assignment] = await db
+      .select()
+      .from(customRoleAssignments)
+      .where(eq(customRoleAssignments.userId, id))
+      .limit(1);
+
+    return {
+      success: true as const,
+      data: {
+        ...user,
+        roleId: assignment ? assignment.roleId : null,
+      },
+    };
+  } catch (error) {
+    console.error("getEmployeeByIdAction error:", error);
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to fetch employee",
+      data: null,
+    };
+  }
+}
+
 export async function createEmployeeAction(data: EmployeeFormData) {
   try {
     if (!data.name || !data.phone) {
@@ -185,6 +224,13 @@ export async function updateEmployeeAction(id: string, data: Partial<EmployeeFor
       error: error instanceof Error ? error.message : "Failed to update employee",
     };
   }
+}
+
+export async function saveEmployeeAction(data: EmployeeFormData) {
+  if (data.id) {
+    return updateEmployeeAction(data.id, data);
+  }
+  return createEmployeeAction(data);
 }
 
 export async function deleteEmployeeAction(id: string) {
