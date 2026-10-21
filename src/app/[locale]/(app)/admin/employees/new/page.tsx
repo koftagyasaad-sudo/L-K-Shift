@@ -1,38 +1,60 @@
-import { auth } from "@/auth";
-import { db } from "@/db";
-import { branches } from "@/db/schema";
-import { redirect } from "@/i18n/navigation";
+import { getBranchesAction } from "@/actions/branchActions";
+import { getRolesAction } from "@/actions/roleActions";
 import { EmployeeForm } from "@/components/admin/employee-form";
+import { ArrowRight, ArrowLeft, UserPlus } from "lucide-react";
+import Link from "next/link";
 
-export default async function NewEmployeePage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
-  const { locale } = await params;
-  const session = await auth();
+interface PageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
 
-  if (session?.user?.systemRole !== "SUPER_ADMIN") {
-    redirect({ href: "/employee/profile", locale });
-    return null;
-  }
+export default async function NewEmployeePage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const locale = (resolvedParams.locale || "ar") as "ar" | "en";
 
-  const allBranches = await db.select().from(branches).orderBy(branches.id);
+  const [branchRes, roleRes] = await Promise.all([
+    getBranchesAction(),
+    getRolesAction(),
+  ]);
+
+  const branches =
+    branchRes.success && Array.isArray(branchRes.data) ? branchRes.data : [];
+  const roles =
+    roleRes.success && Array.isArray(roleRes.data) ? roleRes.data : [];
+
+  const isRtl = locale === "ar";
+  const BackIcon = isRtl ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          {locale === "ar" ? "إضافة موظف جديد" : "Add New Employee"}
-        </h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          {locale === "ar" ? "أدخل بيانات الموظف وحدد صلاحياته" : "Enter employee data and set permissions"}
-        </p>
+    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-4xl">
+      <div className="flex items-center gap-3">
+        <Link
+          href={`/${locale}/admin/employees`}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-input bg-background hover:bg-accent transition-colors"
+        >
+          <BackIcon className="h-4 w-4" />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <UserPlus className="h-6 w-6 text-primary" />
+            {isRtl ? "إضافة موظف جديد" : "Add New Employee"}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isRtl
+              ? "إنشاء حساب موظف جديد وتعيين الفرع والصلاحيات والراتب"
+              : "Create a new employee account, assign branch, role, and salary"}
+          </p>
+        </div>
       </div>
 
-      <div className="rounded-[24px] border border-border bg-surface p-6 shadow-sm">
-        <EmployeeForm locale={locale as "ar" | "en"} branches={allBranches} mode="create" />
-      </div>
+      <EmployeeForm
+        locale={locale}
+        branches={branches}
+        roles={roles}
+        mode="create"
+      />
     </div>
   );
 }
