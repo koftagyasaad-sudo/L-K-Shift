@@ -5,6 +5,20 @@ import { branches } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+export type BranchData = {
+  id?: string;
+  nameAr?: string;
+  nameEn?: string;
+  name?: string;
+  address?: string | null;
+  latitude?: string | number;
+  longitude?: string | number;
+  geofenceRadius?: number;
+  radiusMeters?: number;
+  isActive?: boolean;
+  [key: string]: any;
+};
+
 export async function getBranchesAction() {
   try {
     const list = await db
@@ -159,6 +173,42 @@ export async function deleteBranchAction(id: string) {
     return {
       success: false,
       error: error.message || "Failed to delete branch",
+    };
+  }
+}
+
+export async function toggleBranchStatusAction(id: string) {
+  try {
+    const [existing] = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return { success: false, error: "Branch not found" };
+    }
+
+    const [updated] = await db
+      .update(branches)
+      .set({
+        isActive: !existing.isActive,
+        updatedAt: new Date(),
+      })
+      .where(eq(branches.id, id))
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: updated,
+      branch: updated,
+    };
+  } catch (error: any) {
+    console.error("toggleBranchStatusAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to toggle branch status",
     };
   }
 }
