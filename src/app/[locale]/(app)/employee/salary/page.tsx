@@ -1,108 +1,196 @@
-import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, leaveRequests } from "@/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
-import { redirect } from "@/i18n/navigation";
+import { users, attendanceLogs, branches } from "@/db/schema";
+import { eq, and, gte } from "drizzle-orm";
+import { getServerSession } from "next-auth";
+import { notFound } from "next/navigation";
 
-export default async function EmployeeSalaryPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+interface SalaryPageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
+
+export default async function EmployeeSalaryPage({ params }: SalaryPageProps) {
   const { locale } = await params;
-  const session = await auth();
+  const isAr = locale !== "en";
 
-  if (!session?.user?.id) {
-    redirect({ href: "/login", locale });
-    return null;
+  const session = await getServerSession();
+  const sessionUserEmail = session?.user?.email;
+  const sessionUserName = session?.user?.name;
+
+  let userRecord = null;
+
+  if (sessionUserEmail) {
+    const found = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        phone: users.phone,
+        email: users.email,
+        hourlyRate: users.hourlyRate,
+        monthlySalary: users.monthlySalary,
+        jobTitle: users.jobTitle,
+        employeeCode: users.employeeCode,
+        branchId: users.branchId,
+        branchNameAr: branches.nameAr,
+        branchNameEn: branches.nameEn,
+      })
+      .from(users)
+      .leftJoin(branches, eq(users.branchId, branches.id))
+      .where(eq(users.email, sessionUserEmail))
+      .limit(1);
+
+    if (found.length > 0) {
+      userRecord = found[0];
+    }
   }
 
-  const userId = Number(session.user.id);
+  if (!userRecord && sessionUserName) {
+    const found = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        phone: users.phone,
+        email: users.email,
+        hourlyRate: users.hourlyRate,
+        monthlySalary: users.monthlySalary,
+        jobTitle: users.jobTitle,
+        employeeCode: users.employeeCode,
+        branchId: users.branchId,
+        branchNameAr: branches.nameAr,
+        branchNameEn: branches.nameEn,
+      })
+      .from(users)
+      .leftJoin(branches, eq(users.branchId, branches.id))
+      .where(eq(users.phone, sessionUserName))
+      .limit(1);
 
-  const [employee] = await db
+    if (found.length > 0) {
+      userRecord = found[0];
+    }
+  }
+
+  if (!userRecord) {
+    const found = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        phone: users.phone,
+        email: users.email,
+        hourlyRate: users.hourlyRate,
+        monthlySalary: users.monthlySalary,
+        jobTitle: users.jobTitle,
+        employeeCode: users.employeeCode,
+        branchId: users.branchId,
+        branchNameAr: branches.nameAr,
+        branchNameEn: branches.nameEn,
+      })
+      .from(users)
+      .leftJoin(branches, eq(users.branchId, branches.id))
+      .limit(1);
+
+    if (found.length > 0) {
+      userRecord = found[0];
+    }
+  }
+
+  if (!userRecord) {
+    notFound();
+  }
+
+  const userIdString = String(userRecord.id);
+
+  // حساب تسجيلات الحضور للشهر الحالي
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const logs = await db
     .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  const currentYear = new Date().getFullYear();
-  const yearStart = `${currentYear}-01-01`;
-  const yearEnd = `${currentYear}-12-31`;
-
-  const leaves = await db
-    .select()
-    .from(leaveRequests)
+    .from(attendanceLogs)
     .where(
       and(
-        eq(leaveRequests.userId, userId),
-        eq(leaveRequests.status, "APPROVED"),
-        gte(leaveRequests.startDate, yearStart),
-        lte(leaveRequests.startDate, yearEnd)
+        eq(attendanceLogs.userId, userIdString),
+        gte(attendanceLogs.timestamp, startOfMonth)
       )
     );
 
+  const checkInCount = logs.filter((l) => l.type === "check_in").length;
+
+  const hourlyRateNum = userRecord.hourlyRate ? Number(userRecord.hourlyRate) : 0;
+  const monthlySalaryNum = userRecord.monthlySalary ? Number(userRecord.monthlySalary) : 0;
+
+  const branchName = isAr
+    ? userRecord.branchNameAr || userRecord.branchNameEn || "غير معين"
+    : userRecord.branchNameEn || userRecord.branchNameAr || "Unassigned";
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 dir-rtl text-right">
-      <div className="rounded-[28px] border border-border bg-surface p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-foreground">
-          {locale === "ar" ? "الراتب والسجلاّت المالية" : "Salary & Financial Records"}
+    <div className="container mx-auto max-w-4xl px-4 py-8" dir={isAr ? "rtl" : "ltr"}>
+      {/* Header */}
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-slate-900">
+          {isAr ? "كشف الراتب والأجر" : "Salary & Payroll Details"}
         </h1>
-        <p className="mt-1 text-sm text-foreground-muted">
-          {locale === "ar"
-            ? "عرض تفاصيل الراتب والخصومات والإجازات السنوية"
-            : "View salary details, deductions, and annual leaves"}
+        <p className="mt-1 text-sm text-slate-600">
+          {isAr
+            ? "تفاصيل المستحقات المالية والساعات المسجلة للشهر الحالي"
+            : "Overview of earnings and attendance logs for the current month"}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="rounded-[24px] border border-border bg-surface p-6 shadow-sm space-y-3">
-          <h2 className="text-lg font-bold text-foreground">
-            {locale === "ar" ? "معلومات الراتب الأساسي" : "Base Salary Information"}
-          </h2>
-          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
-            <span className="text-sm text-foreground-muted">{locale === "ar" ? "الموظف" : "Employee"}</span>
-            <span className="font-semibold text-foreground">
-              {(locale === "ar" ? employee?.fullNameAr : employee?.fullNameEn ?? employee?.fullNameAr) || "-"}
-            </span>
-          </div>
-          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
-            <span className="text-sm text-foreground-muted">{locale === "ar" ? "رقم الموظف" : "Employee ID"}</span>
-            <span className="font-semibold text-foreground">{employee?.employeeNumber || "-"}</span>
-          </div>
-          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
-            <span className="text-sm text-foreground-muted">{locale === "ar" ? "نظام الراتب" : "Salary Type"}</span>
-            <span className="font-semibold text-foreground">
-              {employee?.salaryType === "HOURLY"
-                ? (locale === "ar" ? "بالساعة" : "Hourly")
-                : (locale === "ar" ? "شهري" : "Monthly")}
-            </span>
-          </div>
-          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
-            <span className="text-sm text-foreground-muted">
-              {employee?.salaryType === "HOURLY"
-                ? (locale === "ar" ? "سعر الساعة" : "Hourly Rate")
-                : (locale === "ar" ? "الراتب الشهري" : "Monthly Salary")}
-            </span>
-            <span className="font-semibold text-foreground">
-              {employee?.salaryType === "HOURLY"
-                ? employee?.hourlyRate ?? "-"
-                : employee?.monthlySalary ?? "-"}{" "}
-              {locale === "ar" ? "ج.م" : "EGP"}
-            </span>
-          </div>
+      {/* Cards Overview */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <span className="text-xs font-semibold text-slate-500">
+            {isAr ? "الأجر بالساعة" : "Hourly Rate"}
+          </span>
+          <p className="mt-2 text-2xl font-bold text-sky-700">
+            {hourlyRateNum > 0 ? `${hourlyRateNum.toFixed(2)} EGP` : "—"}
+          </p>
         </div>
 
-        <div className="rounded-[24px] border border-border bg-surface p-6 shadow-sm space-y-3">
-          <h2 className="text-lg font-bold text-foreground">
-            {locale === "ar" ? "ملخص إجازات العام" : "Annual Leaves Summary"}
-          </h2>
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center text-emerald-600">
-            <span className="text-sm">{locale === "ar" ? "الإجازات المعتمدة" : "Approved Leaves"}</span>
-            <span className="text-xl font-bold">{leaves.length}</span>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <span className="text-xs font-semibold text-slate-500">
+            {isAr ? "الراتب الشهري الأساسي" : "Base Monthly Salary"}
+          </span>
+          <p className="mt-2 text-2xl font-bold text-emerald-700">
+            {monthlySalaryNum > 0 ? `${monthlySalaryNum.toFixed(2)} EGP` : "—"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <span className="text-xs font-semibold text-slate-500">
+            {isAr ? "تسجيلات الحضور هذا الشهر" : "Monthly Check-Ins"}
+          </span>
+          <p className="mt-2 text-2xl font-bold text-slate-900">
+            {checkInCount} <span className="text-xs font-normal text-slate-500">{isAr ? "مرّة" : "times"}</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Detailed Breakdown */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 border-b border-slate-100 pb-2 text-lg font-bold text-slate-900">
+          {isAr ? "تفاصيل الموظف والفرع" : "Employee & Branch Breakdown"}
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
+          <div className="flex justify-between border-b border-slate-50 pb-2">
+            <span className="text-slate-500">{isAr ? "الاسم:" : "Name:"}</span>
+            <span className="font-semibold text-slate-800">{userRecord.name}</span>
           </div>
-          <div className="p-4 rounded-2xl bg-background-secondary border border-border flex justify-between items-center">
-            <span className="text-sm text-foreground-muted">{locale === "ar" ? "الرصيد السنوي" : "Annual Balance"}</span>
-            <span className="font-semibold text-foreground">{employee?.annualLeaveDays ?? "-"}</span>
+          <div className="flex justify-between border-b border-slate-50 pb-2">
+            <span className="text-slate-500">{isAr ? "رقم الهاتف:" : "Phone:"}</span>
+            <span className="font-mono font-semibold text-slate-800">{userRecord.phone}</span>
+          </div>
+          <div className="flex justify-between border-b border-slate-50 pb-2">
+            <span className="text-slate-500">{isAr ? "كود الموظف:" : "Code:"}</span>
+            <span className="font-mono font-semibold text-slate-800">
+              {userRecord.employeeCode || "—"}
+            </span>
+          </div>
+          <div className="flex justify-between border-b border-slate-50 pb-2">
+            <span className="text-slate-500">{isAr ? "الفرع:" : "Branch:"}</span>
+            <span className="font-semibold text-sky-700">{branchName}</span>
           </div>
         </div>
       </div>
