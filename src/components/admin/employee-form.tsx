@@ -3,48 +3,65 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createEmployeeAction, updateEmployeeAction } from "@/actions/employeeActions";
+import {
+  createEmployeeAction,
+  updateEmployeeAction,
+  saveEmployeeAction,
+} from "@/actions/employeeActions";
 
-interface EmployeeFormProps {
+export interface EmployeeFormProps {
   employee?: any;
+  initialData?: any;
   branches?: any[];
   roles?: any[];
   locale?: string;
+  mode?: string;
+  redirectTo?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
+  [key: string]: any; // يمنع أي خطأ مستقبلي في حالة تمرير أي خاصية إضافية
 }
 
 export function EmployeeForm({
   employee,
+  initialData,
   branches = [],
   roles = [],
   locale = "ar",
+  mode,
+  redirectTo,
   onSuccess,
   onCancel,
 }: EmployeeFormProps) {
   const router = useRouter();
   const isAr = locale === "ar";
-  const isEditing = !!employee?.id;
+  
+  // دمج البيانات من initialData أو employee
+  const targetData = initialData || employee;
+  const isEditing = mode === "edit" || !!targetData?.id;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
-    id: employee?.id || "",
-    name: employee?.name || "",
-    phone: employee?.phone || "",
-    password: employee?.password || "123456",
-    email: employee?.email || "",
-    role: employee?.role || "EMPLOYEE",
-    jobTitle: employee?.jobTitle || "",
-    employeeCode: employee?.employeeCode || "",
-    branchId: employee?.branchId || (branches[0]?.id ?? ""),
-    roleId: employee?.roleId || "",
-    monthlySalary: employee?.monthlySalary ? String(employee.monthlySalary) : "",
-    hourlyRate: employee?.hourlyRate ? String(employee.hourlyRate) : "",
-    isActive: employee?.isActive !== undefined ? Boolean(employee.isActive) : true,
-    canUseAttendanceTerminal: employee?.canUseAttendanceTerminal !== undefined ? Boolean(employee.canUseAttendanceTerminal) : true,
-    notes: employee?.notes || "",
+    id: targetData?.id || "",
+    name: targetData?.name || targetData?.fullNameAr || targetData?.fullNameEn || "",
+    phone: targetData?.phone || "",
+    password: targetData?.password || "123456",
+    email: targetData?.email || "",
+    role: targetData?.role || "EMPLOYEE",
+    jobTitle: targetData?.jobTitle || "",
+    employeeCode: targetData?.employeeCode || "",
+    branchId: targetData?.branchId || (branches[0]?.id ?? ""),
+    roleId: targetData?.roleId || "",
+    monthlySalary: targetData?.monthlySalary ? String(targetData.monthlySalary) : "",
+    hourlyRate: targetData?.hourlyRate ? String(targetData.hourlyRate) : "",
+    isActive: targetData?.isActive !== undefined ? Boolean(targetData.isActive) : true,
+    canUseAttendanceTerminal:
+      targetData?.canUseAttendanceTerminal !== undefined
+        ? Boolean(targetData.canUseAttendanceTerminal)
+        : true,
+    notes: targetData?.notes || "",
   });
 
   const handleChange = (
@@ -66,8 +83,8 @@ export function EmployeeForm({
 
     try {
       let result: any;
-      if (isEditing) {
-        result = await updateEmployeeAction(employee.id, formData);
+      if (isEditing && formData.id) {
+        result = await updateEmployeeAction(formData.id, formData);
       } else {
         result = await createEmployeeAction(formData);
       }
@@ -82,21 +99,26 @@ export function EmployeeForm({
             ? "Employee updated successfully"
             : "Employee created successfully"
         );
-        router.refresh();
+
+        if (redirectTo) {
+          router.push(redirectTo);
+        } else {
+          router.refresh();
+        }
+
         if (onSuccess) {
           onSuccess();
         }
       } else {
-        const errorRes = result as any;
         const message =
-          errorRes?.error ||
-          errorRes?.message ||
+          result?.error ||
           (isAr ? "تعذر حفظ بيانات الموظف" : "Failed to save employee");
         setError(message);
         toast.error(message);
       }
     } catch (err: any) {
-      const msg = err?.message || (isAr ? "حدث خطأ أثناء الاتصال بالخادم" : "An error occurred");
+      const msg =
+        err?.message || (isAr ? "حدث خطأ أثناء الاتصال بالخادم" : "An error occurred");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -105,7 +127,10 @@ export function EmployeeForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 bg-white p-6 rounded-xl shadow-sm border border-gray-100"
+    >
       <div className="border-b pb-4 mb-4">
         <h2 className="text-xl font-bold text-gray-800">
           {isEditing
