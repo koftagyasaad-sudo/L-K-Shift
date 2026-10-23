@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export interface BranchData {
-  id: string;
+  id?: string;
   name?: string | null;
   nameAr?: string | null;
   nameEn?: string | null;
