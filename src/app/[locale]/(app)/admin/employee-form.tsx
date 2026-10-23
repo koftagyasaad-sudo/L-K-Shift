@@ -1,7 +1,4 @@
-export { default, EmployeeForm } from "@/components/admin/employee-form";
-export type {
-  BranchOption,
-  RoleOption,
-  EmployeeFormInitialData,
-  EmployeeFormProps,
-} from "@/components/admin/employee-form";
+import { EmployeeForm } from "@/components/admin/employee-form";
+
+export default EmployeeForm;
+export { EmployeeForm };
