@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { attendanceLogs, branches, users } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 function calculateHaversineDistance(
   lat1: number,
@@ -29,7 +29,10 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const userId = (session.user as any).id as string;
@@ -42,7 +45,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
     if (!user || !user.branchId) {
       return NextResponse.json(
         { success: false, error: "Employee has no assigned branch" },
@@ -50,9 +58,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [branch] = await db.select().from(branches).where(eq(branches.id, user.branchId)).limit(1);
+    const [branch] = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, user.branchId))
+      .limit(1);
+
     if (!branch) {
-      return NextResponse.json({ success: false, error: "Branch not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Branch not found" },
+        { status: 404 }
+      );
     }
 
     const distance = calculateHaversineDistance(
@@ -62,7 +78,7 @@ export async function POST(req: NextRequest) {
       Number(branch.longitude)
     );
 
-    const allowedRadius = branch.radius || 100; // meters
+    const allowedRadius = branch.geofenceRadius || branch.radiusMeters || 100;
     if (distance > allowedRadius) {
       return NextResponse.json(
         {
