@@ -2,157 +2,163 @@
 
 import { db } from "@/db";
 import { branches } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-
-export interface BranchData {
-  id?: string;
-  name?: string | null;
-  nameAr?: string | null;
-  nameEn?: string | null;
-  address?: string | null;
-  latitude?: string | number | null;
-  longitude?: string | number | null;
-  radiusMeters?: number | null;
-  geofenceRadius?: number | null;
-  qrSecretKey?: string | null;
-  isActive?: boolean | null;
-  createdAt?: Date | string | null;
-  updatedAt?: Date | string | null;
-  [key: string]: unknown;
-}
-
-export interface SaveBranchInput {
-  id?: string;
-  name?: string;
-  nameAr?: string;
-  name_ar?: string;
-  nameEn?: string;
-  name_en?: string;
-  address?: string;
-  latitude?: string | number;
-  longitude?: string | number;
-  radiusMeters?: number;
-  radius_meters?: number;
-  geofenceRadius?: number;
-  geofence_radius?: number;
-  qrSecretKey?: string;
-  qr_secret_key?: string;
-  isActive?: boolean;
-  is_active?: boolean;
-}
 
 export async function getBranchesAction() {
   try {
-    const data = await db.select().from(branches);
-    return { success: true, data };
-  } catch (error) {
+    const list = await db
+      .select()
+      .from(branches)
+      .orderBy(desc(branches.createdAt));
+
+    return {
+      success: true,
+      data: list,
+      branches: list,
+    };
+  } catch (error: any) {
     console.error("getBranchesAction error:", error);
-    return { success: false, error: "Failed to fetch branches", data: [] };
+    return {
+      success: false,
+      error: error.message || "Failed to fetch branches",
+      data: [],
+      branches: [],
+    };
   }
 }
 
 export async function getBranchByIdAction(id: string) {
   try {
-    if (!id) return { success: false, error: "Branch ID required" };
-    const res = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
-    if (!res.length) return { success: false, error: "Branch not found" };
-    return { success: true, data: res[0] };
-  } catch (error) {
-    console.error("getBranchByIdAction error:", error);
-    return { success: false, error: "Failed to fetch branch" };
-  }
-}
+    const [branch] = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, id))
+      .limit(1);
 
-export async function saveBranchAction(input: SaveBranchInput) {
-  try {
-    const nameAr = input.nameAr || input.name_ar || input.name || "";
-    const nameEn = input.nameEn || input.name_en || input.name || "";
-    const latitude = String(input.latitude ?? "0");
-    const longitude = String(input.longitude ?? "0");
-    const radiusMeters = input.radiusMeters ?? input.radius_meters ?? 100;
-    const geofenceRadius = input.geofenceRadius ?? input.geofence_radius ?? radiusMeters;
-    const qrSecretKey = input.qrSecretKey || input.qr_secret_key || `QR-${Date.now()}`;
-    const isActive = input.isActive ?? input.is_active ?? true;
-
-    if (input.id) {
-      const [updated] = await db
-        .update(branches)
-        .set({
-          nameAr,
-          nameEn,
-          address: input.address || null,
-          latitude,
-          longitude,
-          radiusMeters,
-          geofenceRadius,
-          qrSecretKey,
-          isActive,
-          updatedAt: new Date(),
-        })
-        .where(eq(branches.id, input.id))
-        .returning();
-
-      revalidatePath("/admin/branches");
-      return { success: true, data: updated };
-    } else {
-      const branchId = crypto.randomUUID();
-      const [created] = await db
-        .insert(branches)
-        .values({
-          id: branchId,
-          nameAr,
-          nameEn,
-          address: input.address || null,
-          latitude,
-          longitude,
-          radiusMeters,
-          geofenceRadius,
-          qrSecretKey,
-          isActive,
-        })
-        .returning();
-
-      revalidatePath("/admin/branches");
-      return { success: true, data: created };
+    if (!branch) {
+      return {
+        success: false,
+        error: "Branch not found",
+        data: null,
+        branch: null,
+      };
     }
-  } catch (error) {
-    console.error("saveBranchAction error:", error);
-    return { success: false, error: "Failed to save branch" };
+
+    return {
+      success: true,
+      data: branch,
+      branch,
+    };
+  } catch (error: any) {
+    console.error("getBranchByIdAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to fetch branch",
+      data: null,
+      branch: null,
+    };
   }
 }
 
-export async function createBranchAction(input: SaveBranchInput) {
-  return saveBranchAction(input);
+export async function createBranchAction(data: any) {
+  try {
+    const id = data.id || crypto.randomUUID();
+    const payload: any = {
+      id,
+      nameAr: data.nameAr || data.name || "فرع جديد",
+      nameEn: data.nameEn || data.name || "New Branch",
+      address: data.address || null,
+      latitude: String(data.latitude || "30.0444"),
+      longitude: String(data.longitude || "31.2357"),
+      geofenceRadius: Number(data.geofenceRadius || data.radiusMeters || 100),
+      radiusMeters: Number(data.radiusMeters || data.geofenceRadius || 100),
+      qrSecretKey: data.qrSecretKey || crypto.randomUUID(),
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const [newBranch] = await db
+      .insert(branches)
+      .values(payload)
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: newBranch,
+      branch: newBranch,
+    };
+  } catch (error: any) {
+    console.error("createBranchAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to create branch",
+    };
+  }
 }
 
-export async function updateBranchAction(id: string, input: SaveBranchInput) {
-  return saveBranchAction({ ...input, id });
+export async function updateBranchAction(id: string, data: any) {
+  try {
+    const payload: any = {
+      nameAr: data.nameAr || data.name,
+      nameEn: data.nameEn || data.name,
+      address: data.address || null,
+      latitude: String(data.latitude || "30.0444"),
+      longitude: String(data.longitude || "31.2357"),
+      geofenceRadius: Number(data.geofenceRadius || data.radiusMeters || 100),
+      radiusMeters: Number(data.radiusMeters || data.geofenceRadius || 100),
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+      updatedAt: new Date(),
+    };
+
+    const [updatedBranch] = await db
+      .update(branches)
+      .set(payload)
+      .where(eq(branches.id, id))
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: updatedBranch,
+      branch: updatedBranch,
+    };
+  } catch (error: any) {
+    console.error("updateBranchAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update branch",
+    };
+  }
+}
+
+export async function saveBranchAction(data: any) {
+  if (data.id) {
+    return updateBranchAction(data.id, data);
+  }
+  return createBranchAction(data);
 }
 
 export async function deleteBranchAction(id: string) {
   try {
-    if (!id) return { success: false, error: "Branch ID required" };
-    await db.delete(branches).where(eq(branches.id, id));
-    revalidatePath("/admin/branches");
-    return { success: true };
-  } catch (error) {
-    console.error("deleteBranchAction error:", error);
-    return { success: false, error: "Failed to delete branch" };
-  }
-}
-
-export async function toggleBranchStatusAction(id: string, currentStatus: boolean) {
-  try {
-    const [updated] = await db
-      .update(branches)
-      .set({ isActive: !currentStatus, updatedAt: new Date() })
+    const [deleted] = await db
+      .delete(branches)
       .where(eq(branches.id, id))
       .returning();
-    revalidatePath("/admin/branches");
-    return { success: true, data: updated };
-  } catch (error) {
-    console.error("toggleBranchStatusAction error:", error);
-    return { success: false, error: "Failed to toggle branch status" };
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: deleted,
+      branch: deleted,
+    };
+  } catch (error: any) {
+    console.error("deleteBranchAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to delete branch",
+    };
   }
 }
