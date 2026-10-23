@@ -9,18 +9,19 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user || !session.user.id) {
+    if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // جلب التنبيهات الخاصة بالمستخدم مرتبة من الأحدث للأقدم
+    const userId = (session.user as any).id as string;
+
     const userNotifications = await db
       .select()
       .from(notifications)
-      .where(eq(notifications.userId, session.user.id))
+      .where(eq(notifications.userId, userId))
       .orderBy(desc(notifications.createdAt));
 
     return NextResponse.json({
