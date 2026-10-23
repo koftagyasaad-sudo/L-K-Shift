@@ -24,7 +24,7 @@ export async function POST(
 
     await db
       .update(notifications)
-      .set({ read: true })
+      .set({ isRead: true })
       .where(
         and(
           eq(notifications.id, id),
