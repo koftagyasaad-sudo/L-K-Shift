@@ -66,13 +66,13 @@ export default function RolesPage({ params }: RolesPageProps) {
       ]);
 
       if (roleRes.success && Array.isArray(roleRes.data)) {
-        setRoles(roleRes.data);
+        setRoles(roleRes.data as unknown as RoleData[]);
       } else {
         setRoles([]);
       }
 
       if (branchRes.success && Array.isArray(branchRes.data)) {
-        setBranches(branchRes.data);
+        setBranches(branchRes.data as unknown as BranchData[]);
       } else {
         setBranches([]);
       }
@@ -102,22 +102,25 @@ export default function RolesPage({ params }: RolesPageProps) {
   };
 
   const handleOpenEditModal = (role: RoleData) => {
+    const rawPerms = Array.isArray(role.permissions) ? role.permissions : [];
+    const formattedPerms: string[] = rawPerms.map((p) => String(p));
+
     setEditingRole({
       id: role.id,
-      name: role.name || role.nameAr || role.nameEn || "",
-      nameAr: role.nameAr || role.name || "",
-      nameEn: role.nameEn || role.name || "",
-      description: role.description || "",
-      permissions: Array.isArray(role.permissions) ? role.permissions : [],
+      name: String(role.name || role.nameAr || role.nameEn || ""),
+      nameAr: String(role.nameAr || role.name || ""),
+      nameEn: String(role.nameEn || role.name || ""),
+      description: role.description ? String(role.description) : "",
+      permissions: formattedPerms,
       isActive: role.isActive ?? true,
     });
     setFormData({
       id: role.id,
-      name: role.name || role.nameAr || role.nameEn || "",
-      nameAr: role.nameAr || role.name || "",
-      nameEn: role.nameEn || role.name || "",
-      description: role.description || "",
-      permissions: Array.isArray(role.permissions) ? role.permissions : [],
+      name: String(role.name || role.nameAr || role.nameEn || ""),
+      nameAr: String(role.nameAr || role.name || ""),
+      nameEn: String(role.nameEn || role.name || ""),
+      description: role.description ? String(role.description) : "",
+      permissions: formattedPerms,
       isActive: role.isActive ?? true,
     });
     setIsModalOpen(true);
@@ -236,9 +239,9 @@ export default function RolesPage({ params }: RolesPageProps) {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {roles.map((role) => {
             const roleName = isAr
-              ? role.nameAr || role.name || role.nameEn
-              : role.nameEn || role.name || role.nameAr;
-            const perms = Array.isArray(role.permissions) ? role.permissions : [];
+              ? String(role.nameAr || role.name || role.nameEn || "")
+              : String(role.nameEn || role.name || role.nameAr || "");
+            const rawPerms = Array.isArray(role.permissions) ? role.permissions : [];
 
             return (
               <div
@@ -263,7 +266,7 @@ export default function RolesPage({ params }: RolesPageProps) {
 
                   {role.description ? (
                     <p className="mt-2 text-xs text-slate-500 line-clamp-2">
-                      {role.description}
+                      {String(role.description)}
                     </p>
                   ) : null}
 
@@ -271,18 +274,18 @@ export default function RolesPage({ params }: RolesPageProps) {
                     <span className="text-xs font-medium text-slate-700 block">
                       {isAr ? "الصلاحيات الممنوحة:" : "Permissions:"}
                     </span>
-                    {perms.length === 0 ? (
+                    {rawPerms.length === 0 ? (
                       <span className="text-xs text-slate-400">
                         {isAr ? "لا توجد صلاحيات محددة" : "No specific permissions"}
                       </span>
                     ) : (
                       <div className="flex flex-wrap gap-1.5 pt-1">
-                        {perms.map((p) => (
+                        {rawPerms.map((p) => (
                           <span
-                            key={p}
+                            key={String(p)}
                             className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
                           >
-                            {p}
+                            {String(p)}
                           </span>
                         ))}
                       </div>
