@@ -1,4 +1,3 @@
-// src/lib/auth.ts
 import type { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import type { Session, User } from "next-auth";
@@ -9,8 +8,8 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 
 /**
- * Augmented user shape returned from authorize() and stored on JWT/session.
- * Phone is the login ID. Branch assignment drives attendance geofence checks.
+ * نموذج المستخدم الموسع في النظام.
+ * الدخول يعتمد على رقم الهاتف فقط كاسم مستخدم (Phone is login ID).
  */
 export type AppUser = User & {
   id: string;
@@ -33,7 +32,7 @@ function toNullableString(value: unknown): string | null {
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60, // 30 يوماً
   },
   pages: {
     signIn: "/login",
@@ -66,7 +65,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Support both active flag naming conventions used across the codebase
         const isActive =
           (user as any).isActive !== false && (user as any).active !== false;
         if (!isActive) {
@@ -103,7 +101,6 @@ export const authOptions: NextAuthOptions = {
           toNullableString((user as any).name) ||
           phone;
 
-        // Return every augmented User field required by NextAuth + app session
         const result: AppUser = {
           id: String(user.id),
           name: displayName,
@@ -131,7 +128,6 @@ export const authOptions: NextAuthOptions = {
         token.systemRole = u.systemRole ?? u.role ?? null;
         token.fullNameAr = u.fullNameAr ?? null;
         token.fullNameEn = u.fullNameEn ?? null;
-        // Always persist branch IDs as strings (schema may use uuid/text/number)
         token.branchId = toNullableString(u.branchId);
         token.primaryBranchId = toNullableString(u.primaryBranchId ?? u.branchId);
       }
@@ -148,7 +144,6 @@ export const authOptions: NextAuthOptions = {
         sUser.fullNameAr = toNullableString(token.fullNameAr);
         sUser.fullNameEn = toNullableString(token.fullNameEn);
         sUser.branchId = toNullableString(token.branchId);
-        // Safe coercion: token.primaryBranchId may be typed number | string | null
         sUser.primaryBranchId = toNullableString(
           token.primaryBranchId ?? token.branchId
         );
