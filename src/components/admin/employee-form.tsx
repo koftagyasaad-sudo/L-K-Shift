@@ -204,7 +204,10 @@ export default function EmployeeForm({
     }
 
     const payload: SaveEmployeeInput = {
-      id: initialData?.id !== undefined && initialData?.id !== null ? String(initialData.id) : undefined,
+      id:
+        initialData?.id !== undefined && initialData?.id !== null
+          ? String(initialData.id)
+          : undefined,
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim() || undefined,
