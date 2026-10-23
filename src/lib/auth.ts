@@ -8,8 +8,8 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 
 /**
- * نموذج المستخدم الموسع في النظام.
- * الدخول يعتمد على رقم الهاتف فقط كاسم مستخدم (Phone is login ID).
+ * نموذج المستخدم الموسع للنظام.
+ * التسجيل يعتمد على رقم الهاتف فقط كاسم مستخدم (Phone is login ID).
  */
 export type AppUser = User & {
   id: string;
@@ -17,7 +17,7 @@ export type AppUser = User & {
   email?: string | null;
   phone?: string | null;
   role?: string | null;
-  systemRole?: string | null;
+  systemRole?: any;
   fullNameAr?: string | null;
   fullNameEn?: string | null;
   branchId?: string | null;
@@ -86,6 +86,8 @@ export const authOptions: NextAuthOptions = {
         }
 
         const role = toNullableString((user as any).role) || "employee";
+        const systemRoleVal = (user as any).systemRole || (user as any).role || "EMPLOYEE";
+
         const branchId = toNullableString(
           (user as any).branchId ?? (user as any).primaryBranchId
         );
@@ -107,7 +109,7 @@ export const authOptions: NextAuthOptions = {
           email: toNullableString((user as any).email),
           phone: toNullableString((user as any).phone) || phone,
           role,
-          systemRole: role,
+          systemRole: systemRoleVal as any,
           fullNameAr,
           fullNameEn,
           branchId,
@@ -125,7 +127,7 @@ export const authOptions: NextAuthOptions = {
         token.id = String(u.id);
         token.phone = u.phone ?? null;
         token.role = u.role ?? null;
-        token.systemRole = u.systemRole ?? u.role ?? null;
+        token.systemRole = (u.systemRole ?? u.role ?? "EMPLOYEE") as any;
         token.fullNameAr = u.fullNameAr ?? null;
         token.fullNameEn = u.fullNameEn ?? null;
         token.branchId = toNullableString(u.branchId);
@@ -139,8 +141,7 @@ export const authOptions: NextAuthOptions = {
         sUser.id = toNullableString(token.id) || sUser.id || "";
         sUser.phone = toNullableString(token.phone);
         sUser.role = toNullableString(token.role);
-        sUser.systemRole =
-          toNullableString(token.systemRole) || toNullableString(token.role);
+        sUser.systemRole = (toNullableString(token.systemRole) || toNullableString(token.role) || "EMPLOYEE") as any;
         sUser.fullNameAr = toNullableString(token.fullNameAr);
         sUser.fullNameEn = toNullableString(token.fullNameEn);
         sUser.branchId = toNullableString(token.branchId);
