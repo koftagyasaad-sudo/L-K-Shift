@@ -177,22 +177,29 @@ export async function deleteBranchAction(id: string) {
   }
 }
 
-export async function toggleBranchStatusAction(id: string) {
+export async function toggleBranchStatusAction(id: string, currentStatus?: boolean) {
   try {
-    const [existing] = await db
-      .select()
-      .from(branches)
-      .where(eq(branches.id, id))
-      .limit(1);
+    let newStatus: boolean;
 
-    if (!existing) {
-      return { success: false, error: "Branch not found" };
+    if (typeof currentStatus === "boolean") {
+      newStatus = !currentStatus;
+    } else {
+      const [existing] = await db
+        .select()
+        .from(branches)
+        .where(eq(branches.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return { success: false, error: "Branch not found" };
+      }
+      newStatus = !existing.isActive;
     }
 
     const [updated] = await db
       .update(branches)
       .set({
-        isActive: !existing.isActive,
+        isActive: newStatus,
         updatedAt: new Date(),
       })
       .where(eq(branches.id, id))
