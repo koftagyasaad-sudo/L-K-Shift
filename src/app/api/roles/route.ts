@@ -44,27 +44,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, description, permissions } = body;
+    const { name, nameAr, nameEn, description, permissions } = body;
 
-    if (!name) {
-      return NextResponse.json(
-        { success: false, error: "Role name is required" },
-        { status: 400 }
-      );
-    }
+    const finalNameAr = nameAr || name || "دور مخصص";
+    const finalNameEn = nameEn || name || "Custom Role";
 
     const id = crypto.randomUUID();
 
+    const rolePayload: any = {
+      id,
+      nameAr: finalNameAr,
+      nameEn: finalNameEn,
+      description: description || null,
+      permissions: permissions || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
     const [newRole] = await db
       .insert(customRoles)
-      .values({
-        id,
-        name,
-        description: description || null,
-        permissions: permissions || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
+      .values(rolePayload)
       .returning();
 
     return NextResponse.json(
