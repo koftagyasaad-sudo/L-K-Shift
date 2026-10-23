@@ -1,32 +1,46 @@
-import { DefaultSession } from "next-auth";
+import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
+import { JWT as DefaultJWT } from "next-auth/jwt";
+
+export type SystemRoleType = "SUPER_ADMIN" | "EMPLOYEE" | "ADMIN" | "MANAGER" | string;
 
 declare module "next-auth" {
-  interface Session {
-    user: DefaultSession["user"] & {
-      id: string;
-      phone: string;
-      fullNameAr: string;
-      fullNameEn: string | null;
-      systemRole: "SUPER_ADMIN" | "EMPLOYEE";
-      primaryBranchId: number | null;
-    };
+  interface User extends DefaultUser {
+    id: string;
+    phone?: string | null;
+    role?: string | null;
+    systemRole?: SystemRoleType | null;
+    fullNameAr?: string | null;
+    fullNameEn?: string | null;
+    branchId?: string | null;
+    primaryBranchId?: string | null;
   }
 
-  interface User {
-    phone: string;
-    fullNameAr: string;
-    fullNameEn: string | null;
-    systemRole: "SUPER_ADMIN" | "EMPLOYEE";
-    primaryBranchId: number | null;
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      phone?: string | null;
+      role?: string | null;
+      systemRole?: SystemRoleType | null;
+      fullNameAr?: string | null;
+      fullNameEn?: string | null;
+      branchId?: string | null;
+      primaryBranchId?: string | null;
+    } & DefaultSession["user"];
   }
 }
 
 declare module "next-auth/jwt" {
-  interface JWT {
-    phone?: string;
-    fullNameAr?: string;
+  interface JWT extends DefaultJWT {
+    id?: string;
+    phone?: string | null;
+    role?: string | null;
+    systemRole?: SystemRoleType | null;
+    fullNameAr?: string | null;
     fullNameEn?: string | null;
-    systemRole?: "SUPER_ADMIN" | "EMPLOYEE";
-    primaryBranchId?: number | null;
+    branchId?: string | null;
+    primaryBranchId?: string | null;
   }
 }
