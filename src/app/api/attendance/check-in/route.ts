@@ -1,189 +1,102 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { attendanceLogs, branches, users } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 
-function calculateDistanceMeters(
+function calculateHaversineDistance(
   lat1: number,
   lon1: number,
   lat2: number,
   lon2: number
 ): number {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const R = 6371e3; // meters
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
+    Math.cos(lat1 * rad) *
+      Math.cos(lat2 * rad) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const {
-      userId,
-      phone,
-      branchId,
-      latitude,
-      longitude,
-      selfieUrl,
-      notes,
-    } = body;
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!userId && !phone) {
+    const userId = (session.user as any).id as string;
+    const { latitude, longitude, photoUrl, notes } = await req.json();
+
+    if (!latitude || !longitude || !photoUrl) {
       return NextResponse.json(
-        { success: false, error: "معرف الموظف أو رقم الهاتف مطلوب" },
+        { success: false, error: "Latitude, longitude, and selfie photo are required" },
         { status: 400 }
       );
     }
 
-    // 1. Find User
-    let user = null;
-    if (userId) {
-      const res = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, String(userId)))
-        .limit(1);
-      if (res.length > 0) user = res[0];
-    } else if (phone) {
-      const res = await db
-        .select()
-        .from(users)
-        .where(eq(users.phone, String(phone)))
-        .limit(1);
-      if (res.length > 0) user = res[0];
-    }
-
-    if (!user) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user || !user.branchId) {
       return NextResponse.json(
-        { success: false, error: "الموظف غير موجود بالنظام" },
-        { status: 404 }
-      );
-    }
-
-    if (!user.isActive) {
-      return NextResponse.json(
-        { success: false, error: "حساب الموظف معطل حالياً" },
-        { status: 403 }
-      );
-    }
-
-    if (!user.canUseAttendanceTerminal) {
-      return NextResponse.json(
-        { success: false, error: "غير مسموح للموظف باستخدام شاشة بصمة الحضور" },
-        { status: 403 }
-      );
-    }
-
-    // 2. Find Branch
-    const targetBranchId = branchId || user.branchId;
-    if (!targetBranchId) {
-      return NextResponse.json(
-        { success: false, error: "لم يتم تحديد أو تعيين فرع لهذا الموظف" },
+        { success: false, error: "Employee has no assigned branch" },
         { status: 400 }
       );
     }
 
-    const branchRes = await db
-      .select()
-      .from(branches)
-      .where(eq(branches.id, String(targetBranchId)))
-      .limit(1);
-
-    if (branchRes.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "الفرع المخصص غير موجود" },
-        { status: 404 }
-      );
+    const [branch] = await db.select().from(branches).where(eq(branches.id, user.branchId)).limit(1);
+    if (!branch) {
+      return NextResponse.json({ success: false, error: "Branch not found" }, { status: 404 });
     }
 
-    const branch = branchRes[0];
+    const distance = calculateHaversineDistance(
+      Number(latitude),
+      Number(longitude),
+      Number(branch.latitude),
+      Number(branch.longitude)
+    );
 
-    // 3. Geofence Verification
-    const userLat = parseFloat(latitude);
-    const userLon = parseFloat(longitude);
-    const branchLat = parseFloat(branch.latitude || "0");
-    const branchLon = parseFloat(branch.longitude || "0");
-
-    if (isNaN(userLat) || isNaN(userLon)) {
-      return NextResponse.json(
-        { success: false, error: "إحداثيات الموقع الجغرافي غير صالحة" },
-        { status: 400 }
-      );
-    }
-
-    const distance = calculateDistanceMeters(userLat, userLon, branchLat, branchLon);
-    const allowedRadius = branch.geofenceRadius || branch.radiusMeters || 100;
-    const isWithinGeofence = distance <= allowedRadius;
-
-    if (!isWithinGeofence) {
+    const allowedRadius = branch.radius || 100; // meters
+    if (distance > allowedRadius) {
       return NextResponse.json(
         {
           success: false,
-          error: `عذراً، أنت خارج نطاق الفرع الجغرافي. المسافة المباشرة: ${Math.round(
-            distance
-          )} متر (النطاق المسموح: ${allowedRadius} متر)`,
-          distanceMeters: Math.round(distance),
-          allowedRadius,
+          error: `You are outside the branch area (${Math.round(distance)}m away, max allowed ${allowedRadius}m)`,
         },
         { status: 400 }
       );
     }
 
-    // 4. Check Check-In Status (Get Latest Log)
-    const [latestLog] = await db
-      .select()
-      .from(attendanceLogs)
-      .where(eq(attendanceLogs.userId, user.id))
-      .orderBy(desc(attendanceLogs.timestamp))
-      .limit(1);
-
-    if (latestLog && latestLog.type === "check_in") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "لقد قمت بتسجيل الحضور بالفعل. يجب تسجيل الانصراف أولاً قبل تسجيل حضور جديد.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // 5. Create Attendance Log Record
-    const logId = crypto.randomUUID();
-    const [newLog] = await db
+    const id = crypto.randomUUID();
+    const [log] = await db
       .insert(attendanceLogs)
       .values({
-        id: logId,
-        userId: user.id,
+        id,
+        userId,
         branchId: branch.id,
-        type: "check_in",
+        type: "CHECK_IN",
         timestamp: new Date(),
-        latitude: String(latitude),
-        longitude: String(longitude),
+        latitude: Number(latitude),
+        longitude: Number(longitude),
         distanceMeters: Math.round(distance),
-        isWithinGeofence: true,
-        selfieUrl: selfieUrl || null,
-        verificationStatus: "approved",
+        photoUrl,
+        status: "PRESENT",
         notes: notes || null,
       })
       .returning();
 
-    return NextResponse.json({
-      success: true,
-      message: "تم تسجيل الحضور بنجاح",
-      data: newLog,
-      distanceMeters: Math.round(distance),
-    });
-  } catch (error) {
-    console.error("Check-in API error:", error);
-    const message =
-      error instanceof Error ? error.message : "حدث خطأ أثناء تسجيل الحضور";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: true, data: log });
+  } catch (error: any) {
+    console.error("Check-in error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
