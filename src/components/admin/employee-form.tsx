@@ -10,14 +10,18 @@ import {
 
 export interface BranchOption {
   id: string | number;
-  name: string;
+  name?: string | null;
+  nameAr?: string | null;
+  nameEn?: string | null;
   code?: string | null;
   isActive?: boolean | null;
 }
 
 export interface RoleOption {
   id: string | number;
-  name: string;
+  name?: string | null;
+  nameAr?: string | null;
+  nameEn?: string | null;
   isActive?: boolean | null;
 }
 
@@ -39,12 +43,13 @@ export interface EmployeeFormInitialData {
   notes?: string | null;
 }
 
-interface EmployeeFormProps {
+export interface EmployeeFormProps {
   mode?: "create" | "edit";
   initialData?: EmployeeFormInitialData | null;
   branches?: BranchOption[];
   roles?: RoleOption[];
   redirectTo?: string;
+  locale?: string;
 }
 
 const DEFAULT_PASSWORD = "123456";
@@ -62,12 +67,29 @@ function toOptionalNumber(
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function getBranchLabel(branch: BranchOption, locale?: string): string {
+  if (branch.name) return branch.name;
+  if (locale === "en") {
+    return branch.nameEn || branch.nameAr || `Branch ${branch.id}`;
+  }
+  return branch.nameAr || branch.nameEn || `فرع ${branch.id}`;
+}
+
+function getRoleLabel(role: RoleOption, locale?: string): string {
+  if (role.name) return role.name;
+  if (locale === "en") {
+    return role.nameEn || role.nameAr || `Role ${role.id}`;
+  }
+  return role.nameAr || role.nameEn || `دور ${role.id}`;
+}
+
 export default function EmployeeForm({
   mode = "create",
   initialData = null,
   branches = [],
   roles = [],
   redirectTo = "/admin/employees",
+  locale = "ar",
 }: EmployeeFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -127,28 +149,29 @@ export default function EmployeeForm({
   const [notes, setNotes] = useState(toInputString(initialData?.notes));
   const [error, setError] = useState<string | null>(null);
 
-  const pageTitle = mode === "edit" ? "تعديل موظف" : "إضافة موظف جديد";
-  const submitLabel =
-    mode === "edit"
-      ? isPending
-        ? "جاري التحديث..."
-        : "حفظ التعديلات"
-      : isPending
-        ? "جاري الإنشاء..."
-        : "إنشاء الموظف";
+  const isAr = locale !== "en";
+  const pageTitle = mode === "edit"
+    ? (isAr ? "تعديل بيانات موظف" : "Edit Employee")
+    : (isAr ? "إضافة موظف جديد" : "Add New Employee");
 
   function validate(): string | null {
-    if (!name.trim()) return "اسم الموظف مطلوب";
-    if (!phone.trim()) return "رقم الهاتف مطلوب (يُستخدم كاسم دخول)";
-    if (mode === "create" && !password.trim()) {
-      return "كلمة المرور مطلوبة";
+    if (!name.trim()) {
+      return isAr ? "اسم الموظف مطلوب" : "Employee name is required";
     }
-    if (!branchId.trim()) return "يجب اختيار الفرع المعين للموظف";
+    if (!phone.trim()) {
+      return isAr ? "رقم الهاتف مطلوب (اسم الدخول)" : "Phone number is required (Login ID)";
+    }
+    if (mode === "create" && !password.trim()) {
+      return isAr ? "كلمة المرور مطلوبة" : "Password is required";
+    }
+    if (!branchId.trim()) {
+      return isAr ? "يجب اختيار الفرع المعين للموظف" : "Assigned branch is required";
+    }
     if (hourlyRate.trim() && Number.isNaN(Number(hourlyRate))) {
-      return "الراتب بالساعة غير صالح";
+      return isAr ? "الراتب بالساعة غير صالح" : "Invalid hourly rate";
     }
     if (monthlySalary.trim() && Number.isNaN(Number(monthlySalary))) {
-      return "الراتب الشهري غير صالح";
+      return isAr ? "الراتب الشهري غير صالح" : "Invalid monthly salary";
     }
     return null;
   }
@@ -200,7 +223,7 @@ export default function EmployeeForm({
           const message =
             result?.error ||
             result?.message ||
-            "تعذر حفظ بيانات الموظف";
+            (isAr ? "تعذر حفظ بيانات الموظف" : "Failed to save employee");
           setError(message);
           toast.error(message);
           return;
@@ -208,14 +231,16 @@ export default function EmployeeForm({
 
         toast.success(
           mode === "edit"
-            ? "تم تحديث بيانات الموظف بنجاح"
-            : "تم إنشاء الموظف بنجاح"
+            ? (isAr ? "تم تحديث بيانات الموظف بنجاح" : "Employee updated successfully")
+            : (isAr ? "تم إنشاء الموظف بنجاح" : "Employee created successfully")
         );
         router.push(redirectTo);
         router.refresh();
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "حدث خطأ غير متوقع أثناء الحفظ";
+          err instanceof Error
+            ? err.message
+            : (isAr ? "حدث خطأ غير متوقع أثناء الحفظ" : "An unexpected error occurred");
         setError(message);
         toast.error(message);
       }
@@ -223,13 +248,15 @@ export default function EmployeeForm({
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl" dir="rtl">
+    <div className="mx-auto w-full max-w-4xl" dir={isAr ? "rtl" : "ltr"}>
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
           <p className="mt-1 text-sm text-slate-600">
-            رقم الهاتف هو معرف تسجيل الدخول. كلمة المرور الافتراضية للموظفين
-            الجدد: <span className="font-semibold">{DEFAULT_PASSWORD}</span>
+            {isAr
+              ? "رقم الهاتف هو اسم الدخول. كلمة المرور الافتراضية للحسابات الجديدة: "
+              : "Phone number is login ID. Default password for new users: "}
+            <span className="font-semibold">{DEFAULT_PASSWORD}</span>
           </p>
         </div>
         <button
@@ -238,7 +265,7 @@ export default function EmployeeForm({
           className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           disabled={isPending}
         >
-          رجوع للقائمة
+          {isAr ? "رجوع للقائمة" : "Back to List"}
         </button>
       </div>
 
@@ -255,13 +282,13 @@ export default function EmployeeForm({
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              اسم الموظف <span className="text-red-500">*</span>
+              {isAr ? "اسم الموظف" : "Employee Name"} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="مثال: أحمد محمد"
+              placeholder={isAr ? "مثال: أحمد محمد" : "e.g. John Doe"}
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-500 transition focus:ring-2"
               disabled={isPending}
               required
@@ -270,7 +297,8 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              رقم الهاتف (اسم الدخول) <span className="text-red-500">*</span>
+              {isAr ? "رقم الهاتف (اسم الدخول)" : "Phone Number (Login ID)"}{" "}
+              <span className="text-red-500">*</span>
             </label>
             <input
               type="tel"
@@ -285,7 +313,7 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              البريد الإلكتروني
+              {isAr ? "البريد الإلكتروني" : "Email Address"}
             </label>
             <input
               type="email"
@@ -299,11 +327,13 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              كلمة المرور{" "}
+              {isAr ? "كلمة المرور" : "Password"}{" "}
               {mode === "create" ? (
                 <span className="text-red-500">*</span>
               ) : (
-                <span className="text-slate-400">(اتركها فارغة لعدم التغيير)</span>
+                <span className="text-slate-400">
+                  {isAr ? "(اتركها فارغة لعدم التغيير)" : "(Leave empty to keep current)"}
+                </span>
               )}
             </label>
             <input
@@ -311,7 +341,11 @@ export default function EmployeeForm({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={
-                mode === "edit" ? "اتركها فارغة للإبقاء على الحالية" : DEFAULT_PASSWORD
+                mode === "edit"
+                  ? isAr
+                    ? "اتركها فارغة للإبقاء على الحالية"
+                    : "Leave blank to keep current"
+                  : DEFAULT_PASSWORD
               }
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-500 transition focus:ring-2"
               disabled={isPending}
@@ -322,7 +356,7 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              الفرع المعين <span className="text-red-500">*</span>
+              {isAr ? "الفرع المعين" : "Assigned Branch"} <span className="text-red-500">*</span>
             </label>
             <select
               value={branchId}
@@ -331,10 +365,10 @@ export default function EmployeeForm({
               disabled={isPending}
               required
             >
-              <option value="">اختر الفرع</option>
+              <option value="">{isAr ? "اختر الفرع" : "Select Branch"}</option>
               {activeBranches.map((branch) => (
                 <option key={String(branch.id)} value={String(branch.id)}>
-                  {branch.name}
+                  {getBranchLabel(branch, locale)}
                   {branch.code ? ` (${branch.code})` : ""}
                 </option>
               ))}
@@ -343,13 +377,13 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              المسمى الوظيفي
+              {isAr ? "المسمى الوظيفي" : "Job Title"}
             </label>
             <input
               type="text"
               value={jobTitle}
               onChange={(e) => setJobTitle(e.target.value)}
-              placeholder="مثال: كاشير / مشرف / محضر"
+              placeholder={isAr ? "مثال: كاشير / مشرف / محضر" : "e.g. Cashier / Supervisor"}
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-500 transition focus:ring-2"
               disabled={isPending}
             />
@@ -357,7 +391,7 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              كود الموظف
+              {isAr ? "كود الموظف" : "Employee Code"}
             </label>
             <input
               type="text"
@@ -371,7 +405,7 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              الدور الأساسي
+              {isAr ? "الدور الأساسي" : "Primary System Role"}
             </label>
             <select
               value={role}
@@ -379,16 +413,16 @@ export default function EmployeeForm({
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-500 transition focus:ring-2"
               disabled={isPending}
             >
-              <option value="employee">موظف</option>
-              <option value="supervisor">مشرف</option>
-              <option value="manager">مدير</option>
-              <option value="admin">أدمن</option>
+              <option value="employee">{isAr ? "موظف" : "Employee"}</option>
+              <option value="supervisor">{isAr ? "مشرف" : "Supervisor"}</option>
+              <option value="manager">{isAr ? "مدير" : "Manager"}</option>
+              <option value="admin">{isAr ? "أدمن" : "Admin"}</option>
             </select>
           </div>
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              صلاحية مخصصة (اختياري)
+              {isAr ? "صلاحية مخصصة (اختياري)" : "Custom Role (Optional)"}
             </label>
             <select
               value={roleId}
@@ -396,10 +430,10 @@ export default function EmployeeForm({
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-500 transition focus:ring-2"
               disabled={isPending}
             >
-              <option value="">بدون صلاحية مخصصة</option>
+              <option value="">{isAr ? "بدون صلاحية مخصصة" : "No Custom Role"}</option>
               {activeRoles.map((item) => (
                 <option key={String(item.id)} value={String(item.id)}>
-                  {item.name}
+                  {getRoleLabel(item, locale)}
                 </option>
               ))}
             </select>
@@ -407,7 +441,7 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              الأجر بالساعة
+              {isAr ? "الأجر بالساعة" : "Hourly Rate"}
             </label>
             <input
               type="number"
@@ -423,7 +457,7 @@ export default function EmployeeForm({
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-slate-700">
-              الراتب الشهري
+              {isAr ? "الراتب الشهري" : "Monthly Salary"}
             </label>
             <input
               type="number"
@@ -440,13 +474,13 @@ export default function EmployeeForm({
 
         <div className="space-y-2">
           <label className="block text-sm font-medium text-slate-700">
-            ملاحظات
+            {isAr ? "ملاحظات" : "Notes"}
           </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            placeholder="ملاحظات إضافية عن الموظف..."
+            placeholder={isAr ? "ملاحظات إضافية عن الموظف..." : "Additional notes..."}
             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none ring-sky-500 transition focus:ring-2"
             disabled={isPending}
           />
@@ -463,10 +497,12 @@ export default function EmployeeForm({
             />
             <span>
               <span className="block text-sm font-medium text-slate-800">
-                حساب نشط
+                {isAr ? "حساب نشط" : "Active Account"}
               </span>
               <span className="block text-xs text-slate-500">
-                إيقاف الحساب يمنع تسجيل الدخول واستخدام النظام.
+                {isAr
+                  ? "إيقاف الحساب يمنع الموظف من تسجيل الدخول"
+                  : "Disabling disables login access for this employee"}
               </span>
             </span>
           </label>
@@ -481,10 +517,12 @@ export default function EmployeeForm({
             />
             <span>
               <span className="block text-sm font-medium text-slate-800">
-                السماح ببصمة الحضور
+                {isAr ? "السماح ببصمة الحضور" : "Enable Attendance Terminal"}
               </span>
               <span className="block text-xs text-slate-500">
-                تفعيل استخدام شاشة الحضور مع السيلفي والتحقق من الموقع.
+                {isAr
+                  ? "تفعيل تسجيل الحضور عبر السيلفي والـ GPS"
+                  : "Allow terminal check-in with live selfie and GPS"}
               </span>
             </span>
           </label>
@@ -497,14 +535,28 @@ export default function EmployeeForm({
             className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isPending}
           >
-            إلغاء
+            {isAr ? "إلغاء" : "Cancel"}
           </button>
           <button
             type="submit"
             className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isPending}
           >
-            {submitLabel}
+            {mode === "edit"
+              ? isPending
+                ? isAr
+                  ? "جاري التحديث..."
+                  : "Updating..."
+                : isAr
+                  ? "حفظ التعديلات"
+                  : "Save Changes"
+              : isPending
+                ? isAr
+                  ? "جاري الإنشاء..."
+                  : "Creating..."
+                : isAr
+                  ? "إنشاء الموظف"
+                  : "Create Employee"}
           </button>
         </div>
       </form>
