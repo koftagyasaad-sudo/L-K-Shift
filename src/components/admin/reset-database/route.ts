@@ -1,45 +1,46 @@
-// src/app/api/admin/reset-database/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { auditLogs, branches, customRoles, shiftTemplates, users } from "@/db/schema";
-import { ensureDemoLoginUser, ensureSeedData } from "@/db/seed";
+import {
+  attendanceLogs,
+  notifications,
+  shifts,
+  leaveRequests,
+  customRoleAssignments,
+  adminBranchScopes,
+  users,
+  customRoles,
+  branches,
+} from "@/db/schema";
 
 export async function POST(request: Request) {
-  const token = request.headers.get("x-reset-token");
-
-  if (!process.env.DB_RESET_TOKEN || token !== process.env.DB_RESET_TOKEN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
-    // الترتيب مهم بسبب الـ Foreign Keys:
-    // 1) حذف السجلات اللي مش مرتبطة بـ cascade تلقائي
-    await db.delete(auditLogs);
-
-    // 2) حذف المستخدمين (سيحذف تلقائيًا عبر cascade: الحضور، الورديات،
-    //    الإجازات، الإشعارات، الأجهزة، صلاحيات الفروع، الأدوار المخصصة)
+    // مسح البيانات من الجداول المعتمدة بالترتيب التنازلي للتعديلات
+    await db.delete(attendanceLogs);
+    await db.delete(notifications);
+    await db.delete(shifts);
+    await db.delete(leaveRequests);
+    await db.delete(customRoleAssignments);
+    await db.delete(adminBranchScopes);
     await db.delete(users);
-
-    // 3) حذف الجداول المستقلة المتبقية
     await db.delete(customRoles);
-    await db.delete(shiftTemplates);
-
-    // 4) حذف كل الفروع القديمة
     await db.delete(branches);
-
-    // 5) إعادة الزرع: 4 فروع جديدة + حساب admin
-    await ensureSeedData();
-    await ensureDemoLoginUser();
 
     return NextResponse.json({
       success: true,
-      message: "تم تصفير قاعدة البيانات بنجاح. سجّل الدخول بـ phone: admin / password: 123",
+      message: "Database reset successfully",
     });
-  } catch (error) {
-    console.error("[RESET_DATABASE_ERROR]", error);
+  } catch (error: any) {
+    console.error("Reset database error:", error);
     return NextResponse.json(
-      { error: "Reset failed", details: String(error) },
-      { status: 500 },
+      {
+        success: false,
+        error: error.message || "Failed to reset database",
+      },
+      { status: 500 }
     );
   }
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }
