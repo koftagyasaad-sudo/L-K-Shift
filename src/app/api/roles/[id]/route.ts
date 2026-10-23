@@ -1,90 +1,135 @@
-// src/app/api/roles/[id]/route.ts
-
-import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { customRoles } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { id } = await params;
+
+    const [role] = await db
+      .select()
+      .from(customRoles)
+      .where(eq(customRoles.id, id))
+      .limit(1);
+
+    if (!role) {
+      return NextResponse.json(
+        { success: false, error: "Role not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: role,
+    });
+  } catch (error: any) {
+    console.error("Error fetching role:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
-
-  const { id } = await params;
-  const [role] = await db
-    .select()
-    .from(customRoles)
-    .where(eq(customRoles.id, Number(id)))
-    .limit(1);
-
-  if (!role) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(role);
 }
 
-export async function PATCH(
-  request: Request,
+export async function PUT(
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (session?.user?.systemRole !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { id } = await params;
+    const body = await req.json();
+    const { name, description, permissions } = body;
+
+    const [updatedRole] = await db
+      .update(customRoles)
+      .set({
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(permissions !== undefined && { permissions }),
+        updatedAt: new Date(),
+      })
+      .where(eq(customRoles.id, id))
+      .returning();
+
+    if (!updatedRole) {
+      return NextResponse.json(
+        { success: false, error: "Role not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: updatedRole,
+    });
+  } catch (error: any) {
+    console.error("Error updating role:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
-
-  const { id } = await params;
-  const body = await request.json();
-
-  if (!body.nameAr || !Array.isArray(body.permissions)) {
-    return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
-  }
-
-  const [updated] = await db
-    .update(customRoles)
-    .set({
-      name: body.name || body.nameAr,
-      nameAr: body.nameAr,
-      permissions: body.permissions,
-    })
-    .where(eq(customRoles.id, Number(id)))
-    .returning();
-
-  if (!updated) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(updated);
 }
 
 export async function DELETE(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (session?.user?.systemRole !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
-  const { id } = await params;
-  const [role] = await db
-    .select()
-    .from(customRoles)
-    .where(eq(customRoles.id, Number(id)))
-    .limit(1);
+    const { id } = await params;
 
-  if (role?.isSystem) {
+    const [deletedRole] = await db
+      .delete(customRoles)
+      .where(eq(customRoles.id, id))
+      .returning();
+
+    if (!deletedRole) {
+      return NextResponse.json(
+        { success: false, error: "Role not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: deletedRole,
+    });
+  } catch (error: any) {
+    console.error("Error deleting role:", error);
     return NextResponse.json(
-      { error: "لا يمكن حذف دور نظامي أساسي" },
-      { status: 400 }
+      { success: false, error: error.message || "Internal Server Error" },
+      { status: 500 }
     );
   }
-
-  await db.delete(customRoles).where(eq(customRoles.id, Number(id)));
-  return NextResponse.json({ success: true });
 }
