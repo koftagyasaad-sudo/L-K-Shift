@@ -25,13 +25,20 @@ export const authOptions: NextAuthOptions = {
 
         if (user.password !== credentials.password) return null;
 
-        return {
+        // مطابقة كائن المستخدم مع واجهة NextAuth المخصصة
+        const userResult: any = {
           id: user.id,
           name: user.name,
+          fullNameAr: user.name,
+          fullNameEn: user.name,
           phone: user.phone,
           role: user.role,
+          systemRole: user.role,
           branchId: user.branchId,
+          primaryBranchId: user.branchId,
         };
+
+        return userResult;
       },
     }),
   ],
@@ -39,8 +46,10 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
-        token.branchId = (user as any).branchId;
+        token.role = (user as any).role || (user as any).systemRole;
+        token.systemRole = (user as any).systemRole || (user as any).role;
+        token.branchId = (user as any).branchId || (user as any).primaryBranchId;
+        token.primaryBranchId = (user as any).primaryBranchId || (user as any).branchId;
       }
       return token;
     },
@@ -48,7 +57,9 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).id = token.id as string;
         (session.user as any).role = token.role as string;
+        (session.user as any).systemRole = token.systemRole as string;
         (session.user as any).branchId = token.branchId as string;
+        (session.user as any).primaryBranchId = token.primaryBranchId as string;
       }
       return session;
     },
