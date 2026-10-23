@@ -1,100 +1,217 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/db";
-import { users, adminBranchScopes, customRoleAssignments } from "@/db/schema";
-import { hash } from "bcryptjs";
+import { users, adminBranchScopes } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
-async function checkAdmin() {
-  const session = await auth();
-  if (session?.user?.systemRole !== "SUPER_ADMIN") return null;
-  return session;
+interface RouteParams {
+  params: Promise<{
+    id: string;
+  }>;
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await checkAdmin();
-  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function GET(req: Request, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+    const employeeId = String(id);
 
-  const { id } = await params;
-  const [user] = await db.select().from(users).where(eq(users.id, Number(id))).limit(1);
-  if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!employeeId || employeeId.trim() === "") {
+      return NextResponse.json(
+        { success: false, error: "معرف الموظف مطلوب" },
+        { status: 400 }
+      );
+    }
 
-  const scopes = await db.select().from(adminBranchScopes).where(eq(adminBranchScopes.userId, user.id));
-  const assignments = await db
-    .select()
-    .from(customRoleAssignments)
-    .where(eq(customRoleAssignments.userId, user.id));
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, employeeId))
+      .limit(1);
 
-  return NextResponse.json({
-    ...user,
-    passwordHash: undefined,
-    managedBranchIds: scopes.map((s) => s.branchId),
-    customRoleIds: assignments.map((a) => a.roleId),
-  });
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "الموظف غير موجود بالنظام" },
+        { status: 404 }
+      );
+    }
+
+    const scopes = await db
+      .select()
+      .from(adminBranchScopes)
+      .where(eq(adminBranchScopes.userId, user.id));
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...user,
+        adminBranchScopes: scopes,
+      },
+    });
+  } catch (error) {
+    console.error("GET employee by ID API error:", error);
+    const message =
+      error instanceof Error ? error.message : "حدث خطأ أثناء جلب بيانات الموظف";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await checkAdmin();
-  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function PUT(req: Request, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+    const employeeId = String(id);
 
-  const { id } = await params;
-  const userId = Number(id);
-  const body = await request.json();
+    if (!employeeId || employeeId.trim() === "") {
+      return NextResponse.json(
+        { success: false, error: "معرف الموظف مطلوب" },
+        { status: 400 }
+      );
+    }
 
-  const updateData: Record<string, unknown> = {
-    fullNameAr: body.fullNameAr,
-    fullNameEn: body.fullNameEn || null,
-    phone: body.phone,
-    nationalId: body.nationalId || null,
-    address: body.address || null,
-    governorate: body.governorate || null,
-    employeeNumber: body.employeeNumber || null,
-    jobRole: body.jobRole,
-    primaryBranchId: body.primaryBranchId ? Number(body.primaryBranchId) : null,
-    managementRole: body.managementRole || "NONE",
-    isActive: body.isActive ?? true,
-    salaryType: body.salaryType || "MONTHLY",
-    hourlyRate: body.hourlyRate ? String(body.hourlyRate) : null,
-    monthlySalary: body.monthlySalary ? String(body.monthlySalary) : null,
-    workingHoursPerDay: body.workingHoursPerDay ? Number(body.workingHoursPerDay) : 8,
-    workingDaysPerMonth: body.workingDaysPerMonth ? Number(body.workingDaysPerMonth) : 26,
-    annualLeaveDays: body.annualLeaveDays ? Number(body.annualLeaveDays) : 21,
-  };
+    const body = await req.json();
+    const {
+      name,
+      phone,
+      email,
+      password,
+      role,
+      jobTitle,
+      job_title,
+      employeeCode,
+      employee_code,
+      branchId,
+      branch_id,
+      roleId,
+      role_id,
+      hourlyRate,
+      hourly_rate,
+      monthlySalary,
+      monthly_salary,
+      isActive,
+      is_active,
+      canUseAttendanceTerminal,
+      can_use_attendance_terminal,
+      notes,
+    } = body;
 
-  if (body.password) {
-    updateData.passwordHash = await hash(body.password, 10);
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, employeeId))
+      .limit(1);
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { success: false, error: "الموظف غير موجود بالنظام" },
+        { status: 404 }
+      );
+    }
+
+    const targetBranchId = branchId || branch_id || existingUser.branchId;
+    const targetRoleId = roleId || role_id || existingUser.roleId;
+    const targetJobTitle = jobTitle || job_title || existingUser.jobTitle;
+    const targetEmployeeCode = employeeCode || employee_code || existingUser.employeeCode;
+    const targetHourlyRate =
+      hourlyRate !== undefined
+        ? hourlyRate
+        : hourly_rate !== undefined
+        ? hourly_rate
+        : existingUser.hourlyRate;
+    const targetMonthlySalary =
+      monthlySalary !== undefined
+        ? monthlySalary
+        : monthly_salary !== undefined
+        ? monthly_salary
+        : existingUser.monthlySalary;
+    const targetIsActive =
+      isActive !== undefined
+        ? Boolean(isActive)
+        : is_active !== undefined
+        ? Boolean(is_active)
+        : existingUser.isActive;
+    const targetCanTerminal =
+      canUseAttendanceTerminal !== undefined
+        ? Boolean(canUseAttendanceTerminal)
+        : can_use_attendance_terminal !== undefined
+        ? Boolean(can_use_attendance_terminal)
+        : existingUser.canUseAttendanceTerminal;
+
+    const updateData: Record<string, unknown> = {
+      name: name ? String(name).trim() : existingUser.name,
+      phone: phone ? String(phone).trim() : existingUser.phone,
+      email: email !== undefined ? (email ? String(email).trim() : null) : existingUser.email,
+      role: role ? String(role).trim() : existingUser.role,
+      jobTitle: targetJobTitle ? String(targetJobTitle).trim() : null,
+      employeeCode: targetEmployeeCode ? String(targetEmployeeCode).trim() : null,
+      branchId: targetBranchId ? String(targetBranchId).trim() : null,
+      roleId: targetRoleId ? String(targetRoleId).trim() : null,
+      hourlyRate: targetHourlyRate !== null && targetHourlyRate !== undefined ? String(targetHourlyRate) : null,
+      monthlySalary: targetMonthlySalary !== null && targetMonthlySalary !== undefined ? String(targetMonthlySalary) : null,
+      isActive: targetIsActive,
+      canUseAttendanceTerminal: targetCanTerminal,
+      notes: notes !== undefined ? (notes ? String(notes).trim() : null) : existingUser.notes,
+      updatedAt: new Date(),
+    };
+
+    if (password && String(password).trim().length > 0) {
+      updateData.password = await bcrypt.hash(String(password).trim(), 10);
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, employeeId))
+      .returning();
+
+    return NextResponse.json({
+      success: true,
+      message: "تم تحديث بيانات الموظف بنجاح",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("PUT employee by ID API error:", error);
+    const message =
+      error instanceof Error ? error.message : "حدث خطأ أثناء تحديث بيانات الموظف";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-
-  await db.update(users).set(updateData).where(eq(users.id, userId));
-
-  await db.delete(adminBranchScopes).where(eq(adminBranchScopes.userId, userId));
-  if (Array.isArray(body.managedBranchIds) && body.managedBranchIds.length > 0) {
-    await db.insert(adminBranchScopes).values(
-      body.managedBranchIds.map((branchId: number) => ({ userId, branchId }))
-    );
-  }
-
-  await db.delete(customRoleAssignments).where(eq(customRoleAssignments.userId, userId));
-  if (Array.isArray(body.customRoleIds) && body.customRoleIds.length > 0) {
-    await db.insert(customRoleAssignments).values(
-      body.customRoleIds.map((roleId: number) => ({ userId, roleId }))
-    );
-  }
-
-  return NextResponse.json({ success: true });
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await checkAdmin();
-  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+export async function PATCH(req: Request, context: RouteParams) {
+  return PUT(req, context);
+}
 
-  const { id } = await params;
-  const userId = Number(id);
+export async function DELETE(req: Request, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+    const employeeId = String(id);
 
-  if (Number(session.user.id) === userId) {
-    return NextResponse.json({ error: "لا يمكنك حذف حسابك الخاص" }, { status: 400 });
+    if (!employeeId || employeeId.trim() === "") {
+      return NextResponse.json(
+        { success: false, error: "معرف الموظف مطلوب" },
+        { status: 400 }
+      );
+    }
+
+    const [deletedUser] = await db
+      .delete(users)
+      .where(eq(users.id, employeeId))
+      .returning();
+
+    if (!deletedUser) {
+      return NextResponse.json(
+        { success: false, error: "الموظف غير موجود بالنظام" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "تم حذف الموظف بنجاح",
+      data: deletedUser,
+    });
+  } catch (error) {
+    console.error("DELETE employee by ID API error:", error);
+    const message =
+      error instanceof Error ? error.message : "حدث خطأ أثناء حذف الموظف";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
-
-  await db.delete(users).where(eq(users.id, userId));
-  return NextResponse.json({ success: true });
 }
