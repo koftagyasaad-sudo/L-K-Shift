@@ -96,9 +96,11 @@ export async function saveBranchAction(input: SaveBranchInput) {
       revalidatePath("/admin/branches");
       return { success: true, data: updated };
     } else {
+      const branchId = crypto.randomUUID();
       const [created] = await db
         .insert(branches)
         .values({
+          id: branchId,
           nameAr,
           nameEn,
           address: input.address || null,
