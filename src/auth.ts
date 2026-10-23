@@ -4,8 +4,7 @@ import { authOptions } from "@/lib/auth";
 const handler = NextAuth(authOptions);
 
 /**
- * دالة مساعدة للحصول على الجلسة الحالية من السيرفر (Server Components / API Routes / Server Actions)
- * توفر استدعاء await auth() بسلاسة وبشكل يتوافق تماماً مع Next.js 15 و NextAuth v4.
+ * دالة مساعدة للحصول على الجلسة الحالية من السيرفر
  */
 export async function auth() {
   return await getServerSession(authOptions);
