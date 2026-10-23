@@ -5,6 +5,19 @@ import { users } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+export type EmployeeData = {
+  id?: string;
+  name?: string;
+  phone?: string;
+  password?: string;
+  email?: string | null;
+  role?: string;
+  branchId?: string | null;
+  isActive?: boolean;
+  canUseAttendanceTerminal?: boolean;
+  [key: string]: any;
+};
+
 export async function getEmployeesAction(branchId?: string) {
   try {
     let list;
@@ -185,6 +198,42 @@ export async function deleteEmployeeAction(id: string) {
     return {
       success: false,
       error: error.message || "Failed to delete employee",
+    };
+  }
+}
+
+export async function toggleEmployeeStatusAction(id: string) {
+  try {
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return { success: false, error: "Employee not found" };
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set({
+        isActive: !existing.isActive,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, id))
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: updated,
+      employee: updated,
+    };
+  } catch (error: any) {
+    console.error("toggleEmployeeStatusAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to toggle employee status",
     };
   }
 }
