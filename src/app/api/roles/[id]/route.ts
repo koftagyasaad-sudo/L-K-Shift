@@ -61,16 +61,28 @@ export async function PUT(
 
     const { id } = await params;
     const body = await req.json();
-    const { name, description, permissions } = body;
+    const { name, nameAr, nameEn, description, permissions } = body;
+
+    const updatePayload: any = {
+      updatedAt: new Date(),
+    };
+
+    if (nameAr !== undefined || name !== undefined) {
+      updatePayload.nameAr = nameAr || name;
+    }
+    if (nameEn !== undefined || name !== undefined) {
+      updatePayload.nameEn = nameEn || name;
+    }
+    if (description !== undefined) {
+      updatePayload.description = description;
+    }
+    if (permissions !== undefined) {
+      updatePayload.permissions = permissions;
+    }
 
     const [updatedRole] = await db
       .update(customRoles)
-      .set({
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(permissions !== undefined && { permissions }),
-        updatedAt: new Date(),
-      })
+      .set(updatePayload)
       .where(eq(customRoles.id, id))
       .returning();
 
