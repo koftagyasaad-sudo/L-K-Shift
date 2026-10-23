@@ -1,412 +1,436 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import {
-  ShieldCheck,
-  Plus,
-  Search,
-  Trash2,
-  Edit2,
-  Building2,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  X,
-} from "lucide-react";
+import { use, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 import {
   getRolesAction,
-  saveRoleAction,
   deleteRoleAction,
+  saveRoleAction,
+  type RoleData,
 } from "@/actions/roleActions";
-import { getBranchesAction } from "@/actions/branchActions";
-import type { RoleData, BranchData } from "@/types";
+import { getBranchesAction, type BranchData } from "@/actions/branchActions";
+
+interface RolesPageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
+
+interface CustomRoleFormState {
+  id?: string;
+  name: string;
+  nameAr: string;
+  nameEn: string;
+  description?: string;
+  permissions: string[];
+  isActive: boolean;
+}
 
 const AVAILABLE_PERMISSIONS = [
-  { id: "view_attendance", labelAr: "عرض سجل الحضور", labelEn: "View Attendance" },
-  { id: "manage_leaves", labelAr: "إدارة طلبات الإجازات", labelEn: "Manage Leaves" },
-  { id: "manage_employees", labelAr: "إدارة الموظفين والرواتب", labelEn: "Manage Employees" },
-  { id: "manage_branches", labelAr: "إدارة الفروع والورديات", labelEn: "Manage Branches" },
-  { id: "manage_roles", labelAr: "إدارة الأدوار والصلاحيات", labelEn: "Manage Roles" },
+  { id: "employees:read", labelAr: "عرض الموظفين", labelEn: "View Employees" },
+  { id: "employees:write", labelAr: "إدارة الموظفين", labelEn: "Manage Employees" },
+  { id: "branches:read", labelAr: "عرض الفروع", labelEn: "View Branches" },
+  { id: "branches:write", labelAr: "إدارة الفروع", labelEn: "Manage Branches" },
+  { id: "attendance:read", labelAr: "عرض سجلات الحضور", labelEn: "View Attendance Logs" },
+  { id: "attendance:write", labelAr: "تعديل الحضور والتنفيذ", labelEn: "Manage Attendance" },
+  { id: "reports:read", labelAr: "عرض التقارير", labelEn: "View Reports" },
 ];
 
-export default function RolesPage() {
-  const params = useParams();
-  const locale = (params?.locale as string) || "ar";
-  const isAr = locale === "ar";
+export default function RolesPage({ params }: RolesPageProps) {
+  const { locale } = use(params);
+  const isAr = locale !== "en";
 
   const [roles, setRoles] = useState<RoleData[]>([]);
   const [branches, setBranches] = useState<BranchData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isPending, startTransition] = useTransition();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [editingRole, setEditingRole] = useState<CustomRoleFormState | null>(null);
 
-  const [formData, setFormData] = useState<RoleData>({
-    id: "",
+  const [formData, setFormData] = useState<CustomRoleFormState>({
     name: "",
+    nameAr: "",
+    nameEn: "",
     description: "",
     permissions: [],
-    branch_ids: [],
+    isActive: true,
   });
 
-  const fetchAll = async () => {
-    setLoading(true);
+  const loadData = async () => {
+    setIsLoading(true);
     try {
       const [roleRes, branchRes] = await Promise.all([
         getRolesAction(),
         getBranchesAction(),
       ]);
 
-      if (roleRes.success) setRoles(roleRes.roles || roleRes.data || []);
-      if (branchRes.success) setBranches(branchRes.branches || branchRes.data || []);
+      if (roleRes.success && Array.isArray(roleRes.data)) {
+        setRoles(roleRes.data);
+      } else {
+        setRoles([]);
+      }
+
+      if (branchRes.success && Array.isArray(branchRes.data)) {
+        setBranches(branchRes.data);
+      } else {
+        setBranches([]);
+      }
     } catch (err) {
       console.error("Failed to load roles page:", err);
+      toast.error(isAr ? "حدث خطأ أثناء تحميل الصلاحيات" : "Failed to load roles");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAll();
+    loadData();
   }, []);
 
-  const handleOpenModal = (role?: RoleData) => {
-    setMessage(null);
-    if (role) {
-      setFormData({
-        id: role.id || "",
-        name: role.name || "",
-        description: role.description || "",
-        permissions: role.permissions || [],
-        branch_ids: role.branch_ids || [],
-      });
-    } else {
-      setFormData({
-        id: "",
-        name: "",
-        description: "",
-        permissions: ["view_attendance"],
-        branch_ids: [],
-      });
-    }
+  const handleOpenCreateModal = () => {
+    setEditingRole(null);
+    setFormData({
+      name: "",
+      nameAr: "",
+      nameEn: "",
+      description: "",
+      permissions: [],
+      isActive: true,
+    });
     setIsModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-
-    setSaving(true);
-    setMessage(null);
-
-    try {
-      const res = await saveRoleAction({
-        id: formData.id || undefined,
-        name: formData.name.trim(),
-        description: formData.description?.trim() || undefined,
-        permissions: formData.permissions,
-        branch_ids: formData.branch_ids,
-      });
-
-      if (res.success) {
-        setMessage({
-          type: "success",
-          text: isAr ? "تم حفظ الدور المسمى الوظيفي بنجاح!" : "Role saved successfully!",
-        });
-        setTimeout(() => {
-          setIsModalOpen(false);
-          fetchAll();
-        }, 900);
-      } else {
-        setMessage({
-          type: "error",
-          text: res.error || (isAr ? "حدث خطأ أثناء الحفظ" : "Failed to save role"),
-        });
-      }
-    } catch {
-      setMessage({
-        type: "error",
-        text: isAr ? "خطأ في الاتصال بالخادم" : "Server connection error",
-      });
-    } finally {
-      setSaving(false);
-    }
+  const handleOpenEditModal = (role: RoleData) => {
+    setEditingRole({
+      id: role.id,
+      name: role.name || role.nameAr || role.nameEn || "",
+      nameAr: role.nameAr || role.name || "",
+      nameEn: role.nameEn || role.name || "",
+      description: role.description || "",
+      permissions: Array.isArray(role.permissions) ? role.permissions : [],
+      isActive: role.isActive ?? true,
+    });
+    setFormData({
+      id: role.id,
+      name: role.name || role.nameAr || role.nameEn || "",
+      nameAr: role.nameAr || role.name || "",
+      nameEn: role.nameEn || role.name || "",
+      description: role.description || "",
+      permissions: Array.isArray(role.permissions) ? role.permissions : [],
+      isActive: role.isActive ?? true,
+    });
+    setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(isAr ? "هل أنت متأكد من حذف هذا الدور؟" : "Are you sure you want to delete this role?")) {
+  const handleTogglePermission = (permId: string) => {
+    setFormData((prev) => {
+      const current = prev.permissions || [];
+      const exists = current.includes(permId);
+      const updated = exists
+        ? current.filter((p) => p !== permId)
+        : [...current, permId];
+      return { ...prev, permissions: updated };
+    });
+  };
+
+  const handleSubmitRole = (e: React.FormEvent) => {
+    e.preventDefault();
+    const nameToSave = formData.nameAr.trim() || formData.name.trim() || formData.nameEn.trim();
+
+    if (!nameToSave) {
+      toast.error(isAr ? "اسم الدور مطلوب" : "Role name is required");
       return;
     }
 
-    try {
-      const res = await deleteRoleAction(id);
-      if (res.success) {
-        fetchAll();
-      } else {
-        alert(res.error || (isAr ? "فشل حذف الدور" : "Failed to delete role"));
+    startTransition(async () => {
+      try {
+        const payload = {
+          id: formData.id,
+          name: nameToSave,
+          nameAr: formData.nameAr.trim() || nameToSave,
+          nameEn: formData.nameEn.trim() || nameToSave,
+          description: formData.description?.trim() || undefined,
+          permissions: formData.permissions,
+          isActive: formData.isActive,
+        };
+
+        const result = await saveRoleAction(payload);
+        if (result.success) {
+          toast.success(
+            editingRole
+              ? isAr ? "تم تحديث الدور بنجاح" : "Role updated successfully"
+              : isAr ? "تم إضافة الدور بنجاح" : "Role added successfully"
+          );
+          setIsModalOpen(false);
+          loadData();
+        } else {
+          toast.error(result.error || (isAr ? "فشل حفظ البيانات" : "Failed to save role"));
+        }
+      } catch (err) {
+        toast.error(isAr ? "حدث خطأ غير متوقع" : "Unexpected error occurred");
       }
-    } catch (err) {
-      console.error("Error deleting role:", err);
-    }
+    });
   };
 
-  const togglePermission = (permId: string) => {
-    const current = formData.permissions || [];
-    if (current.includes(permId)) {
-      setFormData({ ...formData, permissions: current.filter((p) => p !== permId) });
-    } else {
-      setFormData({ ...formData, permissions: [...current, permId] });
+  const handleDeleteRole = (roleId: string) => {
+    if (!confirm(isAr ? "هل أنت تأكد من حذف هذا الدور؟" : "Are you sure you want to delete this role?")) {
+      return;
     }
-  };
 
-  const toggleBranch = (bId: string) => {
-    const current = formData.branch_ids || [];
-    if (current.includes(bId)) {
-      setFormData({ ...formData, branch_ids: current.filter((b) => b !== bId) });
-    } else {
-      setFormData({ ...formData, branch_ids: [...current, bId] });
-    }
+    startTransition(async () => {
+      try {
+        const res = await deleteRoleAction(roleId);
+        if (res.success) {
+          toast.success(isAr ? "تم حذف الدور بنجاح" : "Role deleted successfully");
+          loadData();
+        } else {
+          toast.error(res.error || (isAr ? "فشل حذف الدور" : "Failed to delete role"));
+        }
+      } catch (err) {
+        toast.error(isAr ? "حدث خطأ أثناء الحذف" : "Error deleting role");
+      }
+    });
   };
-
-  const filteredRoles = roles.filter((r) =>
-    !searchTerm || r.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Banner */}
-      <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-orange-500" />
-            <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-              {isAr ? "إدارة الأدوار والصلاحيات" : "Roles & Permissions"}
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+    <div className="container mx-auto px-4 py-6" dir={isAr ? "rtl" : "ltr"}>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {isAr ? "إدارة الصلاحيات والأدوار المخصصة" : "Custom Roles & Permissions"}
+          </h1>
+          <p className="mt-1 text-sm text-slate-600">
             {isAr
-              ? "تخصيص المسميات الوظيفية وصلاحيات التحكم وربطها بالفروع"
-              : "Define job roles, system permissions, and assigned branches"}
+              ? "إضافة وتعديل أدوار الموظفين وتحديد صلاحياتهم في النظام"
+              : "Create and manage system roles and fine-grained permissions"}
           </p>
         </div>
-
         <button
-          onClick={() => handleOpenModal()}
-          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md shadow-orange-500/20 transition active:scale-95"
+          type="button"
+          onClick={handleOpenCreateModal}
+          className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700 shadow-sm"
         >
-          <Plus className="w-4 h-4" />
-          <span>{isAr ? "إضافة دور جديد" : "Add New Role"}</span>
+          {isAr ? "+ إضافة دور جديد" : "+ Add New Role"}
         </button>
       </div>
 
-      {/* Search */}
-      <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={isAr ? "ابحث باسم المسمى الوظيفي..." : "Search role name..."}
-            className="w-full ps-9 pe-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
+      {isLoading ? (
+        <div className="flex h-64 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-sky-600 border-t-transparent"></div>
         </div>
-      </div>
-
-      {/* Grid */}
-      {loading ? (
-        <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-          <span className="text-xs font-medium">{isAr ? "جاري تحميل الأدوار..." : "Loading roles..."}</span>
-        </div>
-      ) : filteredRoles.length === 0 ? (
-        <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-12 text-center text-zinc-400">
-          <ShieldCheck className="w-10 h-10 mx-auto text-zinc-300 dark:text-zinc-700 mb-2" />
-          <p className="text-sm font-semibold">{isAr ? "لا توجد أدوار مسجلة حالياً" : "No roles registered yet"}</p>
+      ) : roles.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+          <p className="text-base text-slate-600">
+            {isAr ? "لا توجد أدوار مخصصة حالياً." : "No custom roles found."}
+          </p>
+          <button
+            type="button"
+            onClick={handleOpenCreateModal}
+            className="mt-4 rounded-xl border border-sky-600 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-100"
+          >
+            {isAr ? "إضافة دور الآن" : "Add Role Now"}
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredRoles.map((role) => (
-            <div
-              key={role.id}
-              className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-5 shadow-lg shadow-orange-500/5 flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-orange-500/20">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{role.name}</h3>
-                      <p className="text-[11px] text-zinc-400 line-clamp-1">{role.description || (isAr ? "لا يوجد وصف" : "No description")}</p>
-                    </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {roles.map((role) => {
+            const roleName = isAr
+              ? role.nameAr || role.name || role.nameEn
+              : role.nameEn || role.name || role.nameAr;
+            const perms = Array.isArray(role.permissions) ? role.permissions : [];
+
+            return (
+              <div
+                key={role.id}
+                className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-slate-900">{roleName}</h2>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        role.isActive ?? true
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {role.isActive ?? true
+                        ? isAr ? "نشط" : "Active"
+                        : isAr ? "معطل" : "Inactive"}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenModal(role)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-zinc-800 transition"
-                      title={isAr ? "تعديل" : "Edit"}
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => role.id && handleDelete(role.id)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-zinc-800 transition"
-                      title={isAr ? "حذف" : "Delete"}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                  {role.description ? (
+                    <p className="mt-2 text-xs text-slate-500 line-clamp-2">
+                      {role.description}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3">
+                    <span className="text-xs font-medium text-slate-700 block">
+                      {isAr ? "الصلاحيات الممنوحة:" : "Permissions:"}
+                    </span>
+                    {perms.length === 0 ? (
+                      <span className="text-xs text-slate-400">
+                        {isAr ? "لا توجد صلاحيات محددة" : "No specific permissions"}
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {perms.map((p) => (
+                          <span
+                            key={p}
+                            className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(role)}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                    disabled={isPending}
+                  >
+                    {isAr ? "تعديل" : "Edit"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => role.id && handleDeleteRole(role.id)}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition"
+                    disabled={isPending}
+                  >
+                    {isAr ? "حذف" : "Delete"}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-orange-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 relative space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
-              <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-orange-500" />
-                <span>{formData.id ? (isAr ? "تعديل الدور" : "Edit Role") : (isAr ? "إضافة دور جديد" : "Add Role")}</span>
-              </h3>
+      {/* Modal Dialog */}
+      {isModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" dir={isAr ? "rtl" : "ltr"}>
+            <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingRole
+                  ? isAr ? "تعديل الدور" : "Edit Role"
+                  : isAr ? "إضافة دور جديد" : "Add New Role"}
+              </h2>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                className="text-slate-400 hover:text-slate-600 text-xl font-bold"
               >
-                <X className="w-4 h-4" />
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              {message && (
-                <div
-                  className={`p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
-                    message.type === "success"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-red-50 text-red-700 border border-red-200"
-                  }`}
-                >
-                  {message.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                  <span>{message.text}</span>
+            <form onSubmit={handleSubmitRole} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {isAr ? "الاسم بالعربية" : "Name (Arabic)"} *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nameAr}
+                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-sky-500 focus:ring-2"
+                    required
+                  />
                 </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  {isAr ? "اسم الدور / المسمى الوظيفي" : "Role Name"} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder={isAr ? "مثال: مدير فرع / مشرف وردية" : "e.g., Branch Manager"}
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    {isAr ? "الاسم بالإنجليزية" : "Name (English)"}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nameEn}
+                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-sky-500 focus:ring-2"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
                   {isAr ? "الوصف" : "Description"}
                 </label>
                 <textarea
-                  rows={2}
-                  value={formData.description || ""}
+                  value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder={isAr ? "وصف مختصر للمسؤوليات..." : "Role responsibilities..."}
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  rows={2}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-sky-500 focus:ring-2"
                 />
               </div>
 
-              {/* Permissions List */}
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
-                  {isAr ? "الصلاحيات المتاحة" : "Permissions"}
+                <label className="block text-xs font-medium text-slate-700 mb-2">
+                  {isAr ? "الصلاحيات" : "Permissions"}
                 </label>
-                <div className="space-y-1.5">
+                <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto rounded-xl border border-slate-200 p-3 bg-slate-50">
                   {AVAILABLE_PERMISSIONS.map((perm) => {
-                    const isChecked = (formData.permissions || []).includes(perm.id);
+                    const checked = formData.permissions.includes(perm.id);
                     return (
-                      <label
-                        key={perm.id}
-                        className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition ${
-                          isChecked
-                            ? "bg-orange-50/80 dark:bg-orange-950/40 border-orange-300 dark:border-orange-800 text-orange-900 dark:text-orange-200"
-                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
-                        }`}
-                      >
+                      <label key={perm.id} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={isChecked}
-                          onChange={() => togglePermission(perm.id)}
-                          className="rounded text-orange-500 focus:ring-orange-400"
+                          checked={checked}
+                          onChange={() => handleTogglePermission(perm.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                         />
-                        <span>{isAr ? perm.labelAr : perm.labelEn}</span>
+                        <span className="text-xs text-slate-800">
+                          {isAr ? perm.labelAr : perm.labelEn}
+                        </span>
                       </label>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Branches Multi-select */}
-              {branches.length > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2 flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-orange-500" />
-                    <span>{isAr ? "الفروع المخصصة لهذا الدور" : "Assigned Branches"}</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1">
-                    {branches.map((b) => {
-                      const isAssigned = (formData.branch_ids || []).includes(b.id || "");
-                      return (
-                        <button
-                          type="button"
-                          key={b.id}
-                          onClick={() => b.id && toggleBranch(b.id)}
-                          className={`p-2 rounded-xl text-xs font-medium border text-start transition ${
-                            isAssigned
-                              ? "bg-gradient-to-r from-orange-500 to-pink-500 text-white border-transparent shadow-xs"
-                              : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
-                          }`}
-                        >
-                          {b.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <label className="flex items-center gap-2 cursor-pointer pt-2">
+                <input
+                  type="checkbox"
+                  checked={formData.isActive}
+                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                />
+                <span className="text-sm font-medium text-slate-800">
+                  {isAr ? "تفعيل هذا الدور" : "Role is Active"}
+                </span>
+              </label>
 
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-2">
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  disabled={isPending}
                 >
                   {isAr ? "إلغاء" : "Cancel"}
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !formData.name.trim()}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-bold shadow-md transition disabled:opacity-50 flex items-center gap-1.5"
+                  className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+                  disabled={isPending}
                 >
-                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{isAr ? "حفظ الدور" : "Save Role"}</span>
+                  {isPending
+                    ? isAr ? "جاري الحفظ..." : "Saving..."
+                    : isAr ? "حفظ" : "Save"}
                 </button>
               </div>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
