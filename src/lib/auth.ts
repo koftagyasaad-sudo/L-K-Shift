@@ -1,76 +1,168 @@
-import { NextAuthOptions, getServerSession } from "next-auth";
+// src/lib/auth.ts
+import type { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
+import type { Session, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+
+/**
+ * Augmented user shape returned from authorize() and stored on JWT/session.
+ * Phone is the login ID. Branch assignment drives attendance geofence checks.
+ */
+export type AppUser = User & {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  systemRole?: string | null;
+  fullNameAr?: string | null;
+  fullNameEn?: string | null;
+  branchId?: string | null;
+  primaryBranchId?: string | null;
+};
+
+function toNullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return String(value);
+}
 
 export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
   providers: [
     CredentialsProvider({
+      id: "credentials",
       name: "Credentials",
       credentials: {
         phone: { label: "Phone", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.phone || !credentials?.password) return null;
+      async authorize(credentials): Promise<AppUser | null> {
+        if (!credentials?.phone || !credentials?.password) {
+          return null;
+        }
 
-        const [user] = await db
+        const phone = String(credentials.phone).trim();
+        const password = String(credentials.password);
+
+        const found = await db
           .select()
           .from(users)
-          .where(eq(users.phone, credentials.phone))
+          .where(eq(users.phone, phone))
           .limit(1);
 
-        if (!user) return null;
+        const user = found[0];
+        if (!user) {
+          return null;
+        }
 
-        if (user.password !== credentials.password) return null;
+        // Support both active flag naming conventions used across the codebase
+        const isActive =
+          (user as any).isActive !== false && (user as any).active !== false;
+        if (!isActive) {
+          return null;
+        }
 
-        // مطابقة كائن المستخدم مع واجهة NextAuth المخصصة
-        const userResult: any = {
-          id: user.id,
-          name: user.name,
-          fullNameAr: user.name,
-          fullNameEn: user.name,
-          phone: user.phone,
-          role: user.role,
-          systemRole: user.role,
-          branchId: user.branchId,
-          primaryBranchId: user.branchId,
+        const passwordHash =
+          (user as any).passwordHash ||
+          (user as any).password ||
+          (user as any).hashedPassword;
+
+        if (!passwordHash || typeof passwordHash !== "string") {
+          return null;
+        }
+
+        const valid = await bcrypt.compare(password, passwordHash);
+        if (!valid) {
+          return null;
+        }
+
+        const role = toNullableString((user as any).role) || "employee";
+        const branchId = toNullableString(
+          (user as any).branchId ?? (user as any).primaryBranchId
+        );
+        const primaryBranchId = toNullableString(
+          (user as any).primaryBranchId ?? (user as any).branchId
+        );
+
+        const fullNameAr = toNullableString((user as any).fullNameAr);
+        const fullNameEn = toNullableString((user as any).fullNameEn);
+        const displayName =
+          fullNameEn ||
+          fullNameAr ||
+          toNullableString((user as any).name) ||
+          phone;
+
+        // Return every augmented User field required by NextAuth + app session
+        const result: AppUser = {
+          id: String(user.id),
+          name: displayName,
+          email: toNullableString((user as any).email),
+          phone: toNullableString((user as any).phone) || phone,
+          role,
+          systemRole: role,
+          fullNameAr,
+          fullNameEn,
+          branchId,
+          primaryBranchId,
         };
 
-        return userResult;
+        return result;
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: JWT; user?: User | AppUser }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as any).role || (user as any).systemRole;
-        token.systemRole = (user as any).systemRole || (user as any).role;
-        token.branchId = (user as any).branchId || (user as any).primaryBranchId;
-        token.primaryBranchId = (user as any).primaryBranchId || (user as any).branchId;
+        const u = user as AppUser;
+        token.id = String(u.id);
+        token.phone = u.phone ?? null;
+        token.role = u.role ?? null;
+        token.systemRole = u.systemRole ?? u.role ?? null;
+        token.fullNameAr = u.fullNameAr ?? null;
+        token.fullNameEn = u.fullNameEn ?? null;
+        // Always persist branch IDs as strings (schema may use uuid/text/number)
+        token.branchId = toNullableString(u.branchId);
+        token.primaryBranchId = toNullableString(u.primaryBranchId ?? u.branchId);
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
-        (session.user as any).id = token.id as string;
-        (session.user as any).role = token.role as string;
-        (session.user as any).systemRole = token.systemRole as string;
-        (session.user as any).branchId = token.branchId as string;
-        (session.user as any).primaryBranchId = token.primaryBranchId as string;
+        const sUser = session.user as AppUser;
+        sUser.id = toNullableString(token.id) || sUser.id || "";
+        sUser.phone = toNullableString(token.phone);
+        sUser.role = toNullableString(token.role);
+        sUser.systemRole =
+          toNullableString(token.systemRole) || toNullableString(token.role);
+        sUser.fullNameAr = toNullableString(token.fullNameAr);
+        sUser.fullNameEn = toNullableString(token.fullNameEn);
+        sUser.branchId = toNullableString(token.branchId);
+        // Safe coercion: token.primaryBranchId may be typed number | string | null
+        sUser.primaryBranchId = toNullableString(
+          token.primaryBranchId ?? token.branchId
+        );
+        sUser.name =
+          sUser.name ||
+          sUser.fullNameEn ||
+          sUser.fullNameAr ||
+          sUser.phone ||
+          null;
       }
       return session;
     },
   },
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-  },
-  secret: process.env.NEXTAUTH_SECRET || "lk-shift-secret-key-production-2025",
+  secret: process.env.NEXTAUTH_SECRET,
 };
 
-export async function auth() {
-  return await getServerSession(authOptions);
-}
+export default authOptions;
