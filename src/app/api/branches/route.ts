@@ -4,11 +4,19 @@ import { db } from "@/db";
 import { branches } from "@/db/schema";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const allBranches = await db.select().from(branches).orderBy(branches.id);
-  return NextResponse.json(allBranches);
+    const data = await db.select().from(branches);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("GET /api/branches error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
 }
