@@ -5,6 +5,16 @@ import { customRoles } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+export type RoleData = {
+  id?: string;
+  nameAr?: string;
+  nameEn?: string;
+  name?: string;
+  description?: string | null;
+  permissions?: any;
+  [key: string]: any;
+};
+
 export async function getRolesAction() {
   try {
     const list = await db
