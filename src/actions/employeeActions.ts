@@ -202,22 +202,29 @@ export async function deleteEmployeeAction(id: string) {
   }
 }
 
-export async function toggleEmployeeStatusAction(id: string) {
+export async function toggleEmployeeStatusAction(id: string, currentStatus?: boolean) {
   try {
-    const [existing] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
+    let newStatus: boolean;
 
-    if (!existing) {
-      return { success: false, error: "Employee not found" };
+    if (typeof currentStatus === "boolean") {
+      newStatus = !currentStatus;
+    } else {
+      const [existing] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return { success: false, error: "Employee not found" };
+      }
+      newStatus = !existing.isActive;
     }
 
     const [updated] = await db
       .update(users)
       .set({
-        isActive: !existing.isActive,
+        isActive: newStatus,
         updatedAt: new Date(),
       })
       .where(eq(users.id, id))
