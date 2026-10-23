@@ -2,118 +2,154 @@
 
 import { db } from "@/db";
 import { customRoles } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-
-export interface RoleData {
-  id: string;
-  name?: string | null;
-  nameAr?: string | null;
-  nameEn?: string | null;
-  description?: string | null;
-  permissions?: string[] | unknown | null;
-  isActive?: boolean | null;
-  createdAt?: Date | string | null;
-  updatedAt?: Date | string | null;
-  [key: string]: unknown;
-}
-
-export interface SaveRoleInput {
-  id?: string;
-  name?: string;
-  nameAr?: string;
-  name_ar?: string;
-  nameEn?: string;
-  name_en?: string;
-  description?: string;
-  permissions?: string[];
-  isActive?: boolean;
-  is_active?: boolean;
-}
 
 export async function getRolesAction() {
   try {
-    const data = await db.select().from(customRoles);
-    return { success: true, data };
-  } catch (error) {
+    const list = await db
+      .select()
+      .from(customRoles)
+      .orderBy(desc(customRoles.createdAt));
+
+    return {
+      success: true,
+      data: list,
+      roles: list,
+    };
+  } catch (error: any) {
     console.error("getRolesAction error:", error);
-    return { success: false, error: "Failed to fetch roles", data: [] };
+    return {
+      success: false,
+      error: error.message || "Failed to fetch roles",
+      data: [],
+      roles: [],
+    };
   }
 }
 
 export async function getRoleByIdAction(id: string) {
   try {
-    if (!id) return { success: false, error: "Role ID required" };
-    const res = await db.select().from(customRoles).where(eq(customRoles.id, id)).limit(1);
-    if (!res.length) return { success: false, error: "Role not found" };
-    return { success: true, data: res[0] };
-  } catch (error) {
-    console.error("getRoleByIdAction error:", error);
-    return { success: false, error: "Failed to fetch role" };
-  }
-}
+    const [role] = await db
+      .select()
+      .from(customRoles)
+      .where(eq(customRoles.id, id))
+      .limit(1);
 
-export async function saveRoleAction(input: SaveRoleInput) {
-  try {
-    const nameAr = input.nameAr || input.name_ar || input.name || "";
-    const nameEn = input.nameEn || input.name_en || input.name || "";
-    const description = input.description || null;
-    const permissions = input.permissions || [];
-    const isActive = input.isActive ?? input.is_active ?? true;
-
-    if (input.id) {
-      const [updated] = await db
-        .update(customRoles)
-        .set({
-          nameAr,
-          nameEn,
-          description,
-          permissions,
-          isActive,
-          updatedAt: new Date(),
-        })
-        .where(eq(customRoles.id, input.id))
-        .returning();
-
-      revalidatePath("/admin/roles");
-      return { success: true, data: updated };
-    } else {
-      const [created] = await db
-        .insert(customRoles)
-        .values({
-          nameAr,
-          nameEn,
-          description,
-          permissions,
-          isActive,
-        })
-        .returning();
-
-      revalidatePath("/admin/roles");
-      return { success: true, data: created };
+    if (!role) {
+      return {
+        success: false,
+        error: "Role not found",
+        data: null,
+        role: null,
+      };
     }
-  } catch (error) {
-    console.error("saveRoleAction error:", error);
-    return { success: false, error: "Failed to save role" };
+
+    return {
+      success: true,
+      data: role,
+      role,
+    };
+  } catch (error: any) {
+    console.error("getRoleByIdAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to fetch role",
+      data: null,
+      role: null,
+    };
   }
 }
 
-export async function createRoleAction(input: SaveRoleInput) {
-  return saveRoleAction(input);
+export async function createRoleAction(data: any) {
+  try {
+    const id = data.id || crypto.randomUUID();
+    const payload: any = {
+      id,
+      nameAr: data.nameAr || data.name || "دور مخصص",
+      nameEn: data.nameEn || data.name || "Custom Role",
+      description: data.description || null,
+      permissions: data.permissions || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const [newRole] = await db
+      .insert(customRoles)
+      .values(payload)
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: newRole,
+      role: newRole,
+    };
+  } catch (error: any) {
+    console.error("createRoleAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to create role",
+    };
+  }
 }
 
-export async function updateRoleAction(id: string, input: SaveRoleInput) {
-  return saveRoleAction({ ...input, id });
+export async function updateRoleAction(id: string, data: any) {
+  try {
+    const payload: any = {
+      nameAr: data.nameAr || data.name,
+      nameEn: data.nameEn || data.name,
+      description: data.description || null,
+      permissions: data.permissions || null,
+      updatedAt: new Date(),
+    };
+
+    const [updatedRole] = await db
+      .update(customRoles)
+      .set(payload)
+      .where(eq(customRoles.id, id))
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: updatedRole,
+      role: updatedRole,
+    };
+  } catch (error: any) {
+    console.error("updateRoleAction error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to update role",
+    };
+  }
+}
+
+export async function saveRoleAction(data: any) {
+  if (data.id) {
+    return updateRoleAction(data.id, data);
+  }
+  return createRoleAction(data);
 }
 
 export async function deleteRoleAction(id: string) {
   try {
-    if (!id) return { success: false, error: "Role ID required" };
-    await db.delete(customRoles).where(eq(customRoles.id, id));
-    revalidatePath("/admin/roles");
-    return { success: true };
-  } catch (error) {
+    const [deleted] = await db
+      .delete(customRoles)
+      .where(eq(customRoles.id, id))
+      .returning();
+
+    revalidatePath("/admin");
+    return {
+      success: true,
+      data: deleted,
+      role: deleted,
+    };
+  } catch (error: any) {
     console.error("deleteRoleAction error:", error);
-    return { success: false, error: "Failed to delete role" };
+    return {
+      success: false,
+      error: error.message || "Failed to delete role",
+    };
   }
 }
