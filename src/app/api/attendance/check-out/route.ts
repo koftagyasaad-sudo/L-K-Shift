@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendanceLogs, branches, users } from "@/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
-import { put } from "@vercel/blob";
+import { eq, desc } from "drizzle-orm";
 
 function calculateDistanceMeters(
   lat1: number,
@@ -10,14 +9,13 @@ function calculateDistanceMeters(
   lat2: number,
   lon2: number
 ): number {
-  const R = 6371e3;
-  const rad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * rad;
-  const dLon = (lon2 - lon1) * rad;
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * rad) *
-      Math.cos(lat2 * rad) *
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -27,27 +25,40 @@ function calculateDistanceMeters(
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { userId, latitude, longitude, imageBase64 } = body;
+    const {
+      userId,
+      phone,
+      branchId,
+      latitude,
+      longitude,
+      selfieUrl,
+      notes,
+    } = body;
 
-    if (!userId) {
+    if (!userId && !phone) {
       return NextResponse.json(
-        { success: false, error: "معرف الموظف مطلوب" },
+        { success: false, error: "معرف الموظف أو رقم الهاتف مطلوب" },
         { status: 400 }
       );
     }
 
-    if (latitude === undefined || longitude === undefined) {
-      return NextResponse.json(
-        { success: false, error: "الموقع الجغرافي (GPS) مطلوب لإتمام التسجيل" },
-        { status: 400 }
-      );
+    // 1. Find User
+    let user = null;
+    if (userId) {
+      const res = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, String(userId)))
+        .limit(1);
+      if (res.length > 0) user = res[0];
+    } else if (phone) {
+      const res = await db
+        .select()
+        .from(users)
+        .where(eq(users.phone, String(phone)))
+        .limit(1);
+      if (res.length > 0) user = res[0];
     }
-
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
 
     if (!user) {
       return NextResponse.json(
@@ -56,104 +67,109 @@ export async function POST(req: Request) {
       );
     }
 
-    const [activeLog] = await db
-      .select()
-      .from(attendanceLogs)
-      .where(and(eq(attendanceLogs.userId, userId), isNull(attendanceLogs.checkOut)))
-      .limit(1);
-
-    if (!activeLog) {
+    // 2. Find Branch
+    const targetBranchId = branchId || user.branchId;
+    if (!targetBranchId) {
       return NextResponse.json(
-        { success: false, error: "لا يوجد تسجيل حضور نشط لهذا الموظف" },
+        { success: false, error: "لم يتم تحديد أو تعيين فرع لهذا الموظف" },
         { status: 400 }
       );
     }
 
-    const branchId = activeLog.branchId || user.branchId;
-    let distance: number | null = null;
+    const branchRes = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, String(targetBranchId)))
+      .limit(1);
 
-    if (branchId) {
-      const [branch] = await db
-        .select()
-        .from(branches)
-        .where(eq(branches.id, branchId))
-        .limit(1);
-
-      if (branch) {
-        const branchLat = parseFloat(branch.latitude);
-        const branchLng = parseFloat(branch.longitude);
-        const userLat = parseFloat(String(latitude));
-        const userLng = parseFloat(String(longitude));
-
-        if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
-          distance = calculateDistanceMeters(userLat, userLng, branchLat, branchLng);
-          const maxAllowedRadius = branch.radiusMeters || branch.geofenceRadius || 100;
-
-          if (distance > maxAllowedRadius) {
-            return NextResponse.json(
-              {
-                success: false,
-                error: `أنت خارج النطاق المسموح للفرع عند الانصراف. المسافة: ${Math.round(distance)} متر، الحد المسموح: ${maxAllowedRadius} متر`,
-                distance: Math.round(distance),
-                maxAllowedRadius,
-              },
-              { status: 400 }
-            );
-          }
-        }
-      }
+    if (branchRes.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "الفرع المخصص غير موجود" },
+        { status: 404 }
+      );
     }
 
-    let selfieUrl: string | null = null;
-    if (imageBase64) {
-      try {
-        if (process.env.BLOB_READ_WRITE_TOKEN) {
-          const buffer = Buffer.from(
-            imageBase64.replace(/^data:image\/\w+;base64,/, ""),
-            "base64"
-          );
-          const filename = `attendance/check-out-${userId}-${Date.now()}.jpg`;
-          const blob = await put(filename, buffer, {
-            access: "public",
-            contentType: "image/jpeg",
-          });
-          selfieUrl = blob.url;
-        } else {
-          selfieUrl = imageBase64;
-        }
-      } catch (uploadError) {
-        console.error("Selfie checkout upload failed, fallback to raw base64:", uploadError);
-        selfieUrl = imageBase64;
-      }
+    const branch = branchRes[0];
+
+    // 3. Geofence Verification
+    const userLat = parseFloat(latitude);
+    const userLon = parseFloat(longitude);
+    const branchLat = parseFloat(branch.latitude || "0");
+    const branchLon = parseFloat(branch.longitude || "0");
+
+    if (isNaN(userLat) || isNaN(userLon)) {
+      return NextResponse.json(
+        { success: false, error: "إحداثيات الموقع الجغرافي غير صالحة" },
+        { status: 400 }
+      );
     }
 
-    const now = new Date();
-    const [updatedLog] = await db
-      .update(attendanceLogs)
-      .set({
-        checkOut: now,
-        checkOutLatitude: String(latitude),
-        checkOutLongitude: String(longitude),
-        checkOutSelfieUrl: selfieUrl,
-        updatedAt: now,
+    const distance = calculateDistanceMeters(userLat, userLon, branchLat, branchLon);
+    const allowedRadius = branch.geofenceRadius || branch.radiusMeters || 100;
+    const isWithinGeofence = distance <= allowedRadius;
+
+    if (!isWithinGeofence) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `عذراً، أنت خارج نطاق الفرع الجغرافي. المسافة المباشرة: ${Math.round(
+            distance
+          )} متر (النطاق المسموح: ${allowedRadius} متر)`,
+          distanceMeters: Math.round(distance),
+          allowedRadius,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 4. Check Check-In Status (Must be currently checked in)
+    const [latestLog] = await db
+      .select()
+      .from(attendanceLogs)
+      .where(eq(attendanceLogs.userId, user.id))
+      .orderBy(desc(attendanceLogs.timestamp))
+      .limit(1);
+
+    if (!latestLog || latestLog.type !== "check_in") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "لم تقم بتسجيل الحضور بعد لتتمكن من تسجيل الانصراف.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 5. Create Check-Out Attendance Log
+    const logId = crypto.randomUUID();
+    const [newLog] = await db
+      .insert(attendanceLogs)
+      .values({
+        id: logId,
+        userId: user.id,
+        branchId: branch.id,
+        type: "check_out",
+        timestamp: new Date(),
+        latitude: String(latitude),
+        longitude: String(longitude),
+        distanceMeters: Math.round(distance),
+        isWithinGeofence: true,
+        selfieUrl: selfieUrl || null,
+        verificationStatus: "approved",
+        notes: notes || null,
       })
-      .where(eq(attendanceLogs.id, activeLog.id))
       .returning();
 
     return NextResponse.json({
       success: true,
       message: "تم تسجيل الانصراف بنجاح",
-      data: updatedLog,
-      distance: distance !== null ? Math.round(distance) : null,
+      data: newLog,
+      distanceMeters: Math.round(distance),
     });
   } catch (error) {
-    console.error("Check-out route error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "فشل في تسجيل الانصراف",
-      },
-      { status: 500 }
-    );
+    console.error("Check-out API error:", error);
+    const message =
+      error instanceof Error ? error.message : "حدث خطأ أثناء تسجيل الانصراف";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
