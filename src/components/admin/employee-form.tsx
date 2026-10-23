@@ -9,24 +9,26 @@ import {
 } from "@/actions/employeeActions";
 
 export interface BranchOption {
-  id: string | number;
+  id?: string | number | null;
   name?: string | null;
   nameAr?: string | null;
   nameEn?: string | null;
   code?: string | null;
   isActive?: boolean | null;
+  [key: string]: unknown;
 }
 
 export interface RoleOption {
-  id: string | number;
+  id?: string | number | null;
   name?: string | null;
   nameAr?: string | null;
   nameEn?: string | null;
   isActive?: boolean | null;
+  [key: string]: unknown;
 }
 
 export interface EmployeeFormInitialData {
-  id?: string | number;
+  id?: string | number | null;
   name?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -41,6 +43,7 @@ export interface EmployeeFormInitialData {
   isActive?: boolean | null;
   canUseAttendanceTerminal?: boolean | null;
   notes?: string | null;
+  [key: string]: unknown;
 }
 
 export interface EmployeeFormProps {
@@ -70,17 +73,17 @@ function toOptionalNumber(
 function getBranchLabel(branch: BranchOption, locale?: string): string {
   if (branch.name) return branch.name;
   if (locale === "en") {
-    return branch.nameEn || branch.nameAr || `Branch ${branch.id}`;
+    return branch.nameEn || branch.nameAr || (branch.id ? `Branch ${branch.id}` : "");
   }
-  return branch.nameAr || branch.nameEn || `فرع ${branch.id}`;
+  return branch.nameAr || branch.nameEn || (branch.id ? `فرع ${branch.id}` : "");
 }
 
 function getRoleLabel(role: RoleOption, locale?: string): string {
   if (role.name) return role.name;
   if (locale === "en") {
-    return role.nameEn || role.nameAr || `Role ${role.id}`;
+    return role.nameEn || role.nameAr || (role.id ? `Role ${role.id}` : "");
   }
-  return role.nameAr || role.nameEn || `دور ${role.id}`;
+  return role.nameAr || role.nameEn || (role.id ? `دور ${role.id}` : "");
 }
 
 export default function EmployeeForm({
@@ -96,20 +99,28 @@ export default function EmployeeForm({
 
   const activeBranches = useMemo(
     () =>
-      (branches || []).filter((branch) =>
-        branch.isActive === undefined || branch.isActive === null
-          ? true
-          : Boolean(branch.isActive)
+      (branches || []).filter(
+        (branch) =>
+          branch &&
+          branch.id !== undefined &&
+          branch.id !== null &&
+          (branch.isActive === undefined || branch.isActive === null
+            ? true
+            : Boolean(branch.isActive))
       ),
     [branches]
   );
 
   const activeRoles = useMemo(
     () =>
-      (roles || []).filter((role) =>
-        role.isActive === undefined || role.isActive === null
-          ? true
-          : Boolean(role.isActive)
+      (roles || []).filter(
+        (role) =>
+          role &&
+          role.id !== undefined &&
+          role.id !== null &&
+          (role.isActive === undefined || role.isActive === null
+            ? true
+            : Boolean(role.isActive))
       ),
     [roles]
   );
@@ -150,9 +161,14 @@ export default function EmployeeForm({
   const [error, setError] = useState<string | null>(null);
 
   const isAr = locale !== "en";
-  const pageTitle = mode === "edit"
-    ? (isAr ? "تعديل بيانات موظف" : "Edit Employee")
-    : (isAr ? "إضافة موظف جديد" : "Add New Employee");
+  const pageTitle =
+    mode === "edit"
+      ? isAr
+        ? "تعديل بيانات موظف"
+        : "Edit Employee"
+      : isAr
+        ? "إضافة موظف جديد"
+        : "Add New Employee";
 
   function validate(): string | null {
     if (!name.trim()) {
@@ -188,7 +204,7 @@ export default function EmployeeForm({
     }
 
     const payload: SaveEmployeeInput = {
-      id: initialData?.id !== undefined ? String(initialData.id) : undefined,
+      id: initialData?.id !== undefined && initialData?.id !== null ? String(initialData.id) : undefined,
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim() || undefined,
@@ -231,8 +247,12 @@ export default function EmployeeForm({
 
         toast.success(
           mode === "edit"
-            ? (isAr ? "تم تحديث بيانات الموظف بنجاح" : "Employee updated successfully")
-            : (isAr ? "تم إنشاء الموظف بنجاح" : "Employee created successfully")
+            ? isAr
+              ? "تم تحديث بيانات الموظف بنجاح"
+              : "Employee updated successfully"
+            : isAr
+              ? "تم إنشاء الموظف بنجاح"
+              : "Employee created successfully"
         );
         router.push(redirectTo);
         router.refresh();
@@ -240,7 +260,9 @@ export default function EmployeeForm({
         const message =
           err instanceof Error
             ? err.message
-            : (isAr ? "حدث خطأ غير متوقع أثناء الحفظ" : "An unexpected error occurred");
+            : isAr
+              ? "حدث خطأ غير متوقع أثناء الحفظ"
+              : "An unexpected error occurred";
         setError(message);
         toast.error(message);
       }
