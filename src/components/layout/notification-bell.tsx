@@ -1,143 +1,148 @@
 "use client";
 
-import { Bell, CheckCheck } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Bell } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "@/i18n/navigation";
 import { formatDateTime } from "@/lib/utils";
-import { type NotificationItem, useNotificationStore } from "@/stores/notification-store";
 
-export function NotificationBell({ initialNotifications }: { initialNotifications: NotificationItem[] }) {
-  const locale = useLocale();
-  const t = useTranslations("header");
-  const [open, setOpen] = useState(false);
-  const hydrated = useNotificationStore((state) => state.hydrated);
-  const notifications = useNotificationStore((state) => state.notifications);
-  const unreadCount = useNotificationStore((state) => state.unreadCount);
-  const hydrate = useNotificationStore((state) => state.hydrate);
-  const markAllRead = useNotificationStore((state) => state.markAllRead);
-  const shownIds = useRef<Set<number>>(new Set());
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message?: string;
+  body?: string;
+  content?: string;
+  isRead?: boolean;
+  read?: boolean;
+  createdAt?: Date | string | null;
+  link?: string;
+  [key: string]: any;
+}
 
-  useEffect(() => {
-    hydrate(initialNotifications);
-  }, [hydrate, initialNotifications]);
-
-  const latestUnread = useMemo(
-    () => notifications.find((item) => !item.isRead && !shownIds.current.has(item.id)),
-    [notifications],
+export function NotificationBell({
+  initialNotifications = [],
+  locale = "ar",
+}: {
+  initialNotifications?: NotificationItem[];
+  locale?: string;
+}) {
+  const [notifications, setNotifications] = useState<NotificationItem[]>(
+    initialNotifications
   );
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !latestUnread) {
-      return;
+    if (initialNotifications && initialNotifications.length > 0) {
+      setNotifications(initialNotifications);
     }
+  }, [initialNotifications]);
 
-    if (window.Notification?.permission === "granted") {
-      new window.Notification(latestUnread.title, { body: latestUnread.message });
-      shownIds.current.add(latestUnread.id);
+  const unreadCount = notifications.filter(
+    (n) => n.isRead === false || n.read === false
+  ).length;
+
+  const markAllAsRead = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/notifications/mark-all-read", {
+        method: "POST",
+      });
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => ({ ...n, isRead: true, read: true }))
+        );
+        toast.success(
+          locale === "ar" ? "تم تحديد الكل كمقروء" : "All marked as read"
+        );
+      }
+    } catch (error) {
+      console.error("Failed to mark notifications as read", error);
+    } finally {
+      setLoading(false);
     }
-  }, [latestUnread]);
+  };
 
-  async function handleMarkAllRead() {
-    const response = await fetch("/api/notifications/mark-all-read", { method: "POST" });
-
-    if (!response.ok) {
-      toast.error("Unable to update notifications");
-      return;
+  const markSingleAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true, read: true } : n))
+      );
+    } catch (error) {
+      console.error("Failed to mark single notification as read", error);
     }
-
-    markAllRead();
-    toast.success(t("markAllRead"));
-  }
-
-  async function enableAlerts() {
-    if (typeof window === "undefined" || !window.Notification) {
-      toast.error("Notifications are not supported in this browser.");
-      return;
-    }
-
-    const permission = await window.Notification.requestPermission();
-
-    if (permission === "granted") {
-      toast.success(t("browserAlerts"));
-      return;
-    }
-
-    toast.error("Notification permission denied.");
-  }
+  };
 
   return (
     <div className="relative">
       <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="relative inline-flex items-center justify-center rounded-full border border-border bg-surface p-2.5 text-foreground transition hover:bg-background-secondary"
-        aria-label={t("notifications")}
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+        aria-label="Notifications"
       >
-        <Bell className="h-5 w-5" />
-        {unreadCount > 0 ? (
-          <span className="bg-primary absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold text-white">
+        <Bell className="w-5 h-5" />
+        {unreadCount > 0 && (
+          <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
             {unreadCount}
           </span>
-        ) : null}
+        )}
       </button>
 
-      {open ? (
-        <div className="absolute end-0 top-14 z-50 w-[22rem] overflow-hidden rounded-3xl border border-border bg-surface shadow-2xl shadow-black/10 dark:shadow-black/40">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">{t("notifications")}</p>
-              <p className="text-xs text-foreground-muted">{unreadCount} unread</p>
-            </div>
-            <div className="flex items-center gap-2">
+      {isOpen && (
+        <div className="absolute right-0 ltr:right-0 rtl:left-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-800 text-sm">
+              {locale === "ar" ? "التنبيهات" : "Notifications"}
+            </h3>
+            {unreadCount > 0 && (
               <button
-                type="button"
-                onClick={enableAlerts}
-                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground-muted transition hover:bg-background-secondary hover:text-foreground"
+                onClick={markAllAsRead}
+                disabled={loading}
+                className="text-xs text-blue-600 hover:underline disabled:opacity-50"
               >
-                {t("enableAlerts")}
+                {locale === "ar" ? "تحديد الكل كمقروء" : "Mark all as read"}
               </button>
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground-muted transition hover:bg-background-secondary hover:text-foreground"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                <span>{t("markAllRead")}</span>
-              </button>
-            </div>
+            )}
           </div>
 
-          <div className="max-h-96 overflow-y-auto">
-            {!hydrated || notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-foreground-muted">{t("noNotifications")}</div>
+          <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+            {notifications.length === 0 ? (
+              <div className="p-4 text-center text-gray-400 text-sm">
+                {locale === "ar" ? "لا توجد تنبيهات حالياً" : "No notifications yet"}
+              </div>
             ) : (
-              notifications.map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.link || "/"}
-                  locale={locale}
-                  className="block border-b border-border px-4 py-3 transition hover:bg-background-secondary last:border-b-0"
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                        item.isRead ? "bg-border-strong" : "bg-primary"
-                      }`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">{item.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-foreground-muted">{item.message}</p>
-                      <p className="mt-2 text-[11px] text-foreground-muted">{formatDateTime(item.createdAt, locale)}</p>
-                    </div>
+              notifications.map((n) => {
+                const isUnread = n.isRead === false || n.read === false;
+                return (
+                  <div
+                    key={n.id}
+                    onClick={() => {
+                      if (isUnread) markSingleAsRead(n.id);
+                    }}
+                    className={`p-3 text-sm hover:bg-gray-50 transition-colors cursor-pointer ${
+                      isUnread ? "bg-blue-50/40" : ""
+                    }`}
+                  >
+                    <div className="font-medium text-gray-800">{n.title}</div>
+                    {(n.message || n.body || n.content) && (
+                      <p className="text-gray-600 text-xs mt-0.5 line-clamp-2">
+                        {n.message || n.body || n.content}
+                      </p>
+                    )}
+                    {n.createdAt && (
+                      <div className="text-[10px] text-gray-400 mt-1">
+                        {formatDateTime(n.createdAt, locale)}
+                      </div>
+                    )}
                   </div>
-                </Link>
-              ))
+                );
+              })
             )}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
+
+export default NotificationBell;
