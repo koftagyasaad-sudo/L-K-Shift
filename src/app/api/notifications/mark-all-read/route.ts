@@ -20,11 +20,11 @@ export async function POST(req: NextRequest) {
 
     await db
       .update(notifications)
-      .set({ read: true })
+      .set({ isRead: true })
       .where(
         and(
           eq(notifications.userId, userId),
-          eq(notifications.read, false)
+          eq(notifications.isRead, false)
         )
       );
 
