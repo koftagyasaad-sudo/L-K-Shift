@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       Number(branch.longitude)
     );
 
-    const allowedRadius = branch.geofenceRadius || branch.radiusMeters || 100;
+    const allowedRadius = (branch as any).geofenceRadius || (branch as any).radiusMeters || 100;
     if (distance > allowedRadius) {
       return NextResponse.json(
         {
@@ -89,22 +89,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const id = crypto.randomUUID();
+    const logPayload: any = {
+      id: crypto.randomUUID(),
+      userId,
+      branchId: branch.id,
+      type: "CHECK_IN",
+      timestamp: new Date(),
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      distanceMeters: Math.round(distance),
+      photoUrl,
+      status: "PRESENT",
+      notes: notes || null,
+    };
+
     const [log] = await db
       .insert(attendanceLogs)
-      .values({
-        id,
-        userId,
-        branchId: branch.id,
-        type: "CHECK_IN",
-        timestamp: new Date(),
-        latitude: Number(latitude),
-        longitude: Number(longitude),
-        distanceMeters: Math.round(distance),
-        photoUrl,
-        status: "PRESENT",
-        notes: notes || null,
-      })
+      .values(logPayload)
       .returning();
 
     return NextResponse.json({ success: true, data: log });
