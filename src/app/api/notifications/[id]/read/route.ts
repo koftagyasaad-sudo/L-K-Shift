@@ -11,23 +11,24 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const { id } = await params; // Next.js 15 requirement
+    const { id } = await params;
 
-    if (!session || !session.user || !session.user.id) {
+    if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // تحديث تنبيه معين بشرط أن يخص المستخدم المسجل حالياً
-    const result = await db
+    const userId = (session.user as any).id as string;
+
+    await db
       .update(notifications)
       .set({ read: true })
       .where(
         and(
           eq(notifications.id, id),
-          eq(notifications.userId, session.user.id)
+          eq(notifications.userId, userId)
         )
       );
 
