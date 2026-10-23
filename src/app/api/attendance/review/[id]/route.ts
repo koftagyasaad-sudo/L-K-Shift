@@ -1,75 +1,72 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/db";
-import { attendanceLogs, users } from "@/db/schema";
+import { attendanceLogs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+interface RouteParams {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export async function PATCH(req: Request, { params }: RouteParams) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "غير مصرح (Unauthorized)" }, { status: 401 });
-    }
-
-    const reviewerId = Number(session.user.id);
     const { id } = await params;
-    const logId = Number(id);
+    const logId = String(id);
 
-    if (isNaN(logId)) {
-      return NextResponse.json({ error: "معرف السجل غير صالح" }, { status: 400 });
+    if (!logId || logId.trim() === "") {
+      return NextResponse.json(
+        { success: false, error: "معرف سجل الحضور مطلوب" },
+        { status: 400 }
+      );
     }
 
-    const body = await request.json();
-    const { type, decision, notes } = body as {
-      type: "checkIn" | "checkOut";
-      decision: "APPROVED" | "REJECTED";
-      notes?: string;
-    };
+    const body = await req.json();
+    const { verificationStatus, status, notes } = body;
 
-    if (!["checkIn", "checkOut"].includes(type) || !["APPROVED", "REJECTED"].includes(decision)) {
-      return NextResponse.json({ error: "بيانات غير صحيحة" }, { status: 400 });
-    }
+    const newStatus = verificationStatus || status || "approved";
 
-    // التحقق من وجود السجل في قاعدة البيانات
-    const [log] = await db
+    // 1. Check if the attendance log exists
+    const [existingLog] = await db
       .select()
       .from(attendanceLogs)
       .where(eq(attendanceLogs.id, logId))
       .limit(1);
 
-    if (!log) {
-      return NextResponse.json({ error: "السجل غير موجود" }, { status: 404 });
+    if (!existingLog) {
+      return NextResponse.json(
+        { success: false, error: "سجل الحضور غير موجود بالنظام" },
+        { status: 404 }
+      );
     }
 
-    // إعداد البيانات المراد تحديثها بناءً على نوع الحركة (حضور / انصراف)
-    const updateData =
-      type === "checkIn"
-        ? {
-            checkInApprovalStatus: decision,
-            notes: notes ?? log.notes ?? null,
-          }
-        : {
-            checkOutApprovalStatus: decision,
-            notes: notes ?? log.notes ?? null,
-          };
-
-    await db
+    // 2. Update the log status
+    const [updatedLog] = await db
       .update(attendanceLogs)
-      .set(updateData)
-      .where(eq(attendanceLogs.id, logId));
+      .set({
+        verificationStatus: String(newStatus),
+        notes: notes !== undefined ? String(notes) : existingLog.notes,
+      })
+      .where(eq(attendanceLogs.id, logId))
+      .returning();
 
     return NextResponse.json({
       success: true,
-      message: "تم تحديث حالة المراجعة بنجاح",
+      message: "تم تحديث حالة سجل الحضور بنجاح",
+      data: updatedLog,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error.message || "حدث خطأ أثناء التحديث" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Attendance review PATCH error:", error);
+    const message =
+      error instanceof Error ? error.message : "حدث خطأ أثناء تحديث حالة السجل";
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
+}
+
+export async function POST(req: Request, context: RouteParams) {
+  return PATCH(req, context);
+}
+
+export async function PUT(req: Request, context: RouteParams) {
+  return PATCH(req, context);
 }
