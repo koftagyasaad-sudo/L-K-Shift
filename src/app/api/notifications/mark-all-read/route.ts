@@ -9,20 +9,21 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user || !session.user.id) {
+    if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // تحديث كافة تنبيهات المستخدم غير المقروءة لتصبح مقروءة
+    const userId = (session.user as any).id as string;
+
     await db
       .update(notifications)
       .set({ read: true })
       .where(
         and(
-          eq(notifications.userId, session.user.id),
+          eq(notifications.userId, userId),
           eq(notifications.read, false)
         )
       );
