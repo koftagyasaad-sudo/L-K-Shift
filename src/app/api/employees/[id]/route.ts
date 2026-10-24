@@ -1,217 +1,235 @@
-import { NextResponse } from "next/server";
-import { db } from "@/db";
-import { users, adminBranchScopes } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+import { NextResponse } from 'next/server';
+import { db } from '@/db';
+import { users, branches, roles, adminBranchScopes } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
 
-interface RouteParams {
-  params: Promise<{
-    id: string;
-  }>;
-}
-
-export async function GET(req: Request, { params }: RouteParams) {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = await params;
-    const employeeId = String(id);
-
-    if (!employeeId || employeeId.trim() === "") {
-      return NextResponse.json(
-        { success: false, error: "معرف الموظف مطلوب" },
-        { status: 400 }
-      );
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 401 });
     }
 
-    const [user] = await db
-      .select()
+    const resolvedParams = await context.params;
+    const employeeId = resolvedParams.id;
+
+    if (!employeeId) {
+      return NextResponse.json({ error: 'معرف الموظف مطلوب' }, { status: 400 });
+    }
+
+    const userRecords = await db
+      .select({
+        id: users.id,
+        phone: users.phone,
+        name: users.name,
+        fullNameAr: users.fullNameAr,
+        fullNameEn: users.fullNameEn,
+        email: users.email,
+        role: users.role,
+        systemRole: users.systemRole,
+        jobTitle: users.jobTitle,
+        employeeCode: users.employeeCode,
+        hourlyRate: users.hourlyRate,
+        monthlySalary: users.monthlySalary,
+        canUseAttendanceTerminal: users.canUseAttendanceTerminal,
+        branchId: users.branchId,
+        primaryBranchId: users.primaryBranchId,
+        roleId: users.roleId,
+        isActive: users.isActive,
+        notes: users.notes,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        branchName: branches.name,
+        roleName: roles.name,
+      })
       .from(users)
+      .leftJoin(branches, eq(users.branchId, branches.id))
+      .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(users.id, employeeId))
       .limit(1);
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "الموظف غير موجود بالنظام" },
-        { status: 404 }
-      );
+    if (!userRecords || userRecords.length === 0) {
+      return NextResponse.json({ error: 'لم يتم العثور على الموظف' }, { status: 404 });
     }
 
     const scopes = await db
-      .select()
+      .select({ branchId: adminBranchScopes.branchId })
       .from(adminBranchScopes)
-      .where(eq(adminBranchScopes.userId, user.id));
+      .where(eq(adminBranchScopes.userId, employeeId));
+
+    const branchScopes = scopes.map((s) => String(s.branchId));
 
     return NextResponse.json({
       success: true,
       data: {
-        ...user,
-        adminBranchScopes: scopes,
+        ...userRecords[0],
+        branchScopes,
       },
     });
-  } catch (error) {
-    console.error("GET employee by ID API error:", error);
-    const message =
-      error instanceof Error ? error.message : "حدث خطأ أثناء جلب بيانات الموظف";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error fetching employee details:', error);
+    return NextResponse.json(
+      { error: error?.message || 'حدث خطأ أثناء جلب بيانات الموظف' },
+      { status: 500 }
+    );
   }
 }
 
-export async function PUT(req: Request, { params }: RouteParams) {
-  try {
-    const { id } = await params;
-    const employeeId = String(id);
+export async function PUT(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  return PATCH(request, context);
+}
 
-    if (!employeeId || employeeId.trim() === "") {
-      return NextResponse.json(
-        { success: false, error: "معرف الموظف مطلوب" },
-        { status: 400 }
-      );
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const {
-      name,
-      phone,
-      email,
-      password,
-      role,
-      jobTitle,
-      job_title,
-      employeeCode,
-      employee_code,
-      branchId,
-      branch_id,
-      roleId,
-      role_id,
-      hourlyRate,
-      hourly_rate,
-      monthlySalary,
-      monthly_salary,
-      isActive,
-      is_active,
-      canUseAttendanceTerminal,
-      can_use_attendance_terminal,
-      notes,
-    } = body;
+    const resolvedParams = await context.params;
+    const employeeId = resolvedParams.id;
 
-    const [existingUser] = await db
+    if (!employeeId) {
+      return NextResponse.json({ error: 'معرف الموظف مطلوب' }, { status: 400 });
+    }
+
+    const existingUsers = await db
       .select()
       .from(users)
       .where(eq(users.id, employeeId))
       .limit(1);
 
-    if (!existingUser) {
-      return NextResponse.json(
-        { success: false, error: "الموظف غير موجود بالنظام" },
-        { status: 404 }
-      );
+    if (!existingUsers || existingUsers.length === 0) {
+      return NextResponse.json({ error: 'الموظف غير موجود' }, { status: 404 });
     }
 
-    const targetBranchId = branchId || branch_id || existingUser.branchId;
-    const targetRoleId = roleId || role_id || existingUser.roleId;
-    const targetJobTitle = jobTitle || job_title || existingUser.jobTitle;
-    const targetEmployeeCode = employeeCode || employee_code || existingUser.employeeCode;
-    const targetHourlyRate =
-      hourlyRate !== undefined
-        ? hourlyRate
-        : hourly_rate !== undefined
-        ? hourly_rate
-        : existingUser.hourlyRate;
-    const targetMonthlySalary =
-      monthlySalary !== undefined
-        ? monthlySalary
-        : monthly_salary !== undefined
-        ? monthly_salary
-        : existingUser.monthlySalary;
-    const targetIsActive =
-      isActive !== undefined
-        ? Boolean(isActive)
-        : is_active !== undefined
-        ? Boolean(is_active)
-        : existingUser.isActive;
-    const targetCanTerminal =
-      canUseAttendanceTerminal !== undefined
-        ? Boolean(canUseAttendanceTerminal)
-        : can_use_attendance_terminal !== undefined
-        ? Boolean(can_use_attendance_terminal)
-        : existingUser.canUseAttendanceTerminal;
+    const existingUser = existingUsers[0];
+    const body = await request.json();
 
-    const updateData: Record<string, unknown> = {
-      name: name ? String(name).trim() : existingUser.name,
+    const {
+      phone,
+      password,
+      name,
+      fullNameAr,
+      fullNameEn,
+      email,
+      role,
+      systemRole,
+      jobTitle,
+      employeeCode,
+      hourlyRate,
+      monthlySalary,
+      canUseAttendanceTerminal,
+      can_use_attendance_terminal,
+      branchId,
+      primaryBranchId,
+      roleId,
+      isActive,
+      notes,
+      branchScopes,
+    } = body;
+
+    const resolvedName = fullNameAr || name || existingUser.fullNameAr || existingUser.name || 'موظف';
+    const resolvedBranchId = branchId || primaryBranchId || existingUser.branchId || existingUser.primaryBranchId || null;
+    const resolvedCanUseTerminal = canUseAttendanceTerminal !== undefined 
+      ? Boolean(canUseAttendanceTerminal) 
+      : can_use_attendance_terminal !== undefined 
+      ? Boolean(can_use_attendance_terminal) 
+      : Boolean(existingUser.canUseAttendanceTerminal ?? true);
+
+    const updateData: Record<string, any> = {
       phone: phone ? String(phone).trim() : existingUser.phone,
+      name: resolvedName,
+      fullNameAr: resolvedName,
+      fullNameEn: fullNameEn !== undefined ? (fullNameEn ? String(fullNameEn).trim() : null) : existingUser.fullNameEn,
       email: email !== undefined ? (email ? String(email).trim() : null) : existingUser.email,
-      role: role ? String(role).trim() : existingUser.role,
-      jobTitle: targetJobTitle ? String(targetJobTitle).trim() : null,
-      employeeCode: targetEmployeeCode ? String(targetEmployeeCode).trim() : null,
-      branchId: targetBranchId ? String(targetBranchId).trim() : null,
-      roleId: targetRoleId ? String(targetRoleId).trim() : null,
-      hourlyRate: targetHourlyRate !== null && targetHourlyRate !== undefined ? String(targetHourlyRate) : null,
-      monthlySalary: targetMonthlySalary !== null && targetMonthlySalary !== undefined ? String(targetMonthlySalary) : null,
-      isActive: targetIsActive,
-      canUseAttendanceTerminal: targetCanTerminal,
-      notes: notes !== undefined ? (notes ? String(notes).trim() : null) : existingUser.notes,
+      role: role ? String(role) : existingUser.role,
+      systemRole: systemRole ? String(systemRole) : (role ? String(role) : existingUser.systemRole),
+      jobTitle: jobTitle !== undefined ? (jobTitle ? String(jobTitle).trim() : null) : existingUser.jobTitle,
+      employeeCode: employeeCode !== undefined ? (employeeCode ? String(employeeCode).trim() : null) : existingUser.employeeCode,
+      hourlyRate: hourlyRate !== undefined ? (hourlyRate !== null ? Number(hourlyRate) : null) : existingUser.hourlyRate,
+      monthlySalary: monthlySalary !== undefined ? (monthlySalary !== null ? Number(monthlySalary) : null) : existingUser.monthlySalary,
+      canUseAttendanceTerminal: resolvedCanUseTerminal,
+      branchId: resolvedBranchId,
+      primaryBranchId: resolvedBranchId,
+      roleId: roleId !== undefined ? (roleId ? String(roleId) : null) : existingUser.roleId,
+      isActive: isActive !== undefined ? Boolean(isActive) : existingUser.isActive,
+      notes: notes !== undefined ? (notes ? String(notes) : null) : existingUser.notes,
       updatedAt: new Date(),
     };
 
-    if (password && String(password).trim().length > 0) {
+    if (password && String(password).trim() !== '') {
       updateData.password = await bcrypt.hash(String(password).trim(), 10);
     }
 
-    const [updatedUser] = await db
-      .update(users)
-      .set(updateData)
-      .where(eq(users.id, employeeId))
-      .returning();
+    await db.update(users).set(updateData).where(eq(users.id, employeeId));
+
+    if (Array.isArray(branchScopes)) {
+      await db.delete(adminBranchScopes).where(eq(adminBranchScopes.userId, employeeId));
+      if (branchScopes.length > 0) {
+        const scopeValues = branchScopes.map((bId: string) => ({
+          userId: employeeId,
+          branchId: String(bId),
+          createdAt: new Date(),
+        }));
+        await db.insert(adminBranchScopes).values(scopeValues);
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      message: "تم تحديث بيانات الموظف بنجاح",
-      data: updatedUser,
+      message: 'تم تحديث بيانات الموظف بنجاح',
+      id: employeeId,
     });
-  } catch (error) {
-    console.error("PUT employee by ID API error:", error);
-    const message =
-      error instanceof Error ? error.message : "حدث خطأ أثناء تحديث بيانات الموظف";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error updating employee:', error);
+    return NextResponse.json(
+      { error: error?.message || 'حدث خطأ أثناء تحديث بيانات الموظف' },
+      { status: 500 }
+    );
   }
 }
 
-export async function PATCH(req: Request, context: RouteParams) {
-  return PUT(req, context);
-}
-
-export async function DELETE(req: Request, { params }: RouteParams) {
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = await params;
-    const employeeId = String(id);
-
-    if (!employeeId || employeeId.trim() === "") {
-      return NextResponse.json(
-        { success: false, error: "معرف الموظف مطلوب" },
-        { status: 400 }
-      );
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 401 });
     }
 
-    const [deletedUser] = await db
-      .delete(users)
-      .where(eq(users.id, employeeId))
-      .returning();
+    const resolvedParams = await context.params;
+    const employeeId = resolvedParams.id;
 
-    if (!deletedUser) {
-      return NextResponse.json(
-        { success: false, error: "الموظف غير موجود بالنظام" },
-        { status: 404 }
-      );
+    if (!employeeId) {
+      return NextResponse.json({ error: 'معرف الموظف مطلوب' }, { status: 400 });
     }
+
+    await db.delete(users).where(eq(users.id, employeeId));
 
     return NextResponse.json({
       success: true,
-      message: "تم حذف الموظف بنجاح",
-      data: deletedUser,
+      message: 'تم حذف الموظف بنجاح',
     });
-  } catch (error) {
-    console.error("DELETE employee by ID API error:", error);
-    const message =
-      error instanceof Error ? error.message : "حدث خطأ أثناء حذف الموظف";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error deleting employee:', error);
+    return NextResponse.json(
+      { error: error?.message || 'حدث خطأ أثناء حذف الموظف' },
+      { status: 500 }
+    );
   }
 }
