@@ -30,7 +30,7 @@ export const branches = pgTable('branches', {
 });
 
 // ----------------------------------------------------------------------
-// 2. جدول الأدوار والصلاحيات (Roles) + تصدير customRoles للـ Backward Compatibility
+// 2. جدول الأدوار والصلاحيات (Roles) + customRoles
 // ----------------------------------------------------------------------
 export const roles = pgTable('roles', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -44,11 +44,11 @@ export const roles = pgTable('roles', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// تصدير اسم بديل لتجنب أخطاء الاستيراد في roleActions و api/roles
 export const customRoles = roles;
 
 // ----------------------------------------------------------------------
 // 3. جدول الموظفين (Users / Employees)
+// يحتوي على جميع الحقول الشخصية، المالية، والمهنية للموظف
 // ----------------------------------------------------------------------
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -61,6 +61,14 @@ export const users = pgTable('users', {
   role: varchar('role', { length: 50 }).default('employee'),
   systemRole: varchar('system_role', { length: 50 }).default('employee'),
   jobTitle: varchar('job_title', { length: 255 }),
+  employeeCode: varchar('employee_code', { length: 100 }),
+  hourlyRate: doublePrecision('hourly_rate'),
+  monthlySalary: doublePrecision('monthly_salary'),
+  avatarUrl: text('avatar_url'),
+  gender: varchar('gender', { length: 20 }),
+  nationalId: varchar('national_id', { length: 100 }),
+  hireDate: timestamp('hire_date'),
+  birthDate: timestamp('birth_date'),
   branchId: uuid('branch_id').references(() => branches.id),
   primaryBranchId: uuid('primary_branch_id').references(() => branches.id),
   roleId: uuid('role_id').references(() => roles.id),
@@ -101,7 +109,7 @@ export const attendanceLogs = pgTable('attendance_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id),
   branchId: uuid('branch_id').notNull().references(() => branches.id),
-  type: varchar('type', { length: 20 }).notNull(), // CHECK_IN / CHECK_OUT
+  type: varchar('type', { length: 20 }).notNull(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
   latitude: doublePrecision('latitude'),
   longitude: doublePrecision('longitude'),
@@ -113,7 +121,6 @@ export const attendanceLogs = pgTable('attendance_logs', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// تصدير اسم بديل لتوافق الواجهات المتنوعة
 export const attendance = attendanceLogs;
 
 // ----------------------------------------------------------------------
