@@ -5,9 +5,29 @@ import { customRoles } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-export async function getRolesAction() {
+export type RoleData = {
+  id: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
+  name?: string | null;
+  description?: string | null;
+  permissions?: string[] | any;
+  isActive?: boolean | null;
+  [key: string]: any;
+};
+
+export async function getRolesAction(): Promise<RoleData[]> {
   try {
-    return await db.select().from(customRoles);
+    const list = await db.select().from(customRoles);
+    return (list || []).map((r: any) => ({
+      id: String(r.id),
+      nameAr: r.nameAr || r.name || "دور بدون اسم",
+      nameEn: r.nameEn || "",
+      name: r.name || r.nameAr || "دور بدون اسم",
+      description: r.description || "",
+      permissions: Array.isArray(r.permissions) ? r.permissions : [],
+      isActive: r.isActive ?? true,
+    }));
   } catch (error) {
     console.error("Error fetching roles:", error);
     return [];
@@ -21,11 +41,18 @@ export async function getRoleByIdAction(id: string) {
       .from(customRoles)
       .where(eq(customRoles.id, String(id)))
       .limit(1);
+
     if (!found[0]) return null;
+
+    const r = found[0];
     return {
       success: true,
-      data: found[0],
-      ...found[0],
+      data: {
+        ...r,
+        id: String(r.id),
+      },
+      ...r,
+      id: String(r.id),
     };
   } catch (error) {
     console.error("Error fetching role by id:", error);
