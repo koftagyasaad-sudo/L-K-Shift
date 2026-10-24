@@ -17,11 +17,25 @@ export async function getEmployeesAction() {
 
 export async function getEmployeeByIdAction(id: string) {
   try {
-    const found = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return found[0] || null;
-  } catch (error) {
+    const found = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, String(id)))
+      .limit(1);
+
+    if (!found[0]) {
+      return { success: false, data: null, error: "الموظف غير موجود" };
+    }
+
+    const user = found[0];
+    return {
+      success: true,
+      data: user,
+      ...user,
+    };
+  } catch (error: any) {
     console.error("Error fetching employee by id:", error);
-    return null;
+    return { success: false, data: null, error: error?.message || "خطأ أثناء جلب الموظف" };
   }
 }
 
@@ -46,17 +60,17 @@ export async function saveEmployeeAction(data: any) {
       isActive,
     };
 
-    const passwordRaw = data.password || data.passwordHash || "123456";
-    if (passwordRaw && !id) {
+    const passwordRaw = data.password || data.passwordHash;
+    if (passwordRaw) {
       payload.password = await bcrypt.hash(passwordRaw, 10);
       payload.passwordHash = payload.password;
-    } else if (data.password) {
-      payload.password = await bcrypt.hash(data.password, 10);
+    } else if (!id) {
+      payload.password = await bcrypt.hash("123456", 10);
       payload.passwordHash = payload.password;
     }
 
     if (id) {
-      await db.update(users).set(payload).where(eq(users.id, id));
+      await db.update(users).set(payload).where(eq(users.id, String(id)));
     } else {
       await db.insert(users).values(payload);
     }
@@ -80,7 +94,7 @@ export async function updateEmployeeAction(id: string, data: any) {
 
 export async function deleteEmployeeAction(id: string) {
   try {
-    await db.delete(users).where(eq(users.id, id));
+    await db.delete(users).where(eq(users.id, String(id)));
     revalidatePath("/admin/employees");
     revalidatePath("/employees");
     return { success: true };
@@ -92,10 +106,10 @@ export async function deleteEmployeeAction(id: string) {
 
 export async function toggleEmployeeStatusAction(id: string, currentStatus?: boolean) {
   try {
-    const userData = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const userData = await db.select().from(users).where(eq(users.id, String(id))).limit(1);
     if (!userData.length) throw new Error("User not found");
     const newStatus = currentStatus !== undefined ? !currentStatus : !(userData[0].isActive);
-    await db.update(users).set({ isActive: newStatus }).where(eq(users.id, id));
+    await db.update(users).set({ isActive: newStatus }).where(eq(users.id, String(id)));
     revalidatePath("/admin/employees");
     revalidatePath("/employees");
     return { success: true };
