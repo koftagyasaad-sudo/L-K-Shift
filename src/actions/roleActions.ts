@@ -21,7 +21,12 @@ export async function getRoleByIdAction(id: string) {
       .from(customRoles)
       .where(eq(customRoles.id, String(id)))
       .limit(1);
-    return found[0] || null;
+    if (!found[0]) return null;
+    return {
+      success: true,
+      data: found[0],
+      ...found[0],
+    };
   } catch (error) {
     console.error("Error fetching role by id:", error);
     return null;
@@ -38,7 +43,6 @@ export async function saveRoleAction(data: any) {
     const permissions = Array.isArray(data.permissions) ? data.permissions : [];
     const isActive = data.isActive ?? true;
 
-    // تجهيز كائن البيانات لتلبية متطلبات جميع أعمدة الجدول في Drizzle Schema
     const payload: any = {
       nameAr,
       nameEn,
