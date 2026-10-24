@@ -1,259 +1,412 @@
 "use client";
 
-import { useRouter } from "@/i18n/navigation";
-import { useState } from "react";
-import { toast } from "sonner";
-import { Loader2, Pencil, Plus, Shield, Trash2, X } from "lucide-react";
+import React, { useState } from "react";
+import {
+  Shield,
+  Plus,
+  Edit,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  X,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
+import {
+  saveRoleAction,
+  deleteRoleAction,
+  toggleRoleStatusAction,
+  type RoleData,
+} from "@/actions/roleActions";
+import { useRouter } from "next/navigation";
 
-type PermissionItem = { id: string; label: string; labelAr: string };
-type PermissionCategory = { category: string; categoryAr: string; items: readonly PermissionItem[] };
+interface RoleManagerProps {
+  initialRoles?: RoleData[];
+}
 
-type CustomRole = {
-  id: number;
-  name: string;
-  nameAr: string;
-  permissions: string[];
-  isSystem: boolean;
-};
+const AVAILABLE_PERMISSIONS = [
+  { id: "view_employees", label: "عرض الموظفين" },
+  { id: "manage_employees", label: "إدارة الموظفين (إضافة/تعديل/حذف)" },
+  { id: "view_branches", label: "عرض الفروع" },
+  { id: "manage_branches", label: "إدارة الفروع والجغرافيا" },
+  { id: "view_attendance", label: "عرض سجلات الحضور" },
+  { id: "edit_attendance", label: "تعديل الحضور والتنفيذ" },
+  { id: "view_reports", label: "عرض التقارير" },
+];
 
-export function RoleManager({
-  locale,
-  roles,
-  catalog,
-}: {
-  locale: "ar" | "en";
-  roles: CustomRole[];
-  catalog: readonly PermissionCategory[];
-}) {
+export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
   const router = useRouter();
-  const isAr = locale === "ar";
-  const [showForm, setShowForm] = useState(false);
-  const [editingRole, setEditingRole] = useState<CustomRole | null>(null);
-  const [nameAr, setNameAr] = useState("");
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [roles, setRoles] = useState<RoleData[]>(initialRoles);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [editingRole, setEditingRole] = useState<RoleData | null>(null);
 
-  function openCreateForm() {
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  const [formData, setFormData] = useState({
+    id: "",
+    nameAr: "",
+    nameEn: "",
+    description: "",
+    permissions: [] as string[],
+    isActive: true,
+  });
+
+  const openAddModal = () => {
     setEditingRole(null);
-    setNameAr("");
-    setSelectedPermissions([]);
-    setShowForm(true);
-  }
+    setFormData({
+      id: "",
+      nameAr: "",
+      nameEn: "",
+      description: "",
+      permissions: [],
+      isActive: true,
+    });
+    setIsModalOpen(true);
+  };
 
-  function openEditForm(role: CustomRole) {
+  const openEditModal = (role: RoleData) => {
     setEditingRole(role);
-    setNameAr(role.nameAr);
-    setSelectedPermissions(role.permissions);
-    setShowForm(true);
-  }
+    setFormData({
+      id: role.id,
+      nameAr: role.nameAr || role.name || "",
+      nameEn: role.nameEn || "",
+      description: role.description || "",
+      permissions: Array.isArray(role.permissions) ? role.permissions : [],
+      isActive: role.isActive ?? true,
+    });
+    setIsModalOpen(true);
+  };
 
-  function togglePermission(id: string) {
-    setSelectedPermissions((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    );
-  }
+  const handlePermissionChange = (permId: string) => {
+    setFormData((prev) => {
+      const exists = prev.permissions.includes(permId);
+      const updated = exists
+        ? prev.permissions.filter((p) => p !== permId)
+        : [...prev.permissions, permId];
+      return { ...prev, permissions: updated };
+    });
+  };
 
-  async function handleSave() {
-    if (!nameAr.trim()) {
-      toast.error(isAr ? "يرجى إدخال اسم الصلاحية" : "Please enter a role name");
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-    setSaving(true);
     try {
-      const url = editingRole ? `/api/roles/${editingRole.id}` : "/api/roles";
-      const method = editingRole ? "PATCH" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nameAr, name: nameAr, permissions: selectedPermissions }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        toast.error(data.error ?? (isAr ? "حدث خطأ" : "Something went wrong"));
-        return;
+      const res = await saveRoleAction(formData);
+      if (res && (res.success || !res.error)) {
+        showToast(
+          formData.id ? "تم تعديل الدور بنجاح" : "تم إضافة الدور بنجاح",
+          "success"
+        );
+        setIsModalOpen(false);
+        router.refresh();
+      } else {
+        showToast(res?.error || "حدث خطأ أثناء حفظ البيانات", "error");
       }
-
-      toast.success(isAr ? "تم الحفظ بنجاح" : "Saved successfully");
-      setShowForm(false);
-      router.refresh();
+    } catch (err) {
+      showToast("حدث خطأ غير متوقع", "error");
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }
+  };
 
-  async function handleDelete(role: CustomRole) {
-    const confirmed = window.confirm(
-      isAr ? `هل تريد حذف صلاحية "${role.nameAr}"؟` : `Delete role "${role.name}"?`
-    );
-    if (!confirmed) return;
-
-    const response = await fetch(`/api/roles/${role.id}`, { method: "DELETE" });
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      toast.error(data.error ?? (isAr ? "تعذر الحذف" : "Could not delete"));
-      return;
+  const handleDelete = async (id: string) => {
+    if (!confirm("هل أنت تأكد من حذف هذا الدور؟")) return;
+    try {
+      const res = await deleteRoleAction(id);
+      if (res && (res.success || !res.error)) {
+        showToast("تم حذف الدور بنجاح", "success");
+        setRoles((prev) => prev.filter((r) => r.id !== id));
+        router.refresh();
+      } else {
+        showToast(res?.error || "فشل الحذف", "error");
+      }
+    } catch (err) {
+      showToast("حدث خطأ أثناء الحذف", "error");
     }
+  };
 
-    toast.success(isAr ? "تم الحذف بنجاح" : "Deleted successfully");
-    router.refresh();
-  }
+  const handleToggleStatus = async (id: string, currentStatus?: boolean) => {
+    try {
+      const res = await toggleRoleStatusAction(id, currentStatus);
+      if (res && (res.success || !res.error)) {
+        showToast("تم تغيير حالة الدور بنجاح", "success");
+        setRoles((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r))
+        );
+        router.refresh();
+      }
+    } catch (err) {
+      showToast("فشل تغيير الحالة", "error");
+    }
+  };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
-          <Shield className="h-5 w-5 text-accent" />
-          {isAr ? "الصلاحيات المخصصة" : "Custom Roles"}
-        </h2>
-        <button
-          type="button"
-          onClick={openCreateForm}
-          className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover"
+    <div className="space-y-6" dir="rtl">
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
+            feedback.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
         >
-          <Plus className="h-4 w-4" />
-          {isAr ? "إضافة صلاحية" : "Add Role"}
+          {feedback.type === "success" ? (
+            <CheckCircle2 size={20} />
+          ) : (
+            <AlertCircle size={20} />
+          )}
+          <span className="font-medium text-sm">{feedback.text}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Shield className="text-purple-500" />
+            إدارة الأدوار والصلاحيات
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            إضافة وتعديل أدوار الموظفين وتخصيص صلاحيات الشاشات والعمليات
+          </p>
+        </div>
+        <button
+          onClick={openAddModal}
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-purple-600/20"
+        >
+          <Plus size={18} />
+          إضافة دور جديد
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {roles.map((role) => (
-          <div key={role.id} className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
+          <div
+            key={role.id}
+            className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-6 transition-all space-y-4 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start">
               <div>
-                <p className="font-bold text-foreground">{isAr ? role.nameAr : role.name}</p>
-                <p className="mt-0.5 text-xs text-foreground-muted">
-                  {role.permissions.length} {isAr ? "صلاحية" : "permissions"}
-                </p>
+                <h3 className="text-lg font-bold text-white">
+                  {role.nameAr || role.name || role.nameEn || "دور بدون اسم"}
+                </h3>
+                {role.nameEn && (
+                  <p className="text-xs text-slate-400">{role.nameEn}</p>
+                )}
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => openEditForm(role)}
-                  className="rounded-lg p-1.5 text-foreground-muted transition hover:bg-background-secondary hover:text-foreground"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                {!role.isSystem && (
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(role)}
-                    className="text-danger hover:bg-danger/10 rounded-lg p-1.5 transition"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+              <button
+                onClick={() =>
+                  handleToggleStatus(role.id, role.isActive ?? true)
+                }
+                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
+                  role.isActive
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                }`}
+              >
+                {role.isActive ? (
+                  <>
+                    <CheckCircle size={12} /> نشط
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={12} /> غير نشط
+                  </>
+                )}
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-400 min-h-[40px]">
+              {role.description || "لا يوجد وصف محدد لهذا الدور"}
+            </p>
+
+            <div className="bg-slate-800/50 p-3 rounded-xl space-y-2">
+              <span className="text-xs font-semibold text-slate-300 block">
+                الصلاحيات الممنوحة:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {Array.isArray(role.permissions) && role.permissions.length > 0 ? (
+                  role.permissions.map((p) => {
+                    const label =
+                      AVAILABLE_PERMISSIONS.find((ap) => ap.id === p)?.label ||
+                      p;
+                    return (
+                      <span
+                        key={p}
+                        className="bg-purple-500/10 text-purple-300 border border-purple-500/20 text-xs px-2 py-0.5 rounded-md"
+                      >
+                        {label}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-xs text-slate-500">
+                    لا توجد صلاحيات خاصة
+                  </span>
                 )}
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {role.permissions.slice(0, 4).map((p) => (
-                <span
-                  key={p}
-                  className="rounded-full bg-background-secondary px-2 py-0.5 text-[10px] font-medium text-foreground-muted"
-                >
-                  {p}
-                </span>
-              ))}
-              {role.permissions.length > 4 && (
-                <span className="rounded-full bg-background-secondary px-2 py-0.5 text-[10px] font-medium text-foreground-muted">
-                  +{role.permissions.length - 4}
-                </span>
-              )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => openEditModal(role)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                title="تعديل"
+              >
+                <Edit size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(role.id)}
+                className="p-2 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
+                title="حذف"
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
           </div>
         ))}
-
-        {roles.length === 0 && (
-          <div className="col-span-full rounded-2xl border border-dashed border-border p-8 text-center text-sm text-foreground-muted">
-            {isAr ? "لا توجد صلاحيات مخصصة بعد" : "No custom roles yet"}
-          </div>
-        )}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-border bg-surface p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-foreground">
-                {editingRole
-                  ? isAr ? "تعديل الصلاحية" : "Edit Role"
-                  : isAr ? "إضافة صلاحية جديدة" : "Add New Role"}
-              </h3>
-              <button type="button" onClick={() => setShowForm(false)} className="text-foreground-muted">
-                <X className="h-5 w-5" />
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-700/50 bg-slate-800/50">
+              <h2 className="text-2xl font-bold text-white">
+                {editingRole ? "تعديل الدور" : "إضافة دور جديد"}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full transition-colors"
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-foreground-muted">
-                  {isAr ? "اسم الصلاحية" : "Role Name"}
-                </label>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">
+                    الاسم بالعربية *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nameAr}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nameAr: e.target.value })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="كول سنتر"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">
+                    الاسم بالإنجليزية
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nameEn}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nameEn: e.target.value })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                    placeholder="Call Center"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">الوصف</label>
                 <input
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground outline-none focus:border-accent"
-                  value={nameAr}
-                  onChange={(e) => setNameAr(e.target.value)}
-                  placeholder={isAr ? "مثال: مشرف المخزون" : "e.g. Inventory Supervisor"}
+                  type="text"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                  placeholder="وصف مختصر لمسؤوليات هذا الدور"
                 />
               </div>
 
-              <div className="space-y-4">
-                {catalog.map((group) => (
-                  <div key={group.category}>
-                    <p className="mb-2 text-xs font-bold text-foreground-muted">
-                      {isAr ? group.categoryAr : group.category}
-                    </p>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {group.items.map((item) => {
-                        const checked = selectedPermissions.includes(item.id);
-                        return (
-                          <label
-                            key={item.id}
-                            className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-medium transition ${
-                              checked
-                                ? "border-accent bg-accent/10 text-accent"
-                                : "border-border text-foreground-muted hover:bg-background-secondary"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => togglePermission(item.id)}
-                              className="h-4 w-4 rounded border-border accent-accent"
-                            />
-                            {isAr ? item.labelAr : item.label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-slate-300 block">
+                  الصلاحيات
+                </label>
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 space-y-3 max-h-52 overflow-y-auto">
+                  {AVAILABLE_PERMISSIONS.map((perm) => {
+                    const checked = formData.permissions.includes(perm.id);
+                    return (
+                      <label
+                        key={perm.id}
+                        className="flex items-center gap-3 cursor-pointer hover:bg-slate-800 p-2 rounded-lg transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handlePermissionChange(perm.id)}
+                          className="w-4 h-4 rounded bg-slate-700 border-slate-600 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm text-slate-200">
+                          {perm.label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded-full border border-border px-5 py-2.5 text-sm font-semibold text-foreground-muted transition hover:bg-background-secondary"
-              >
-                {isAr ? "إلغاء" : "Cancel"}
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 transition hover:bg-primary-hover disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : isAr ? "حفظ" : "Save"}
-              </button>
-            </div>
+              <div className="flex items-center gap-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <input
+                  type="checkbox"
+                  id="isActiveRoleModal"
+                  checked={formData.isActive}
+                  onChange={(e) =>
+                    setFormData({ ...formData, isActive: e.target.checked })
+                  }
+                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-purple-600 focus:ring-purple-500"
+                />
+                <label
+                  htmlFor="isActiveRoleModal"
+                  className="text-sm font-medium text-slate-300 cursor-pointer"
+                >
+                  تفعيل هذا الدور
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2.5 rounded-xl bg-purple-600 text-white font-medium hover:bg-purple-700 transition-all disabled:opacity-50"
+                >
+                  {loading ? "جاري الحفظ..." : "حفظ"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+export default RoleManager;
