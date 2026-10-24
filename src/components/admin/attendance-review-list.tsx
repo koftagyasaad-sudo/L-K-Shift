@@ -1,117 +1,404 @@
 "use client";
 
 import React, { useState } from "react";
+import { Plus, Edit, Trash2, MapPin, Building2, CheckCircle, XCircle, X, AlertCircle, CheckCircle2 } from "lucide-react";
+import { saveBranchAction, deleteBranchAction, toggleBranchStatusAction, type BranchData } from "@/actions/branchActions";
+import { useRouter } from "next/navigation";
 
-interface AttendanceRecord {
-  id: number;
-  employeeName: string;
-  performanceId: string;
-  branchName: string;
-  checkInTime: string;
-  checkOutTime?: string;
-  checkInPhotoUrl?: string;
-  status: string;
-  lateReason?: string;
+interface Props {
+  initialBranches?: BranchData[];
 }
 
-export default function AttendanceReviewList({ initialLogs }: { initialLogs: AttendanceRecord[] }) {
-  const [logs, setLogs] = useState<AttendanceRecord[]>(initialLogs);
-  const [loadingId, setLoadingId] = useState<number | null>(null);
+export function BranchEmployeeManager({ initialBranches = [] }: Props) {
+  const router = useRouter();
+  const [branches, setBranches] = useState<BranchData[]>(initialBranches);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<BranchData | null>(null);
 
-  const handleAction = async (id: number, status: "APPROVED" | "REJECTED") => {
-    setLoadingId(id);
+  // Toast Feedback State
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  // Form State
+  const [mapLink, setMapLink] = useState("");
+  const [formData, setFormData] = useState<BranchData>({
+    id: "",
+    nameAr: "",
+    nameEn: "",
+    address: "",
+    latitude: "30.0444",
+    longitude: "31.2357",
+    radiusMeters: 100,
+    geofenceRadius: 100,
+    isActive: true,
+  });
+
+  const openAddModal = () => {
+    setEditingBranch(null);
+    setMapLink("");
+    setFormData({
+      id: "",
+      nameAr: "",
+      nameEn: "",
+      address: "",
+      latitude: "30.0444",
+      longitude: "31.2357",
+      radiusMeters: 100,
+      geofenceRadius: 100,
+      isActive: true,
+    });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (branch: BranchData) => {
+    setEditingBranch(branch);
+    setMapLink("");
+    setFormData({
+      id: branch.id,
+      nameAr: branch.nameAr || "",
+      nameEn: branch.nameEn || "",
+      address: branch.address || "",
+      latitude: branch.latitude || "30.0444",
+      longitude: branch.longitude || "31.2357",
+      radiusMeters: branch.geofenceRadius || branch.radiusMeters || 100,
+      geofenceRadius: branch.geofenceRadius || branch.radiusMeters || 100,
+      isActive: branch.isActive ?? true,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleMapLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const url = e.target.value;
+    setMapLink(url);
+
+    const atRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const qRegex = /q=(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const placeRegex = /search\/(-?\d+\.\d+),(-?\d+\.\d+)/;
+
+    const match = url.match(atRegex) || url.match(qRegex) || url.match(placeRegex);
+    if (match) {
+      setFormData((prev) => ({
+        ...prev,
+        latitude: match[1],
+        longitude: match[2],
+      }));
+      showToast("تم استخراج الإحداثيات بنجاح!", "success");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
     try {
-      const res = await fetch(`/api/admin/attendance-review`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logId: id, status }),
-      });
-
-      if (res.ok) {
-        setLogs((prev) =>
-          prev.map((log) => (log.id === id ? { ...log, status } : log))
-        );
+      const res = await saveBranchAction(formData);
+      if (res.success) {
+        showToast(formData.id ? "تم تعديل الفرع بنجاح" : "تم إضافة الفرع بنجاح", "success");
+        setIsModalOpen(false);
+        router.refresh();
       } else {
-        alert("فشل تحديث الحالة");
+        showToast(res.error || "حدث خطأ أثناء الحفظ", "error");
       }
     } catch (err) {
-      alert("حدث خطأ في الاتصال");
+      showToast("حدث خطأ غير متوقع", "error");
     } finally {
-      setLoadingId(null);
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("هل أنت تأكد من حذف هذا الفرع؟")) return;
+    try {
+      const res = await deleteBranchAction(id);
+      if (res.success) {
+        showToast("تم حذف الفرع", "success");
+        setBranches((prev) => prev.filter((b) => b.id !== id));
+        router.refresh();
+      } else {
+        showToast(res.error || "فشل الحذف", "error");
+      }
+    } catch (err) {
+      showToast("حدث خطأ أثناء الحذف", "error");
+    }
+  };
+
+  const handleToggleStatus = async (id: string, currentStatus?: boolean) => {
+    try {
+      const res = await toggleBranchStatusAction(id, currentStatus);
+      if (res.success) {
+        showToast("تم تغيير حالة الفرع", "success");
+        setBranches((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, isActive: !b.isActive } : b))
+        );
+        router.refresh();
+      }
+    } catch (err) {
+      showToast("فشل تغيير الحالة", "error");
     }
   };
 
   return (
-    <div className="space-y-4 dir-rtl text-right">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {logs.map((log) => (
+    <div className="space-y-6" dir="rtl">
+      {/* Toast Feedback */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
+            feedback.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
+        >
+          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="font-medium text-sm">{feedback.text}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Building2 className="text-blue-500" />
+            إدارة الفروع والنطاق الجغرافي
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">
+            إضافة وتعديل الفروع وتحديد نطاق بصمة الحضور والانصراف (GPS Geofence)
+          </p>
+        </div>
+        <button
+          onClick={openAddModal}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-600/20"
+        >
+          <Plus size={18} />
+          إضافة فرع جديد
+        </button>
+      </div>
+
+      {/* Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {branches.map((branch) => (
           <div
-            key={log.id}
-            className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm flex flex-col justify-between"
+            key={branch.id}
+            className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-6 transition-all space-y-4 relative overflow-hidden group"
           >
-            <div>
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h4 className="font-bold text-slate-800 dark:text-slate-100">{log.employeeName}</h4>
-                  <p className="text-xs text-slate-500">رقم الأداء: {log.performanceId}</p>
-                </div>
-                <span
-                  className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                    log.status === "APPROVED" || log.status === "AUTO_APPROVED"
-                      ? "bg-green-100 text-green-800"
-                      : log.status === "REJECTED"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {log.status === "APPROVED" || log.status === "AUTO_APPROVED"
-                    ? "مقبول ✅"
-                    : log.status === "REJECTED"
-                    ? "مرفوض ❌"
-                    : "قيد المراجعة ⏳"}
-                </span>
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  {branch.nameAr || branch.nameEn || "فرع بدون اسم"}
+                </h3>
+                {branch.nameEn && <p className="text-xs text-slate-400">{branch.nameEn}</p>}
               </div>
-
-              {log.checkInPhotoUrl && (
-                <div className="my-3 h-40 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden border">
-                  <img
-                    src={log.checkInPhotoUrl}
-                    alt="صورة الحضور"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-
-              <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1 my-2">
-                <p>📍 الفرع: <strong>{log.branchName}</strong></p>
-                <p>🕒 الحضور: <strong>{new Date(log.checkInTime).toLocaleString("ar-EG")}</strong></p>
-                {log.lateReason && (
-                  <p className="text-amber-600 dark:text-amber-400 font-semibold">
-                    ⚠️ سبب التأخير: {log.lateReason}
-                  </p>
+              <button
+                onClick={() => handleToggleStatus(branch.id, branch.isActive ?? true)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
+                  branch.isActive
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                }`}
+              >
+                {branch.isActive ? (
+                  <>
+                    <CheckCircle size={12} /> نشط
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={12} /> غير نشط
+                  </>
                 )}
+              </button>
+            </div>
+
+            <div className="text-sm text-slate-300 space-y-2 bg-slate-800/50 p-3 rounded-xl">
+              <p className="flex items-center gap-2 text-slate-400">
+                <MapPin size={14} className="text-blue-400" />
+                {branch.address || "لا يوجد عنوان محدد"}
+              </p>
+              <div className="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-700/50">
+                <span>الإحداثيات: {branch.latitude}, {branch.longitude}</span>
+                <span className="text-blue-400 font-medium">
+                  نطاق البصمة: {branch.geofenceRadius || branch.radiusMeters || 100} متر
+                </span>
               </div>
             </div>
 
-            <div className="flex gap-2 mt-4 pt-3 border-t">
+            <div className="flex justify-end gap-2 pt-2">
               <button
-                onClick={() => handleAction(log.id, "APPROVED")}
-                disabled={loadingId === log.id}
-                className="flex-1 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition"
+                onClick={() => openEditModal(branch)}
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                title="تعديل"
               >
-                قبول
+                <Edit size={16} />
               </button>
               <button
-                onClick={() => handleAction(log.id, "REJECTED")}
-                disabled={loadingId === log.id}
-                className="flex-1 py-1.5 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 disabled:opacity-50 transition"
+                onClick={() => handleDelete(branch.id)}
+                className="p-2 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
+                title="حذف"
               >
-                رفض
+                <Trash2 size={16} />
               </button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-slate-700/50 bg-slate-800/50">
+              <h2 className="text-2xl font-bold text-white">
+                {editingBranch ? "تعديل الفرع" : "إضافة فرع جديد"}
+              </h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">الاسم بالعربية *</label>
+                  <input
+                    type="text"
+                    name="nameAr"
+                    required
+                    value={formData.nameAr || ""}
+                    onChange={handleChange}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="الاسد"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">الاسم بالإنجليزية</label>
+                  <input
+                    type="text"
+                    name="nameEn"
+                    value={formData.nameEn || ""}
+                    onChange={handleChange}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Lion"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">العنوان</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address || ""}
+                  onChange={handleChange}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="دسوق - ش الجيش"
+                />
+              </div>
+
+              <div className="space-y-2 bg-blue-900/20 p-4 rounded-xl border border-blue-500/20">
+                <label className="text-sm font-medium text-blue-300 flex items-center gap-2">
+                  <MapPin size={16} />
+                  رابط خرائط جوجل (سحب الإحداثيات تلقائياً)
+                </label>
+                <input
+                  type="text"
+                  value={mapLink}
+                  onChange={handleMapLinkChange}
+                  className="w-full bg-slate-800/80 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left placeholder:text-slate-500"
+                  dir="ltr"
+                  placeholder="https://maps.google.com/..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">خط العرض (Latitude)</label>
+                  <input
+                    type="text"
+                    name="latitude"
+                    required
+                    value={formData.latitude || ""}
+                    onChange={handleChange}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">خط الطول (Longitude)</label>
+                  <input
+                    type="text"
+                    name="longitude"
+                    required
+                    value={formData.longitude || ""}
+                    onChange={handleChange}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">نصف قطر نطاق البصمة (بالمتر)</label>
+                  <input
+                    type="number"
+                    name="radiusMeters"
+                    required
+                    min="10"
+                    value={formData.radiusMeters || 100}
+                    onChange={handleChange}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <input
+                  type="checkbox"
+                  id="isActiveBranchManager"
+                  name="isActive"
+                  checked={formData.isActive ?? true}
+                  onChange={handleChange}
+                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-blue-500"
+                />
+                <label htmlFor="isActiveBranchManager" className="text-sm font-medium text-slate-300 cursor-pointer">
+                  الفرع نشط ومتاح للبصمة
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  {loading ? "جاري الحفظ..." : "حفظ"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default BranchEmployeeManager;
