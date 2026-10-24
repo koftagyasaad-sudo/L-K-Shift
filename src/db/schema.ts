@@ -17,6 +17,7 @@ import { relations } from 'drizzle-orm';
 export const branches = pgTable('branches', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
+  nameAr: varchar('name_ar', { length: 255 }),
   nameEn: varchar('name_en', { length: 255 }),
   address: text('address'),
   latitude: doublePrecision('latitude'),
@@ -48,7 +49,6 @@ export const customRoles = roles;
 
 // ----------------------------------------------------------------------
 // 3. جدول الموظفين (Users / Employees)
-// يحتوي على جميع الحقول الشخصية، المالية، والمهنية للموظف
 // ----------------------------------------------------------------------
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
