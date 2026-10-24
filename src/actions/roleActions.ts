@@ -1,4 +1,4 @@
-'use server';
+"use server";
 
 import { db } from "@/db";
 import { roles, customRoles } from "@/db/schema";
@@ -11,121 +11,195 @@ export type RoleData = {
   nameAr?: string | null;
   nameEn?: string | null;
   description?: string | null;
-  permissions?: string[] | any;
-  isActive: boolean;
-  createdAt?: Date | null;
-  updatedAt?: Date | null;
+  permissions?: string | string[] | null;
+  isActive?: boolean | null;
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
 };
+
+/**
+  تحويل الصلاحيات من مصفوفة أو كائن إلى نص JSON متوافق مع Drizzle Text Column
+ */
+function formatPermissionsForDb(permissions: unknown): string | null {
+  if (!permissions) return null;
+  if (typeof permissions === "string") return permissions;
+  if (Array.isArray(permissions) || typeof permissions === "object") {
+    try {
+      return JSON.stringify(permissions);
+    } catch {
+      return null;
+    }
+  }
+  return String(permissions);
+}
+
+/**
+  تحويل الصلاحيات من نص JSON مخزن بالمحرك إلى مصفوفة لسهولة استخدامها في واجهة المستخدم
+ */
+function parsePermissionsFromDb(permissions: unknown): string[] | string | null {
+  if (!permissions) return [];
+  if (Array.isArray(permissions)) return permissions;
+  if (typeof permissions === "string") {
+    const trimmed = permissions.trim();
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return trimmed;
+      }
+    }
+    return trimmed;
+  }
+  return [];
+}
 
 export async function getRolesAction(): Promise<RoleData[]> {
   try {
-    const rawRoles = await db.select().from(customRoles).orderBy(desc(customRoles.createdAt));
-    return rawRoles.map((r: any) => ({
+    const targetTable = roles || customRoles;
+    const rows = await db.select().from(targetTable).orderBy(desc(targetTable.createdAt));
+
+    return (rows || []).map((r: any) => ({
       id: String(r.id),
-      name: r.nameAr || r.name || r.nameEn || '',
-      nameAr: r.nameAr || r.name || null,
-      nameEn: r.nameEn || null,
-      description: r.description || null,
-      permissions: typeof r.permissions === 'string' ? JSON.parse(r.permissions) : (r.permissions || []),
-      isActive: Boolean(r.isActive ?? true),
-      createdAt: r.createdAt ? new Date(r.createdAt) : null,
-      updatedAt: r.updatedAt ? new Date(r.updatedAt) : null,
+      name: r.name || r.nameAr || "دور بدون اسم",
+      nameAr: r.nameAr || r.name || "",
+      nameEn: r.nameEn || "",
+      description: r.description || "",
+      permissions: parsePermissionsFromDb(r.permissions),
+      isActive: r.isActive !== false && r.isActive !== 0,
+      createdAt: r.createdAt ? String(r.createdAt) : null,
+      updatedAt: r.updatedAt ? String(r.updatedAt) : null,
     }));
   } catch (error) {
-    console.error('Error fetching roles:', error);
+    console.error("getRolesAction error:", error);
     return [];
   }
 }
 
 export async function getRoleByIdAction(id: string): Promise<RoleData | null> {
   try {
-    const result = await db.select().from(customRoles).where(eq(customRoles.id, id)).limit(1);
-    if (!result || result.length === 0) return null;
-    const r: any = result[0];
+    const targetTable = roles || customRoles;
+    const rows = await db.select().from(targetTable).where(eq(targetTable.id, id)).limit(1);
+    if (!rows || rows.length === 0) return null;
+
+    const r = rows[0] as any;
     return {
       id: String(r.id),
-      name: r.nameAr || r.name || r.nameEn || '',
-      nameAr: r.nameAr || r.name || null,
-      nameEn: r.nameEn || null,
-      description: r.description || null,
-      permissions: typeof r.permissions === 'string' ? JSON.parse(r.permissions) : (r.permissions || []),
-      isActive: Boolean(r.isActive ?? true),
-      createdAt: r.createdAt ? new Date(r.createdAt) : null,
-      updatedAt: r.updatedAt ? new Date(r.updatedAt) : null,
+      name: r.name || r.nameAr || "دور بدون اسم",
+      nameAr: r.nameAr || r.name || "",
+      nameEn: r.nameEn || "",
+      description: r.description || "",
+      permissions: parsePermissionsFromDb(r.permissions),
+      isActive: r.isActive !== false && r.isActive !== 0,
+      createdAt: r.createdAt ? String(r.createdAt) : null,
+      updatedAt: r.updatedAt ? String(r.updatedAt) : null,
     };
   } catch (error) {
-    console.error(`Error fetching role with ID ${id}:`, error);
+    console.error("getRoleByIdAction error:", error);
     return null;
   }
 }
 
-export async function saveRoleAction(data: Partial<RoleData> & { name: string }) {
+export async function createRoleAction(payload: Record<string, any>) {
   try {
-    const { id, name, nameAr, nameEn, description, permissions, isActive } = data;
-    const resolvedName = nameAr || name || 'دور جديد';
-    const resolvedPermissions = Array.isArray(permissions) ? permissions : (permissions ? [permissions] : []);
+    const name = payload.name || payload.nameAr || "دور جديد";
+    const nameAr = payload.nameAr || name;
+    const nameEn = payload.nameEn || "";
+    const description = payload.description || "";
+    const permissionsStr = formatPermissionsForDb(payload.permissions);
+    const isActive = payload.isActive !== false && payload.isActive !== 0;
 
-    if (id) {
-      await db.update(customRoles).set({
-        name: resolvedName,
-        nameAr: resolvedName,
-        nameEn: nameEn || null,
-        description: description || null,
-        permissions: resolvedPermissions,
-        isActive: isActive !== undefined ? isActive : true,
-        updatedAt: new Date(),
-      }).where(eq(customRoles.id, id));
-
-      revalidatePath('/admin/roles');
-      return { success: true, message: 'تم تحديث الدور بنجاح', id };
-    } else {
-      const newRoles = await db.insert(customRoles).values({
-        name: resolvedName,
-        nameAr: resolvedName,
-        nameEn: nameEn || null,
-        description: description || null,
-        permissions: resolvedPermissions,
-        isActive: isActive !== undefined ? isActive : true,
+    const targetTable = roles || customRoles;
+    const [inserted] = await db
+      .insert(targetTable)
+      .values({
+        name,
+        nameAr,
+        nameEn,
+        description,
+        permissions: permissionsStr,
+        isActive,
         createdAt: new Date(),
         updatedAt: new Date(),
-      } as any).returning({ id: customRoles.id });
+      } as any)
+      .returning();
 
-      const newId = newRoles[0]?.id ? String(newRoles[0].id) : undefined;
-      revalidatePath('/admin/roles');
-      return { success: true, message: 'تم إنشاء الدور بنجاح', id: newId };
-    }
+    revalidatePath("/[locale]/(app)/admin/roles", "page");
+    return { success: true, data: inserted };
   } catch (error: any) {
-    console.error('Error saving role:', error);
-    return { success: false, error: error?.message || 'فشل في حفظ بيانات الدور' };
+    console.error("createRoleAction error:", error);
+    return { success: false, error: error.message || "فشل إنشاء الدور" };
   }
 }
 
-export async function createRoleAction(data: Partial<RoleData> & { name: string }) {
-  return saveRoleAction(data);
+export async function updateRoleAction(id: string, payload: Record<string, any>) {
+  try {
+    const name = payload.name || payload.nameAr || "دور";
+    const nameAr = payload.nameAr || name;
+    const nameEn = payload.nameEn || "";
+    const description = payload.description || "";
+    const permissionsStr = formatPermissionsForDb(payload.permissions);
+    const isActive = payload.isActive !== false && payload.isActive !== 0;
+
+    const targetTable = roles || customRoles;
+    await db
+      .update(targetTable)
+      .set({
+        name,
+        nameAr,
+        nameEn,
+        description,
+        permissions: permissionsStr,
+        isActive,
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(targetTable.id, id));
+
+    revalidatePath("/[locale]/(app)/admin/roles", "page");
+    revalidatePath(`/[locale]/(app)/admin/roles/${id}`, "page");
+    return { success: true };
+  } catch (error: any) {
+    console.error("updateRoleAction error:", error);
+    return { success: false, error: error.message || "فشل تحديث بيانات الدور" };
+  }
 }
 
-export async function updateRoleAction(id: string, data: Partial<RoleData> & { name: string }) {
-  return saveRoleAction({ ...data, id });
+export async function saveRoleAction(payload: Record<string, any>) {
+  if (payload.id && String(payload.id).trim() !== "") {
+    return await updateRoleAction(String(payload.id), payload);
+  } else {
+    return await createRoleAction(payload);
+  }
+}
+
+export async function toggleRoleStatusAction(id: string, currentStatus?: boolean) {
+  try {
+    const nextStatus = currentStatus !== undefined ? !currentStatus : true;
+    const targetTable = roles || customRoles;
+    await db
+      .update(targetTable)
+      .set({
+        isActive: nextStatus,
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(targetTable.id, id));
+
+    revalidatePath("/[locale]/(app)/admin/roles", "page");
+    return { success: true, isActive: nextStatus };
+  } catch (error: any) {
+    console.error("toggleRoleStatusAction error:", error);
+    return { success: false, error: error.message || "فشل تغيير حالة الدور" };
+  }
 }
 
 export async function deleteRoleAction(id: string) {
   try {
-    await db.delete(customRoles).where(eq(customRoles.id, id));
-    revalidatePath('/admin/roles');
-    return { success: true, message: 'تم حذف الدور بنجاح' };
-  } catch (error: any) {
-    console.error('Error deleting role:', error);
-    return { success: false, error: error?.message || 'فشل في حذف الدور' };
-  }
-}
+    const targetTable = roles || customRoles;
+    await db.delete(targetTable).where(eq(targetTable.id, id));
 
-export async function toggleRoleStatusAction(id: string, currentStatus: boolean) {
-  try {
-    await db.update(customRoles).set({ isActive: !currentStatus, updatedAt: new Date() }).where(eq(customRoles.id, id));
-    revalidatePath('/admin/roles');
-    return { success: true, message: 'تم تغيير حالة الدور بنجاح' };
+    revalidatePath("/[locale]/(app)/admin/roles", "page");
+    return { success: true };
   } catch (error: any) {
-    console.error('Error toggling role status:', error);
-    return { success: false, error: error?.message || 'فشل في تغيير حالة الدور' };
+    console.error("deleteRoleAction error:", error);
+    return { success: false, error: error.message || "فشل حذف الدور" };
   }
 }
