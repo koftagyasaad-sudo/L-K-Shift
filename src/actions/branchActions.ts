@@ -14,41 +14,78 @@ export async function getBranchesAction() {
   }
 }
 
+export async function getBranchByIdAction(id: string) {
+  try {
+    const found = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
+    return found[0] || null;
+  } catch (error) {
+    console.error("Error fetching branch by id:", error);
+    return null;
+  }
+}
+
 export async function saveBranchAction(data: any) {
   try {
-    // Payload Mapping: معالجة البيانات لتتطابق مع أعمدة قاعدة البيانات تماماً
-    const payload = {
-      nameAr: data.nameAr || "فرع جديد",
-      nameEn: data.nameEn || "",
-      address: data.address || "",
-      latitude: String(data.latitude || "0"),
-      longitude: String(data.longitude || "0"),
-      // تحويل radiusMeters القادم من الفورم إلى geofenceRadius الذي تقبله قاعدة البيانات
-      geofenceRadius: Number(data.radiusMeters || data.geofenceRadius || 100),
-      isActive: data.isActive ?? true,
+    const id = data.id || data.branchId;
+    const nameAr = data.nameAr || data.name || "فرع جديد";
+    const nameEn = data.nameEn || "";
+    const address = data.address || "";
+    const latitude = String(data.latitude || "30.0444");
+    const longitude = String(data.longitude || "31.2357");
+    const geofenceRadius = Number(data.radiusMeters || data.geofenceRadius || 100);
+    const radiusMeters = geofenceRadius;
+    const isActive = data.isActive ?? true;
+
+    // توليد مفتاح فريد لـ QR الخاص بالفرع لتجنب خطأ التجميع مع قاعدة البيانات
+    const qrSecretKey =
+      data.qrSecretKey ||
+      `qr_secret_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    const payload: any = {
+      nameAr,
+      nameEn,
+      address,
+      latitude,
+      longitude,
+      geofenceRadius,
+      radiusMeters,
+      qrSecretKey,
+      isActive,
     };
 
-    if (data.id) {
-      await db.update(branches).set(payload).where(eq(branches.id, data.id));
+    if (id) {
+      delete payload.qrSecretKey; // عدم تغيير مفتاح QR عند التعديل إلا إذا توفر
+      await db.update(branches).set(payload).where(eq(branches.id, id));
     } else {
       await db.insert(branches).values(payload);
     }
+
     revalidatePath("/admin/branches");
+    revalidatePath("/branches");
     return { success: true };
   } catch (error: any) {
     console.error("saveBranchAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "حدث خطأ أثناء حفظ الفرع" };
   }
+}
+
+export async function createBranchAction(data: any) {
+  return await saveBranchAction(data);
+}
+
+export async function updateBranchAction(id: string, data: any) {
+  return await saveBranchAction({ ...data, id });
 }
 
 export async function deleteBranchAction(id: string) {
   try {
     await db.delete(branches).where(eq(branches.id, id));
     revalidatePath("/admin/branches");
+    revalidatePath("/branches");
     return { success: true };
   } catch (error: any) {
     console.error("deleteBranchAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "فشل حذف الفرع" };
   }
 }
 
@@ -59,9 +96,10 @@ export async function toggleBranchStatusAction(id: string, currentStatus?: boole
     const newStatus = currentStatus !== undefined ? !currentStatus : !(branchData[0].isActive);
     await db.update(branches).set({ isActive: newStatus }).where(eq(branches.id, id));
     revalidatePath("/admin/branches");
+    revalidatePath("/branches");
     return { success: true };
   } catch (error: any) {
     console.error("toggleBranchStatusAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "فشل تغيير حالة الفرع" };
   }
 }
