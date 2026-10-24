@@ -1,258 +1,201 @@
-import { db } from "@/db";
-import { users, branches } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { getServerSession } from "next-auth";
-import { notFound } from "next/navigation";
+import React from 'react';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db } from '@/db';
+import { users, branches, roles } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { redirect } from 'next/navigation';
+import { 
+  User, 
+  Phone, 
+  Building2, 
+  ShieldCheck, 
+  Briefcase, 
+  Calendar, 
+  CreditCard, 
+  BadgeCheck,
+  Mail,
+  FileText
+} from 'lucide-react';
 
-interface ProfilePageProps {
-  params: Promise<{
-    locale: string;
-  }>;
-}
+export default async function EmployeeProfilePage() {
+  const session = await getServerSession(authOptions);
 
-export default async function EmployeeProfilePage({ params }: ProfilePageProps) {
-  const { locale } = await params;
-  const isAr = locale !== "en";
-
-  const session = await getServerSession();
-  const sessionUserEmail = session?.user?.email;
-  const sessionUserName = session?.user?.name;
-
-  let userRecord = null;
-
-  if (sessionUserEmail) {
-    const found = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        phone: users.phone,
-        email: users.email,
-        role: users.role,
-        jobTitle: users.jobTitle,
-        employeeCode: users.employeeCode,
-        hourlyRate: users.hourlyRate,
-        monthlySalary: users.monthlySalary,
-        notes: users.notes,
-        isActive: users.isActive,
-        canUseAttendanceTerminal: users.canUseAttendanceTerminal,
-        createdAt: users.createdAt,
-        branchId: users.branchId,
-        branchNameAr: branches.nameAr,
-        branchNameEn: branches.nameEn,
-        branchAddress: branches.address,
-      })
-      .from(users)
-      .leftJoin(branches, eq(users.branchId, branches.id))
-      .where(eq(users.email, sessionUserEmail))
-      .limit(1);
-
-    if (found.length > 0) {
-      userRecord = found[0];
-    }
+  if (!session || !session.user) {
+    redirect('/login');
   }
 
-  if (!userRecord && sessionUserName) {
-    const found = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        phone: users.phone,
-        email: users.email,
-        role: users.role,
-        jobTitle: users.jobTitle,
-        employeeCode: users.employeeCode,
-        hourlyRate: users.hourlyRate,
-        monthlySalary: users.monthlySalary,
-        notes: users.notes,
-        isActive: users.isActive,
-        canUseAttendanceTerminal: users.canUseAttendanceTerminal,
-        createdAt: users.createdAt,
-        branchId: users.branchId,
-        branchNameAr: branches.nameAr,
-        branchNameEn: branches.nameEn,
-        branchAddress: branches.address,
-      })
-      .from(users)
-      .leftJoin(branches, eq(users.branchId, branches.id))
-      .where(eq(users.phone, sessionUserName))
-      .limit(1);
+  const userId = session.user.id;
 
-    if (found.length > 0) {
-      userRecord = found[0];
-    }
-  }
+  const userRecords = await db
+    .select({
+      id: users.id,
+      phone: users.phone,
+      name: users.name,
+      fullNameAr: users.fullNameAr,
+      fullNameEn: users.fullNameEn,
+      email: users.email,
+      role: users.role,
+      jobTitle: users.jobTitle,
+      employeeCode: users.employeeCode,
+      hourlyRate: users.hourlyRate,
+      monthlySalary: users.monthlySalary,
+      notes: users.notes,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+      branchName: branches.name,
+      roleName: roles.name,
+    })
+    .from(users)
+    .leftJoin(branches, eq(users.branchId, branches.id))
+    .leftJoin(roles, eq(users.roleId, roles.id))
+    .where(eq(users.id, userId))
+    .limit(1);
 
-  if (!userRecord) {
-    const found = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        phone: users.phone,
-        email: users.email,
-        role: users.role,
-        jobTitle: users.jobTitle,
-        employeeCode: users.employeeCode,
-        hourlyRate: users.hourlyRate,
-        monthlySalary: users.monthlySalary,
-        notes: users.notes,
-        isActive: users.isActive,
-        canUseAttendanceTerminal: users.canUseAttendanceTerminal,
-        createdAt: users.createdAt,
-        branchId: users.branchId,
-        branchNameAr: branches.nameAr,
-        branchNameEn: branches.nameEn,
-        branchAddress: branches.address,
-      })
-      .from(users)
-      .leftJoin(branches, eq(users.branchId, branches.id))
-      .limit(1);
+  const profile = userRecords[0];
 
-    if (found.length > 0) {
-      userRecord = found[0];
-    }
-  }
-
-  if (!userRecord) {
-    notFound();
-  }
-
-  const branchName = isAr
-    ? userRecord.branchNameAr || userRecord.branchNameEn || "غير معين"
-    : userRecord.branchNameEn || userRecord.branchNameAr || "Unassigned";
-
-  return (
-    <div className="container mx-auto max-w-4xl px-4 py-8" dir={isAr ? "rtl" : "ltr"}>
-      {/* Profile Header */}
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-600 text-2xl font-bold text-white shadow-md">
-              {userRecord.name ? userRecord.name.charAt(0).toUpperCase() : "M"}
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">{userRecord.name}</h1>
-              <p className="text-sm font-medium text-slate-500">
-                {userRecord.jobTitle || (isAr ? "موظف" : "Employee")}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                userRecord.isActive
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-red-100 text-red-800"
-              }`}
-            >
-              {userRecord.isActive
-                ? isAr
-                  ? "حساب نشط"
-                  : "Active Account"
-                : isAr
-                  ? "حساب معطل"
-                  : "Disabled Account"}
-            </span>
-            <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
-              {userRecord.role.toUpperCase()}
-            </span>
-          </div>
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8 flex items-center justify-center" dir="rtl">
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm text-center">
+          <p className="text-slate-600 dark:text-slate-300 font-medium">لم يتم العثور على بيانات الملف الشخصي.</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Details Sections */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Personal & Login Info */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 border-b border-slate-100 pb-2 text-lg font-bold text-slate-900">
-            {isAr ? "معلومات الحساب والاتصال" : "Account & Contact Info"}
-          </h2>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? "اسم الموظف:" : "Full Name:"}</span>
-              <span className="font-semibold text-slate-800">{userRecord.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">
-                {isAr ? "رقم الهاتف (معرف الدخول):" : "Phone (Login ID):"}
-              </span>
-              <span className="font-mono font-semibold text-slate-800">{userRecord.phone}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? "البريد الإلكتروني:" : "Email:"}</span>
-              <span className="font-semibold text-slate-800">{userRecord.email || "—"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? "كود الموظف:" : "Employee Code:"}</span>
-              <span className="font-mono font-semibold text-slate-800">
-                {userRecord.employeeCode || "—"}
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4 md:p-8" dir="rtl">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Profile Card Header */}
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row items-center gap-6">
+          <div className="w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center text-3xl font-bold border-2 border-blue-500/20">
+            {(profile.fullNameAr || profile.name || profile.phone).charAt(0)}
+          </div>
+          <div className="text-center md:text-right space-y-1 flex-1">
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+              <h1 className="text-2xl font-bold">
+                {profile.fullNameAr || profile.name || 'موظف'}
+              </h1>
+              <span className={`px-3 py-0.5 rounded-full text-xs font-semibold ${profile.isActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-red-100 text-red-800'}`}>
+                {profile.isActive ? 'نشط' : 'غير نشط'}
               </span>
             </div>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+              {profile.jobTitle || profile.roleName || 'كادر وظيفي'}
+            </p>
+            {profile.employeeCode && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-mono">
+                كود الموظف: {profile.employeeCode}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Work & Branch Info */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 border-b border-slate-100 pb-2 text-lg font-bold text-slate-900">
-            {isAr ? "معلومات العمل والفرع" : "Work & Branch Info"}
-          </h2>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? "الفرع المعين:" : "Assigned Branch:"}</span>
-              <span className="font-semibold text-sky-700">{branchName}</span>
-            </div>
-            {userRecord.branchAddress ? (
-              <div className="flex justify-between">
-                <span className="text-slate-500">{isAr ? "عنوان الفرع:" : "Branch Address:"}</span>
-                <span className="font-medium text-slate-700">{userRecord.branchAddress}</span>
+        {/* Profile Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Main Info */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 pb-3 flex items-center gap-2">
+              <User className="w-5 h-5 text-blue-500" />
+              البيانات الأساسية
+            </h3>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <Phone className="w-4 h-4" /> رقم الهاتف (مُعرف الدخول)
+                </span>
+                <span className="font-semibold font-mono" dir="ltr">{profile.phone}</span>
               </div>
-            ) : null}
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? "المسمى الوظيفي:" : "Job Title:"}</span>
-              <span className="font-semibold text-slate-800">{userRecord.jobTitle || "—"}</span>
+
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <Mail className="w-4 h-4" /> البريد الإلكتروني
+                </span>
+                <span className="font-medium">{profile.email || 'غير مسجل'}</span>
+              </div>
+
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <Building2 className="w-4 h-4" /> الفرع التابع له
+                </span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  {profile.branchName || 'غير معين لموقع'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" /> الدور والصلاحية
+                </span>
+                <span className="font-semibold">
+                  {profile.roleName || profile.role || 'موظف'}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">{isAr ? "بصمة الحضور:" : "Terminal Access:"}</span>
-              <span
-                className={`font-semibold ${
-                  userRecord.canUseAttendanceTerminal ? "text-emerald-600" : "text-slate-400"
-                }`}
-              >
-                {userRecord.canUseAttendanceTerminal
-                  ? isAr
-                    ? "مسموح"
-                    : "Allowed"
-                  : isAr
-                    ? "غير مسموح"
-                    : "Disabled"}
-              </span>
+          </div>
+
+          {/* Job & Financial Info */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 pb-3 flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-emerald-500" />
+              البيانات الوظيفية
+            </h3>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <BadgeCheck className="w-4 h-4" /> المسمى الوظيفي
+                </span>
+                <span className="font-medium">{profile.jobTitle || 'غير محدد'}</span>
+              </div>
+
+              {profile.monthlySalary !== null && profile.monthlySalary !== undefined && (
+                <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" /> الراتب الشهرى
+                  </span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {profile.monthlySalary} ج.م
+                  </span>
+                </div>
+              )}
+
+              {profile.hourlyRate !== null && profile.hourlyRate !== undefined && (
+                <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" /> أجر الساعة
+                  </span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400">
+                    {profile.hourlyRate} ج.م
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between py-1">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" /> تاريخ التسجيل
+                </span>
+                <span className="font-medium">
+                  {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('ar-EG') : 'غير متوفر'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Financial Info */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:col-span-2">
-          <h2 className="mb-4 border-b border-slate-100 pb-2 text-lg font-bold text-slate-900">
-            {isAr ? "بيانات الأجر والراتب" : "Salary & Financial Info"}
-          </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <span className="mb-1 block text-xs font-medium text-slate-500">
-                {isAr ? "الأجر بالساعة" : "Hourly Rate"}
-              </span>
-              <span className="text-xl font-bold text-slate-900">
-                {userRecord.hourlyRate ? `${userRecord.hourlyRate} EGP` : "—"}
-              </span>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <span className="mb-1 block text-xs font-medium text-slate-500">
-                {isAr ? "الراتب الشهري" : "Monthly Salary"}
-              </span>
-              <span className="text-xl font-bold text-slate-900">
-                {userRecord.monthlySalary ? `${userRecord.monthlySalary} EGP` : "—"}
-              </span>
-            </div>
+        {/* Notes Section if exists */}
+        {profile.notes && (
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-amber-500" /> ملاحظات إدارية
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+              {profile.notes}
+            </p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
