@@ -72,12 +72,31 @@ export async function getBranchByIdAction(id: string): Promise<BranchData | null
   }
 }
 
-export async function saveBranchAction(data: Partial<BranchData> & { name: string }) {
+export async function saveBranchAction(data: Record<string, any>) {
   try {
-    const { id, name, nameAr, nameEn, address, latitude, longitude, radiusMeters, geofenceRadius, isActive } = data;
+    const { id, name, nameAr, nameEn, address, latitude, longitude, radiusMeters, geofenceRadius, isActive, qrSecretKey } = data;
     const resolvedName = name || nameAr || 'فرع جديد';
-    const resolvedRadius = radiusMeters || geofenceRadius || 100;
-    const resolvedSecretKey = data.qrSecretKey || crypto.randomBytes(16).toString('hex');
+    
+    let parsedLat: number | null = null;
+    if (latitude !== undefined && latitude !== null && latitude !== '') {
+      parsedLat = Number(latitude);
+      if (isNaN(parsedLat)) parsedLat = null;
+    }
+
+    let parsedLng: number | null = null;
+    if (longitude !== undefined && longitude !== null && longitude !== '') {
+      parsedLng = Number(longitude);
+      if (isNaN(parsedLng)) parsedLng = null;
+    }
+
+    let parsedRadius = 100;
+    const rawRadius = radiusMeters || geofenceRadius;
+    if (rawRadius !== undefined && rawRadius !== null && rawRadius !== '') {
+      const p = Number(rawRadius);
+      if (!isNaN(p) && p > 0) parsedRadius = p;
+    }
+
+    const resolvedSecretKey = qrSecretKey || crypto.randomBytes(16).toString('hex');
 
     if (id) {
       await db.update(branches).set({
@@ -85,10 +104,10 @@ export async function saveBranchAction(data: Partial<BranchData> & { name: strin
         nameAr: resolvedName,
         nameEn: nameEn || null,
         address: address || null,
-        latitude: latitude !== undefined && latitude !== null ? Number(latitude) : null,
-        longitude: longitude !== undefined && longitude !== null ? Number(longitude) : null,
-        radiusMeters: Number(resolvedRadius),
-        geofenceRadius: Number(resolvedRadius),
+        latitude: parsedLat,
+        longitude: parsedLng,
+        radiusMeters: parsedRadius,
+        geofenceRadius: parsedRadius,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
         updatedAt: new Date(),
       }).where(eq(branches.id, id));
@@ -101,10 +120,10 @@ export async function saveBranchAction(data: Partial<BranchData> & { name: strin
         nameAr: resolvedName,
         nameEn: nameEn || null,
         address: address || null,
-        latitude: latitude !== undefined && latitude !== null ? Number(latitude) : null,
-        longitude: longitude !== undefined && longitude !== null ? Number(longitude) : null,
-        radiusMeters: Number(resolvedRadius),
-        geofenceRadius: Number(resolvedRadius),
+        latitude: parsedLat,
+        longitude: parsedLng,
+        radiusMeters: parsedRadius,
+        geofenceRadius: parsedRadius,
         qrSecretKey: resolvedSecretKey,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
         createdAt: new Date(),
@@ -121,11 +140,11 @@ export async function saveBranchAction(data: Partial<BranchData> & { name: strin
   }
 }
 
-export async function createBranchAction(data: Partial<BranchData> & { name: string }) {
+export async function createBranchAction(data: Record<string, any>) {
   return saveBranchAction(data);
 }
 
-export async function updateBranchAction(id: string, data: Partial<BranchData> & { name: string }) {
+export async function updateBranchAction(id: string, data: Record<string, any>) {
   return saveBranchAction({ ...data, id });
 }
 
