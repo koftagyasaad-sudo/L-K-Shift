@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export type BranchData = {
-  id?: string;
+  id: string; // إجباري لضمان التوافق التام مع الواجهات
   nameAr?: string | null;
   nameEn?: string | null;
   name?: string | null;
