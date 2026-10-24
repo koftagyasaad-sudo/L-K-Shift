@@ -69,6 +69,7 @@ export const users = pgTable('users', {
   nationalId: varchar('national_id', { length: 100 }),
   hireDate: timestamp('hire_date'),
   birthDate: timestamp('birth_date'),
+  canUseAttendanceTerminal: boolean('can_use_attendance_terminal').default(true),
   branchId: uuid('branch_id').references(() => branches.id),
   primaryBranchId: uuid('primary_branch_id').references(() => branches.id),
   roleId: uuid('role_id').references(() => roles.id),
