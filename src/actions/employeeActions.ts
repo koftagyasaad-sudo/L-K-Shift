@@ -22,6 +22,7 @@ export type EmployeeData = {
   avatarUrl?: string | null;
   gender?: string | null;
   nationalId?: string | null;
+  canUseAttendanceTerminal?: boolean;
   branchId?: string | null;
   primaryBranchId?: string | null;
   roleId?: string | null;
@@ -51,6 +52,7 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
       avatarUrl: u.avatarUrl ?? null,
       gender: u.gender ?? null,
       nationalId: u.nationalId ?? null,
+      canUseAttendanceTerminal: Boolean(u.canUseAttendanceTerminal ?? true),
       branchId: u.branchId ? String(u.branchId) : u.primaryBranchId ? String(u.primaryBranchId) : null,
       primaryBranchId: u.primaryBranchId ? String(u.primaryBranchId) : u.branchId ? String(u.branchId) : null,
       roleId: u.roleId ? String(u.roleId) : null,
@@ -87,6 +89,7 @@ export async function getEmployeeByIdAction(id: string): Promise<EmployeeData | 
       avatarUrl: u.avatarUrl ?? null,
       gender: u.gender ?? null,
       nationalId: u.nationalId ?? null,
+      canUseAttendanceTerminal: Boolean(u.canUseAttendanceTerminal ?? true),
       branchId: u.branchId ? String(u.branchId) : u.primaryBranchId ? String(u.primaryBranchId) : null,
       primaryBranchId: u.primaryBranchId ? String(u.primaryBranchId) : u.branchId ? String(u.branchId) : null,
       roleId: u.roleId ? String(u.roleId) : null,
@@ -117,6 +120,7 @@ export async function saveEmployeeAction(data: Partial<EmployeeData> & { phone: 
       employeeCode,
       hourlyRate,
       monthlySalary,
+      canUseAttendanceTerminal,
       branchId,
       primaryBranchId,
       roleId,
@@ -141,10 +145,11 @@ export async function saveEmployeeAction(data: Partial<EmployeeData> & { phone: 
         employeeCode: employeeCode || null,
         hourlyRate: hourlyRate !== undefined && hourlyRate !== null ? Number(hourlyRate) : null,
         monthlySalary: monthlySalary !== undefined && monthlySalary !== null ? Number(monthlySalary) : null,
+        canUseAttendanceTerminal: canUseAttendanceTerminal !== undefined ? Boolean(canUseAttendanceTerminal) : true,
         branchId: resolvedBranchId,
         primaryBranchId: resolvedBranchId,
         roleId: roleId || null,
-        isActive: isActive !== undefined ? isActive : true,
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
         notes: notes || null,
         updatedAt: new Date(),
       };
@@ -171,10 +176,11 @@ export async function saveEmployeeAction(data: Partial<EmployeeData> & { phone: 
         employeeCode: employeeCode || null,
         hourlyRate: hourlyRate !== undefined && hourlyRate !== null ? Number(hourlyRate) : null,
         monthlySalary: monthlySalary !== undefined && monthlySalary !== null ? Number(monthlySalary) : null,
+        canUseAttendanceTerminal: canUseAttendanceTerminal !== undefined ? Boolean(canUseAttendanceTerminal) : true,
         branchId: resolvedBranchId,
         primaryBranchId: resolvedBranchId,
         roleId: roleId || null,
-        isActive: isActive !== undefined ? isActive : true,
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
         notes: notes || null,
         createdAt: new Date(),
         updatedAt: new Date(),
