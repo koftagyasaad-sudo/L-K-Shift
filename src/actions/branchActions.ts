@@ -5,6 +5,21 @@ import { branches } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+export type BranchData = {
+  id?: string;
+  nameAr?: string | null;
+  nameEn?: string | null;
+  name?: string | null;
+  address?: string | null;
+  latitude?: string | null;
+  longitude?: string | null;
+  geofenceRadius?: number | null;
+  radiusMeters?: number | null;
+  qrSecretKey?: string | null;
+  isActive?: boolean | null;
+  [key: string]: any;
+};
+
 export async function getBranchesAction() {
   try {
     return await db.select().from(branches);
@@ -16,7 +31,11 @@ export async function getBranchesAction() {
 
 export async function getBranchByIdAction(id: string) {
   try {
-    const found = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
+    const found = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, String(id)))
+      .limit(1);
     return found[0] || null;
   } catch (error) {
     console.error("Error fetching branch by id:", error);
@@ -32,11 +51,12 @@ export async function saveBranchAction(data: any) {
     const address = data.address || "";
     const latitude = String(data.latitude || "30.0444");
     const longitude = String(data.longitude || "31.2357");
-    const geofenceRadius = Number(data.radiusMeters || data.geofenceRadius || 100);
+    const geofenceRadius = Number(
+      data.radiusMeters || data.geofenceRadius || 100
+    );
     const radiusMeters = geofenceRadius;
     const isActive = data.isActive ?? true;
 
-    // توليد مفتاح فريد لـ QR الخاص بالفرع لتجنب خطأ التجميع مع قاعدة البيانات
     const qrSecretKey =
       data.qrSecretKey ||
       `qr_secret_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -54,8 +74,11 @@ export async function saveBranchAction(data: any) {
     };
 
     if (id) {
-      delete payload.qrSecretKey; // عدم تغيير مفتاح QR عند التعديل إلا إذا توفر
-      await db.update(branches).set(payload).where(eq(branches.id, id));
+      delete payload.qrSecretKey;
+      await db
+        .update(branches)
+        .set(payload)
+        .where(eq(branches.id, String(id)));
     } else {
       await db.insert(branches).values(payload);
     }
@@ -65,7 +88,10 @@ export async function saveBranchAction(data: any) {
     return { success: true };
   } catch (error: any) {
     console.error("saveBranchAction error:", error);
-    return { success: false, error: error?.message || "حدث خطأ أثناء حفظ الفرع" };
+    return {
+      success: false,
+      error: error?.message || "حدث خطأ أثناء حفظ الفرع",
+    };
   }
 }
 
@@ -79,7 +105,7 @@ export async function updateBranchAction(id: string, data: any) {
 
 export async function deleteBranchAction(id: string) {
   try {
-    await db.delete(branches).where(eq(branches.id, id));
+    await db.delete(branches).where(eq(branches.id, String(id)));
     revalidatePath("/admin/branches");
     revalidatePath("/branches");
     return { success: true };
@@ -89,12 +115,27 @@ export async function deleteBranchAction(id: string) {
   }
 }
 
-export async function toggleBranchStatusAction(id: string, currentStatus?: boolean) {
+export async function toggleBranchStatusAction(
+  id: string,
+  currentStatus?: boolean
+) {
   try {
-    const branchData = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
+    const branchData = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, String(id)))
+      .limit(1);
+
     if (!branchData.length) throw new Error("Branch not found");
-    const newStatus = currentStatus !== undefined ? !currentStatus : !(branchData[0].isActive);
-    await db.update(branches).set({ isActive: newStatus }).where(eq(branches.id, id));
+
+    const newStatus =
+      currentStatus !== undefined ? !currentStatus : !branchData[0].isActive;
+
+    await db
+      .update(branches)
+      .set({ isActive: newStatus })
+      .where(eq(branches.id, String(id)));
+
     revalidatePath("/admin/branches");
     revalidatePath("/branches");
     return { success: true };
