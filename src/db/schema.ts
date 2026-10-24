@@ -1,172 +1,127 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
+import { 
+  pgTable, 
+  uuid, 
+  varchar, 
+  timestamp, 
+  boolean, 
+  text, 
+  doublePrecision, 
   integer,
-  decimal,
-  jsonb,
-} from "drizzle-orm/pg-core";
+  jsonb
+} from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
-// 1. Branches Table
-export const branches = pgTable("branches", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  nameAr: text("name_ar").notNull(),
-  nameEn: text("name_en").notNull(),
-  address: text("address"),
-  latitude: text("latitude").notNull().default("0"),
-  longitude: text("longitude").notNull().default("0"),
-  radiusMeters: integer("radius_meters").notNull().default(100),
-  geofenceRadius: integer("geofence_radius").notNull().default(100),
-  qrSecretKey: text("qr_secret_key").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// ----------------------------------------------------------------------
+// 1. جدول الفروع (Branches)
+// ----------------------------------------------------------------------
+export const branches = pgTable('branches', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  nameEn: varchar('name_en', { length: 255 }),
+  address: text('address'),
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
+  radiusMeters: integer('radius_meters').default(100), // النطاق الجغرافي المسموح للحضور
+  qrSecretKey: varchar('qr_secret_key', { length: 255 }).notNull(), // مفتاح سري ضروري
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// 2. Custom Roles Table
-export const customRoles = pgTable("custom_roles", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  nameAr: text("name_ar").notNull(),
-  nameEn: text("name_en").notNull(),
-  description: text("description"),
-  permissions: jsonb("permissions").notNull().default([]),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// ----------------------------------------------------------------------
+// 2. جدول الأدوار والصلاحيات (Roles)
+// ----------------------------------------------------------------------
+export const roles = pgTable('roles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  nameAr: varchar('name_ar', { length: 255 }),
+  nameEn: varchar('name_en', { length: 255 }),
+  description: text('description'),
+  permissions: jsonb('permissions').default('[]'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// 3. Users / Employees Table
-export const users = pgTable("users", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: text("name").notNull(),
-  phone: text("phone").notNull().unique(),
-  email: text("email"),
-  password: text("password").notNull(),
-  role: text("role").notNull().default("employee"), // 'admin' | 'manager' | 'supervisor' | 'employee'
-  jobTitle: text("job_title"),
-  employeeCode: text("employee_code"),
-  branchId: text("branch_id").references(() => branches.id, {
-    onDelete: "set null",
+// ----------------------------------------------------------------------
+// 3. جدول الموظفين (Users / Employees)
+// نظام الدخول يعتمد على رقم الهاتف (Phone)
+// ----------------------------------------------------------------------
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  phone: varchar('phone', { length: 50 }).notNull().unique(), // مُعرف الدخول
+  password: varchar('password', { length: 255 }).notNull(),
+  name: varchar('name', { length: 255 }),
+  fullNameAr: varchar('full_name_ar', { length: 255 }),
+  fullNameEn: varchar('full_name_en', { length: 255 }),
+  email: varchar('email', { length: 255 }),
+  role: varchar('role', { length: 50 }).default('employee'),
+  systemRole: varchar('system_role', { length: 50 }).default('employee'),
+  jobTitle: varchar('job_title', { length: 255 }),
+  branchId: uuid('branch_id').references(() => branches.id),
+  primaryBranchId: uuid('primary_branch_id').references(() => branches.id),
+  roleId: uuid('role_id').references(() => roles.id),
+  isActive: boolean('is_active').default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// ----------------------------------------------------------------------
+// 4. جدول سجلات الحضور والانصراف (Attendance Logs)
+// يدعم الصورة الشخصية وإحداثيات الموقع للمطابقة مع الفرع
+// ----------------------------------------------------------------------
+export const attendanceLogs = pgTable('attendance_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  branchId: uuid('branch_id').notNull().references(() => branches.id),
+  type: varchar('type', { length: 20 }).notNull(), // 'CHECK_IN' or 'CHECK_OUT'
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
+  distanceMeters: doublePrecision('distance_meters'), // البعد عن الفرع وقت التسجيل
+  isWithinGeofence: boolean('is_within_geofence'),
+  selfieUrl: text('selfie_url'), // رابط الصورة أو مسارها في التخزين
+  status: varchar('status', { length: 50 }).default('PENDING'), // PENDING, APPROVED, REJECTED
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ----------------------------------------------------------------------
+// العلاقات بين الجداول (Relations) لـ Drizzle ORM
+// ----------------------------------------------------------------------
+export const usersRelations = relations(users, ({ one, many }) => ({
+  branch: one(branches, {
+    fields: [users.branchId],
+    references: [branches.id],
   }),
-  roleId: text("role_id").references(() => customRoles.id, {
-    onDelete: "set null",
+  primaryBranch: one(branches, {
+    fields: [users.primaryBranchId],
+    references: [branches.id],
   }),
-  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
-  monthlySalary: decimal("monthly_salary", { precision: 12, scale: 2 }),
-  isActive: boolean("is_active").notNull().default(true),
-  canUseAttendanceTerminal: boolean("can_use_attendance_terminal")
-    .notNull()
-    .default(true),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+  role: one(roles, {
+    fields: [users.roleId],
+    references: [roles.id],
+  }),
+  attendanceLogs: many(attendanceLogs),
+}));
 
-// 4. Custom Role Assignments Table
-export const customRoleAssignments = pgTable("custom_role_assignments", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  roleId: text("role_id")
-    .notNull()
-    .references(() => customRoles.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const branchesRelations = relations(branches, ({ many }) => ({
+  users: many(users),
+  attendanceLogs: many(attendanceLogs),
+}));
 
-// 5. Admin Branch Scopes Table
-export const adminBranchScopes = pgTable("admin_branch_scopes", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  branchId: text("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const rolesRelations = relations(roles, ({ many }) => ({
+  users: many(users),
+}));
 
-// 6. Shifts Table
-export const shifts = pgTable("shifts", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  branchId: text("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
-  startTime: timestamp("start_time").notNull(),
-  endTime: timestamp("end_time").notNull(),
-  status: text("status").notNull().default("scheduled"), // 'scheduled' | 'completed' | 'cancelled'
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// 7. Attendance Logs Table
-export const attendanceLogs = pgTable("attendance_logs", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  branchId: text("branch_id")
-    .notNull()
-    .references(() => branches.id, { onDelete: "cascade" }),
-  type: text("type").notNull(), // 'check_in' | 'check_out'
-  timestamp: timestamp("timestamp").notNull().defaultNow(),
-  latitude: text("latitude"),
-  longitude: text("longitude"),
-  distanceMeters: integer("distance_meters"),
-  isWithinGeofence: boolean("is_within_geofence").notNull().default(true),
-  selfieUrl: text("selfie_url"),
-  verificationStatus: text("verification_status").notNull().default("approved"), // 'approved' | 'rejected' | 'pending'
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// 8. Leave Requests Table
-export const leaveRequests = pgTable("leave_requests", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date").notNull(),
-  reason: text("reason").notNull(),
-  status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'rejected'
-  reviewerNotes: text("reviewer_notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// 9. Notifications Table
-export const notifications = pgTable("notifications", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  isRead: boolean("is_read").notNull().default(false),
-  type: text("type").notNull().default("info"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const attendanceLogsRelations = relations(attendanceLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [attendanceLogs.userId],
+    references: [users.id],
+  }),
+  branch: one(branches, {
+    fields: [attendanceLogs.branchId],
+    references: [branches.id],
+  }),
+}));
