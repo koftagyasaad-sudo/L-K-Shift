@@ -5,7 +5,7 @@ export default async function AdminBranchesPage() {
   const branchesList = await getBranchesAction();
 
   const formattedBranches: BranchData[] = (branchesList || []).map((b: any) => ({
-    id: String(b.id),
+    id: String(b.id || Math.random().toString()),
     nameAr: b.nameAr || b.name || "فرع بدون اسم",
     nameEn: b.nameEn || "",
     address: b.address || "",
