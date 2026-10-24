@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Edit, Trash2, MapPin, Building2, CheckCircle, XCircle, X } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, Building2, CheckCircle, XCircle, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { saveBranchAction, deleteBranchAction, toggleBranchStatusAction } from "@/actions/branchActions";
-import { toast } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
 interface Branch {
@@ -28,6 +27,14 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+
+  // Toast Feedback State
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   // Form State
   const [mapLink, setMapLink] = useState("");
@@ -82,7 +89,6 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     }));
   };
 
-  // استخراج خطوط الطول والعرض تلقائياً من رابط جوجل ماب
   const handleMapLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const url = e.target.value;
     setMapLink(url);
@@ -98,7 +104,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
         latitude: match[1],
         longitude: match[2],
       }));
-      toast.success("تم استخراج الإحداثيات من جوجل ماب بنجاح!");
+      showToast("تم استخراج الإحداثيات بنجاح!", "success");
     }
   };
 
@@ -109,14 +115,14 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     try {
       const res = await saveBranchAction(formData);
       if (res.success) {
-        toast.success(formData.id ? "تم تعديل الفرع بنجاح" : "تم إضافة الفرع بنجاح");
+        showToast(formData.id ? "تم تعديل الفرع بنجاح" : "تم إضافة الفرع بنجاح", "success");
         setIsModalOpen(false);
         router.refresh();
       } else {
-        toast.error(res.error || "حدث خطأ أثناء الحفظ");
+        showToast(res.error || "حدث خطأ أثناء الحفظ", "error");
       }
     } catch (err) {
-      toast.error("حدث خطأ غير متوقع");
+      showToast("حدث خطأ غير متوقع", "error");
     } finally {
       setLoading(false);
     }
@@ -127,14 +133,14 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     try {
       const res = await deleteBranchAction(id);
       if (res.success) {
-        toast.success("تم حذف الفرع");
+        showToast("تم حذف الفرع", "success");
         setBranches((prev) => prev.filter((b) => b.id !== id));
         router.refresh();
       } else {
-        toast.error(res.error || "فشل الحذف");
+        showToast(res.error || "فشل الحذف", "error");
       }
     } catch (err) {
-      toast.error("حدث خطأ أثناء الحذف");
+      showToast("حدث خطأ أثناء الحذف", "error");
     }
   };
 
@@ -142,25 +148,39 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     try {
       const res = await toggleBranchStatusAction(id, currentStatus);
       if (res.success) {
-        toast.success("تم تغيير حالة الفرع");
+        showToast("تم تغيير حالة الفرع", "success");
         setBranches((prev) =>
           prev.map((b) => (b.id === id ? { ...b, isActive: !b.isActive } : b))
         );
         router.refresh();
       }
     } catch (err) {
-      toast.error("فشل تغيير الحالة");
+      showToast("فشل تغيير الحالة", "error");
     }
   };
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Top Header */}
+      {/* Toast Feedback */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
+            feedback.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
+        >
+          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="font-medium text-sm">{feedback.text}</span>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Building2 className="text-blue-500" />
-            إدارة الفروع والفروض الجغرافية
+            إدارة الفروع والنطاق الجغرافي
           </h1>
           <p className="text-slate-400 text-sm mt-1">
             إضافة وتعديل الفروع وتحديد نطاق بصمة الحضور والانصراف (GPS Geofence)
@@ -175,7 +195,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
         </button>
       </div>
 
-      {/* Branches Table / Cards */}
+      {/* Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {branches.map((branch) => (
           <div
@@ -187,9 +207,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
                 <h3 className="text-lg font-bold text-white">
                   {branch.nameAr || branch.nameEn || "فرع بدون اسم"}
                 </h3>
-                {branch.nameEn && (
-                  <p className="text-xs text-slate-400">{branch.nameEn}</p>
-                )}
+                {branch.nameEn && <p className="text-xs text-slate-400">{branch.nameEn}</p>}
               </div>
               <button
                 onClick={() => handleToggleStatus(branch.id, branch.isActive ?? true)}
@@ -244,7 +262,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
         ))}
       </div>
 
-      {/* Modal Form */}
+      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
@@ -299,11 +317,10 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
                 />
               </div>
 
-              {/* Google Maps Link Parsing Field */}
               <div className="space-y-2 bg-blue-900/20 p-4 rounded-xl border border-blue-500/20">
                 <label className="text-sm font-medium text-blue-300 flex items-center gap-2">
                   <MapPin size={16} />
-                  رابط جوجل ماب (يقوم باستخراج الإحداثيات تلقائياً)
+                  رابط خرائط جوجل (سحب الإحداثيات تلقائياً)
                 </label>
                 <input
                   type="text"
@@ -313,9 +330,6 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
                   dir="ltr"
                   placeholder="https://maps.google.com/..."
                 />
-                <p className="text-xs text-slate-400">
-                  انسخ رابط الموقع من تطبيق Google Maps واجعل الخانة هنا تقرأ الإحداثيات مباشرة.
-                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -361,13 +375,13 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
               <div className="flex items-center gap-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                 <input
                   type="checkbox"
-                  id="isActiveBranch"
+                  id="isActiveBranchManager"
                   name="isActive"
                   checked={formData.isActive}
                   onChange={handleChange}
                   className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-blue-500"
                 />
-                <label htmlFor="isActiveBranch" className="text-sm font-medium text-slate-300 cursor-pointer">
+                <label htmlFor="isActiveBranchManager" className="text-sm font-medium text-slate-300 cursor-pointer">
                   الفرع نشط ومتاح للبصمة
                 </label>
               </div>
@@ -376,7 +390,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                  className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-700 transition-colors"
                 >
                   إلغاء
                 </button>
