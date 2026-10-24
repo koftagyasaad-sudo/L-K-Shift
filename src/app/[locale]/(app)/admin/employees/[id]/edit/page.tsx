@@ -12,17 +12,32 @@ export default async function EditEmployeePage({ params }: EditEmployeePageProps
   const resolvedParams = await params;
   const id = resolvedParams.id;
 
-  const [employeeRes, branches, roles] = await Promise.all([
+  const [employeeRes, branchesRes, rolesRes] = await Promise.all([
     getEmployeeByIdAction(id),
     getBranchesAction(),
     getRolesAction(),
   ]);
 
-  if (!employeeRes || !employeeRes.success || !employeeRes.data) {
+  if (!employeeRes) {
     notFound();
   }
 
-  const employee = employeeRes.data;
+  const employee = (employeeRes as any).data || ((employeeRes as any).id ? employeeRes : null);
+  if (!employee) {
+    notFound();
+  }
+
+  const branches = Array.isArray(branchesRes)
+    ? branchesRes
+    : (branchesRes as any)?.data && Array.isArray((branchesRes as any).data)
+    ? (branchesRes as any).data
+    : [];
+
+  const roles = Array.isArray(rolesRes)
+    ? rolesRes
+    : (rolesRes as any)?.data && Array.isArray((rolesRes as any).data)
+    ? (rolesRes as any).data
+    : [];
 
   return (
     <div className="container mx-auto py-6 max-w-4xl" dir="rtl">
