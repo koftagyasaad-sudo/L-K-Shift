@@ -3,8 +3,7 @@
 import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { getBranchByIdAction, updateBranchAction } from "@/actions/branchActions";
-import { toast } from "react-hot-toast";
-import { ArrowRight, MapPin, Building2, Save } from "lucide-react";
+import { ArrowRight, MapPin, Building2, Save, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string; locale: string }>;
@@ -19,6 +18,9 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
   const [saving, setSaving] = useState(false);
   const [branch, setBranch] = useState<any>(null);
 
+  // Toast Banner State
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   const [nameAr, setNameAr] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [address, setAddress] = useState("");
@@ -28,13 +30,17 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
   const [isActive, setIsActive] = useState(true);
   const [mapLink, setMapLink] = useState("");
 
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
         const bRes = await getBranchByIdAction(branchId);
 
-        // التفتيش الآمن المباشر للتأكد من وجود البيانات وعدم كونها null
         if (bRes) {
           const branchObj = (bRes as any).data || bRes;
           setBranch(branchObj);
@@ -43,16 +49,14 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
           setAddress(branchObj.address || "");
           setLatitude(branchObj.latitude || "30.0444");
           setLongitude(branchObj.longitude || "31.2357");
-          setRadiusMeters(
-            branchObj.geofenceRadius || branchObj.radiusMeters || 100
-          );
+          setRadiusMeters(branchObj.geofenceRadius || branchObj.radiusMeters || 100);
           setIsActive(branchObj.isActive ?? true);
         } else {
-          toast.error("لم يتم العثور على الفرع المطلوبة");
+          showToast("لم يتم العثور على الفرع المطلوب", "error");
         }
       } catch (err) {
         console.error("Error loading branch detail:", err);
-        toast.error("حدث خطأ أثناء تحميل بيانات الفرع");
+        showToast("حدث خطأ أثناء تحميل بيانات الفرع", "error");
       } finally {
         setLoading(false);
       }
@@ -71,12 +75,11 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
     const qRegex = /q=(-?\d+\.\d+),(-?\d+\.\d+)/;
     const placeRegex = /search\/(-?\d+\.\d+),(-?\d+\.\d+)/;
 
-    const match =
-      url.match(atRegex) || url.match(qRegex) || url.match(placeRegex);
+    const match = url.match(atRegex) || url.match(qRegex) || url.match(placeRegex);
     if (match) {
       setLatitude(match[1]);
       setLongitude(match[2]);
-      toast.success("تم استخراج الإحداثيات بنجاح!");
+      showToast("تم استخراج الإحداثيات بنجاح!", "success");
     }
   };
 
@@ -99,14 +102,16 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
 
       const res = await updateBranchAction(branchId, payload);
       if (res && (res.success || !res.error)) {
-        toast.success("تم تعديل بيانات الفرع بنجاح");
-        router.push("/admin/branches");
-        router.refresh();
+        showToast("تم تعديل بيانات الفرع بنجاح", "success");
+        setTimeout(() => {
+          router.push("/admin/branches");
+          router.refresh();
+        }, 1000);
       } else {
-        toast.error(res?.error || "حدث خطأ أثناء الحفظ");
+        showToast(res?.error || "حدث خطأ أثناء الحفظ", "error");
       }
     } catch (err) {
-      toast.error("حدث خطأ غير متوقع");
+      showToast("حدث خطأ غير متوقع", "error");
     } finally {
       setSaving(false);
     }
@@ -122,6 +127,20 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6" dir="rtl">
+      {/* Toast Notification Banner */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
+            feedback.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
+        >
+          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="font-medium text-sm">{feedback.text}</span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-6 rounded-2xl">
         <div className="flex items-center gap-3">
           <button
@@ -142,15 +161,10 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6"
-      >
+      <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              الاسم بالعربية *
-            </label>
+            <label className="text-sm font-medium text-slate-300">الاسم بالعربية *</label>
             <input
               type="text"
               required
@@ -160,9 +174,7 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              الاسم بالإنجليزية
-            </label>
+            <label className="text-sm font-medium text-slate-300">الاسم بالإنجليزية</label>
             <input
               type="text"
               value={nameEn}
@@ -199,9 +211,7 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              خط العرض (Latitude)
-            </label>
+            <label className="text-sm font-medium text-slate-300">خط العرض (Latitude)</label>
             <input
               type="text"
               required
@@ -212,9 +222,7 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              خط الطول (Longitude)
-            </label>
+            <label className="text-sm font-medium text-slate-300">خط الطول (Longitude)</label>
             <input
               type="text"
               required
@@ -225,9 +233,7 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              نطاق البصمة (بالمتر)
-            </label>
+            <label className="text-sm font-medium text-slate-300">نطاق البصمة (بالمتر)</label>
             <input
               type="number"
               required
@@ -248,10 +254,7 @@ export default function AdminBranchDetailPage({ params }: PageProps) {
             onChange={(e) => setIsActive(e.target.checked)}
             className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-blue-500"
           />
-          <label
-            htmlFor="isActiveBranchDetailAdmin"
-            className="text-sm font-medium text-slate-300 cursor-pointer"
-          >
+          <label htmlFor="isActiveBranchDetailAdmin" className="text-sm font-medium text-slate-300 cursor-pointer">
             الفرع نشط ومتاح للبصمة
           </label>
         </div>
