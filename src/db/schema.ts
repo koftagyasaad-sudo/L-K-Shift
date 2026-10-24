@@ -117,6 +117,7 @@ export const attendanceLogs = pgTable('attendance_logs', {
   isWithinGeofence: boolean('is_within_geofence'),
   selfieUrl: text('selfie_url'),
   status: varchar('status', { length: 50 }).default('PENDING'),
+  verificationStatus: varchar('verification_status', { length: 50 }).default('PENDING'),
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
 });
