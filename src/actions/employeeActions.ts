@@ -15,45 +15,78 @@ export async function getEmployeesAction() {
   }
 }
 
+export async function getEmployeeByIdAction(id: string) {
+  try {
+    const found = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return found[0] || null;
+  } catch (error) {
+    console.error("Error fetching employee by id:", error);
+    return null;
+  }
+}
+
 export async function saveEmployeeAction(data: any) {
   try {
-    // Payload Mapping: ترجمة 'name' القادم من الواجهة إلى 'fullNameAr' لقاعدة البيانات
+    const id = data.id || data.userId;
+    const name = data.name || data.fullNameAr || data.fullNameEn || "موظف جديد";
+    const phone = data.phone || data.phoneNumber;
+    const role = data.roleId || data.role || data.systemRole || "EMPLOYEE";
+    const branchId = data.branchId || data.primaryBranchId || null;
+    const isActive = data.isActive ?? data.active ?? true;
+
     const payload: any = {
-      fullNameAr: data.name || data.fullNameAr || "مستخدم جديد",
-      fullNameEn: data.nameEn || data.fullNameEn || "",
-      phone: data.phone,
-      role: data.roleId || data.role || "EMPLOYEE",
-      branchId: data.branchId || null,
-      isActive: data.isActive ?? true,
+      name,
+      fullNameAr: data.fullNameAr || name,
+      fullNameEn: data.fullNameEn || name,
+      phone,
+      role,
+      systemRole: role,
+      branchId,
+      primaryBranchId: branchId,
+      isActive,
     };
 
-    if (data.password) {
+    const passwordRaw = data.password || data.passwordHash || "123456";
+    if (passwordRaw && !id) {
+      payload.password = await bcrypt.hash(passwordRaw, 10);
+      payload.passwordHash = payload.password;
+    } else if (data.password) {
       payload.password = await bcrypt.hash(data.password, 10);
-    } else if (!data.id) {
-      payload.password = await bcrypt.hash("123456", 10);
+      payload.passwordHash = payload.password;
     }
 
-    if (data.id) {
-      await db.update(users).set(payload).where(eq(users.id, data.id));
+    if (id) {
+      await db.update(users).set(payload).where(eq(users.id, id));
     } else {
       await db.insert(users).values(payload);
     }
+
     revalidatePath("/admin/employees");
+    revalidatePath("/employees");
     return { success: true };
   } catch (error: any) {
     console.error("saveEmployeeAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "حدث خطأ أثناء حفظ بيانات الموظف" };
   }
+}
+
+export async function createEmployeeAction(data: any) {
+  return await saveEmployeeAction(data);
+}
+
+export async function updateEmployeeAction(id: string, data: any) {
+  return await saveEmployeeAction({ ...data, id });
 }
 
 export async function deleteEmployeeAction(id: string) {
   try {
     await db.delete(users).where(eq(users.id, id));
     revalidatePath("/admin/employees");
+    revalidatePath("/employees");
     return { success: true };
   } catch (error: any) {
     console.error("deleteEmployeeAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "فشل حذف الموظف" };
   }
 }
 
@@ -64,9 +97,10 @@ export async function toggleEmployeeStatusAction(id: string, currentStatus?: boo
     const newStatus = currentStatus !== undefined ? !currentStatus : !(userData[0].isActive);
     await db.update(users).set({ isActive: newStatus }).where(eq(users.id, id));
     revalidatePath("/admin/employees");
+    revalidatePath("/employees");
     return { success: true };
   } catch (error: any) {
     console.error("toggleEmployeeStatusAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "فشل تغيير حالة الموظف" };
   }
 }
