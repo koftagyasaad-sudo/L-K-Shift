@@ -1,25 +1,46 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
-import { getBranchByIdAction, updateBranchAction } from "@/actions/branchActions";
-import { ArrowRight, MapPin, Building2, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
+import {
+  getBranchByIdAction,
+  updateBranchAction,
+} from "@/actions/branchActions";
 
-interface PageProps {
-  params: Promise<{ id: string; locale: string }>;
+function extractCoordinatesFromUrl(url: string): { lat: string; lng: string } | null {
+  if (!url) return null;
+
+  const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) {
+    return { lat: atMatch[1], lng: atMatch[2] };
+  }
+
+  const qMatch = url.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (qMatch) {
+    return { lat: qMatch[1], lng: qMatch[2] };
+  }
+
+  const searchMatch = url.match(/search\/(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (searchMatch) {
+    return { lat: searchMatch[1], lng: searchMatch[2] };
+  }
+
+  const directMatch = url.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+  if (directMatch) {
+    return { lat: directMatch[1], lng: directMatch[2] };
+  }
+
+  return null;
 }
 
-export default function BranchDetailPage({ params }: PageProps) {
+export default function EditBranchPage() {
   const router = useRouter();
-  const resolvedParams = use(params);
-  const branchId = resolvedParams.id;
+  const routeParams = useParams();
+  const branchId = String(routeParams?.id || "");
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [branch, setBranch] = useState<any>(null);
-
-  // Toast Banner State
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const [nameAr, setNameAr] = useState("");
   const [nameEn, setNameEn] = useState("");
@@ -27,253 +48,309 @@ export default function BranchDetailPage({ params }: PageProps) {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [radiusMeters, setRadiusMeters] = useState(100);
-  const [isActive, setIsActive] = useState(true);
-  const [mapLink, setMapLink] = useState("");
+  const [isActive, setIsActive] = useState<boolean>(true);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState("");
+  const [phone, setPhone] = useState("");
+  const [managerName, setManagerName] = useState("");
 
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setFeedback({ type, text });
-    setTimeout(() => setFeedback(null), 4000);
-  };
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    async function loadData() {
+    if (!branchId) return;
+
+    let isMounted = true;
+    async function loadBranch() {
       try {
         setLoading(true);
-        const bRes = await getBranchByIdAction(branchId);
+        const data = await getBranchByIdAction(branchId);
+        if (!isMounted) return;
 
-        if (bRes) {
-          const branchObj = (bRes as any).data || bRes;
-          setBranch(branchObj);
-          setNameAr(branchObj.nameAr || branchObj.name || "");
-          setNameEn(branchObj.nameEn || "");
-          setAddress(branchObj.address || "");
-          setLatitude(branchObj.latitude || "30.0444");
-          setLongitude(branchObj.longitude || "31.2357");
-          setRadiusMeters(branchObj.geofenceRadius || branchObj.radiusMeters || 100);
-          setIsActive(branchObj.isActive ?? true);
+        if (data) {
+          setNameAr(data.nameAr || data.name || "");
+          setNameEn(data.nameEn || "");
+          setAddress(data.address || "");
+          setLatitude(
+            data.latitude !== null && data.latitude !== undefined
+              ? String(data.latitude)
+              : ""
+          );
+          setLongitude(
+            data.longitude !== null && data.longitude !== undefined
+              ? String(data.longitude)
+              : ""
+          );
+          setRadiusMeters(
+            typeof data.radiusMeters === "number"
+              ? data.radiusMeters
+              : typeof data.geofenceRadius === "number"
+                ? data.geofenceRadius
+                : 100
+          );
+          setIsActive(data.isActive !== false && data.isActive !== null && data.isActive !== undefined);
+          setGoogleMapsUrl(data.googleMapsUrl || "");
+          setPhone(data.phone || "");
+          setManagerName(data.managerName || "");
         } else {
-          showToast("لم يتم العثور على الفرع المطلوب", "error");
+          setError("لم يتم العثور على الفرع المطلوب");
         }
-      } catch (err) {
-        console.error("Error loading branch detail:", err);
-        showToast("حدث خطأ أثناء تحميل بيانات الفرع", "error");
+      } catch (e: any) {
+        if (isMounted) setError(e?.message || "حدث خطأ أثناء تحميل بيانات الفرع");
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
-    if (branchId) {
-      loadData();
-    }
+    loadBranch();
+    return () => {
+      isMounted = false;
+    };
   }, [branchId]);
 
-  const handleMapLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    setMapLink(url);
-
-    const atRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
-    const qRegex = /q=(-?\d+\.\d+),(-?\d+\.\d+)/;
-    const placeRegex = /search\/(-?\d+\.\d+),(-?\d+\.\d+)/;
-
-    const match = url.match(atRegex) || url.match(qRegex) || url.match(placeRegex);
-    if (match) {
-      setLatitude(match[1]);
-      setLongitude(match[2]);
-      showToast("تم استخراج الإحداثيات بنجاح!", "success");
+  function handleMapsUrlChange(url: string) {
+    setGoogleMapsUrl(url);
+    const coords = extractCoordinatesFromUrl(url);
+    if (coords) {
+      setLatitude(coords.lat);
+      setLongitude(coords.lng);
     }
-  };
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
+    setMessage("");
+    setError("");
 
-    try {
-      const payload = {
-        id: branchId,
-        nameAr,
-        nameEn,
-        address,
-        latitude,
-        longitude,
-        radiusMeters: Number(radiusMeters),
-        geofenceRadius: Number(radiusMeters),
-        isActive,
-      };
+    if (!nameAr.trim()) {
+      setError("يرجى إدخال اسم الفرع باللغة العربية");
+      return;
+    }
 
-      const res = await updateBranchAction(branchId, payload);
-      if (res && (res.success || !res.error)) {
-        showToast("تم تعديل بيانات الفرع بنجاح", "success");
+    startTransition(async () => {
+      try {
+        const payload = {
+          id: branchId,
+          name: nameAr.trim(),
+          nameAr: nameAr.trim(),
+          nameEn: nameEn.trim(),
+          address: address.trim(),
+          latitude: latitude.trim() ? parseFloat(latitude.trim()) : null,
+          longitude: longitude.trim() ? parseFloat(longitude.trim()) : null,
+          geofenceRadius: Number(radiusMeters) || 100,
+          radiusMeters: Number(radiusMeters) || 100,
+          isActive,
+          googleMapsUrl: googleMapsUrl.trim(),
+          phone: phone.trim(),
+          managerName: managerName.trim(),
+        };
+
+        const res = await updateBranchAction(branchId, payload);
+        if (res && res.success === false) {
+          setError(res.error || "فشل حفظ بيانات الفرع");
+          return;
+        }
+
+        setMessage("تم تحديث بيانات الفرع بنجاح");
         setTimeout(() => {
-          router.push("/branches");
+          router.push("/admin/branches");
           router.refresh();
         }, 1000);
-      } else {
-        showToast(res?.error || "حدث خطأ أثناء الحفظ", "error");
+      } catch (err: any) {
+        setError(err?.message || "حدث خطأ أثناء حفظ التعديلات");
       }
-    } catch (err) {
-      showToast("حدث خطأ غير متوقع", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
+    });
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-slate-400 font-medium">جاري تحميل بيانات الفرع...</div>
+      <div className="p-8 text-center text-slate-500" dir="rtl">
+        جاري تحميل بيانات الفرع...
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6" dir="rtl">
-      {/* Toast Notification Banner */}
-      {feedback && (
-        <div
-          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
-            feedback.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
-          }`}
+    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6" dir="rtl">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">تعديل بيانات الفرع</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            تحديث اسم وموقع ونطاق التحقق الجغرافي للفرع
+          </p>
+        </div>
+        <Link
+          href="/admin/branches"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
-          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-          <span className="font-medium text-sm">{feedback.text}</span>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.back()}
-            className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl transition-colors"
-          >
-            <ArrowRight size={20} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Building2 className="text-blue-500" />
-              تفاصيل الفرع: {branch?.nameAr || branch?.nameEn || "تعديل الفرع"}
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              تعديل بيانات الفرع والموقع الجغرافي لبصمة الحضور والانصراف
-            </p>
-          </div>
-        </div>
+          العودة للفروع
+        </Link>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">الاسم بالعربية *</label>
+      {message ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {message}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {error}
+        </div>
+      ) : null}
+
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              اسم الفرع بالعربي <span className="text-rose-500">*</span>
+            </label>
             <input
               type="text"
               required
               value={nameAr}
               onChange={(e) => setNameAr(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="مثال: فرع الرياض الرئيسي"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">الاسم بالإنجليزية</label>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              اسم الفرع بالإنجليزي
+            </label>
             <input
               type="text"
               value={nameEn}
               onChange={(e) => setNameEn(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="e.g. Main Branch"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
             />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-300">العنوان</label>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              اسم المدير / المشرف
+            </label>
+            <input
+              type="text"
+              value={managerName}
+              onChange={(e) => setManagerName(e.target.value)}
+              placeholder="اسم مدير الفرع"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              رقم هاتف الفرع
+            </label>
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="05XXXXXXXX"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700">
+            العنوان النصي
+          </label>
           <input
             type="text"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="المدينة، الحي، الشارع..."
+            className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
           />
         </div>
 
-        <div className="space-y-2 bg-blue-900/20 p-4 rounded-xl border border-blue-500/20">
-          <label className="text-sm font-medium text-blue-300 flex items-center gap-2">
-            <MapPin size={16} />
-            رابط خرائط جوجل (سحب الإحداثيات تلقائياً)
+        <div>
+          <label className="block text-sm font-medium text-slate-700">
+            رابط Google Maps (يستخرج الإحداثيات تلقائياً)
           </label>
           <input
-            type="text"
-            value={mapLink}
-            onChange={handleMapLinkChange}
-            className="w-full bg-slate-800/80 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left placeholder:text-slate-500"
-            dir="ltr"
+            type="url"
+            value={googleMapsUrl}
+            onChange={(e) => handleMapsUrlChange(e.target.value)}
             placeholder="https://maps.google.com/..."
+            className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">خط العرض (Latitude)</label>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              خط العرض (Latitude)
+            </label>
             <input
               type="text"
-              required
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
+              placeholder="24.7136"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">خط الطول (Longitude)</label>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              خط الطول (Longitude)
+            </label>
             <input
               type="text"
-              required
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
+              placeholder="46.6753"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">نطاق البصمة (بالمتر)</label>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              نصف قطر GPS (متر)
+            </label>
             <input
               type="number"
-              required
-              min="10"
+              min={10}
+              max={5000}
               value={radiusMeters}
               onChange={(e) => setRadiusMeters(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none ring-blue-500 focus:ring-2"
             />
           </div>
         </div>
 
-        <div className="flex items-center gap-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+        <div className="flex items-center gap-3 pt-2">
           <input
             type="checkbox"
-            id="isActiveBranchDetailUser"
+            id="isActive"
             checked={isActive}
             onChange={(e) => setIsActive(e.target.checked)}
-            className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-blue-500"
+            className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
           />
-          <label htmlFor="isActiveBranchDetailUser" className="text-sm font-medium text-slate-300 cursor-pointer">
-            الفرع نشط ومتاح للبصمة
+          <label htmlFor="isActive" className="text-sm font-medium text-slate-800">
+            تفعيل الفرع (السماح بتسجيل الحضور والانصراف فيه)
           </label>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-700 transition-colors"
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          <Link
+            href="/admin/branches"
+            className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             إلغاء
-          </button>
+          </Link>
+
           <button
             type="submit"
-            disabled={saving}
-            className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50"
+            disabled={isPending}
+            className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            <Save size={18} />
-            {saving ? "جاري الحفظ..." : "حفظ التغييرات"}
+            {isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
           </button>
         </div>
       </form>
