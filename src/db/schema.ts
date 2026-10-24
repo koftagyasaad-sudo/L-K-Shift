@@ -31,7 +31,7 @@ export const branches = pgTable('branches', {
 });
 
 // ----------------------------------------------------------------------
-// 2. جدول الأدوار والصلاحيات (Roles) + customRoles
+// 2. جدول الأدوار والصلاحيات (Roles)
 // ----------------------------------------------------------------------
 export const roles = pgTable('roles', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -45,6 +45,7 @@ export const roles = pgTable('roles', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// تصدير اسم بديل متوافق كلياً مع مسارات الأدوار القديمة
 export const customRoles = roles;
 
 // ----------------------------------------------------------------------
@@ -123,6 +124,7 @@ export const attendanceLogs = pgTable('attendance_logs', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// تصدير اسم بديل لسجلات الحضور
 export const attendance = attendanceLogs;
 
 // ----------------------------------------------------------------------
