@@ -24,7 +24,7 @@ export async function getEmployeeByIdAction(id: string) {
       .limit(1);
 
     if (!found[0]) {
-      return { success: false, data: null, error: "الموظف غير موجود" };
+      return null;
     }
 
     const user = found[0];
@@ -35,7 +35,7 @@ export async function getEmployeeByIdAction(id: string) {
     };
   } catch (error: any) {
     console.error("Error fetching employee by id:", error);
-    return { success: false, data: null, error: error?.message || "خطأ أثناء جلب الموظف" };
+    return null;
   }
 }
 
