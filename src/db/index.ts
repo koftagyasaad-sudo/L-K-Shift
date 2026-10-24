@@ -1,26 +1,15 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import * as schema from "./schema";
+import { neon, neonConfig } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+import * as schema from './schema';
 
-const databaseUrl = process.env.DATABASE_URL;
+// تحسين أداء الاتصال في بيئة Vercel Edge/Serverless
+neonConfig.fetchConnectionCache = true;
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required");
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not defined in environment variables');
 }
 
-const globalForDb = globalThis as typeof globalThis & {
-  __arenaNextJsPostgresqlPool?: Pool;
-};
+// استخدام HTTP لضمان عدم استنفاد اتصالات قاعدة البيانات (Connection Exhaustion)
+const sql = neon(process.env.DATABASE_URL);
 
-export const pool =
-  globalForDb.__arenaNextJsPostgresqlPool ??
-  new Pool({
-    connectionString: databaseUrl,
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__arenaNextJsPostgresqlPool = pool;
-}
-
-export const db = drizzle(pool, { schema });
-export { schema };
+export const db = drizzle(sql, { schema });
