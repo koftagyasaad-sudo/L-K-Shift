@@ -208,9 +208,10 @@ export async function deleteEmployeeAction(id: string) {
   }
 }
 
-export async function toggleEmployeeStatusAction(id: string, currentStatus: boolean) {
+export async function toggleEmployeeStatusAction(id: string, currentStatus?: boolean) {
   try {
-    await db.update(users).set({ isActive: !currentStatus, updatedAt: new Date() }).where(eq(users.id, id));
+    const isCurrentlyActive = currentStatus !== undefined ? currentStatus : true;
+    await db.update(users).set({ isActive: !isCurrentlyActive, updatedAt: new Date() }).where(eq(users.id, id));
     return { success: true, message: 'تم تغيير حالة الموظف بنجاح' };
   } catch (error: any) {
     console.error('Error toggling employee status:', error);
