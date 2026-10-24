@@ -1,38 +1,40 @@
+import { notFound } from "next/navigation";
 import { getEmployeeByIdAction } from "@/actions/employeeActions";
 import { getBranchesAction } from "@/actions/branchActions";
 import { getRolesAction } from "@/actions/roleActions";
 import { EmployeeForm } from "@/components/admin/employee-form";
-import { notFound } from "next/navigation";
 
-export default async function EditEmployeePage({
-  params,
-}: {
+interface EditEmployeePageProps {
   params: Promise<{ id: string; locale: string }>;
-}) {
-  const { id, locale } = await params;
+}
 
-  const [employeeRes, branchesRes, rolesRes] = await Promise.all([
+export default async function EditEmployeePage({ params }: EditEmployeePageProps) {
+  const resolvedParams = await params;
+  const id = resolvedParams.id;
+
+  const [employeeRes, branches, roles] = await Promise.all([
     getEmployeeByIdAction(id),
     getBranchesAction(),
     getRolesAction(),
   ]);
 
-  if (!employeeRes.success || !employeeRes.data) {
+  if (!employeeRes || !employeeRes.success || !employeeRes.data) {
     notFound();
   }
 
-  const branches = branchesRes.data || [];
-  const roles = rolesRes.data || [];
+  const employee = employeeRes.data;
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <div className="container mx-auto py-6 max-w-4xl" dir="rtl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">تعديل بيانات الموظف</h1>
+        <p className="text-slate-400 text-sm mt-1">تحديث معلومات الحساب والفرع والدور المسند</p>
+      </div>
       <EmployeeForm
-        locale={locale}
-        mode="edit"
-        initialData={employeeRes.data}
+        initialData={employee}
         branches={branches}
         roles={roles}
-        redirectTo={`/${locale}/admin/employees`}
+        mode="edit"
       />
     </div>
   );
