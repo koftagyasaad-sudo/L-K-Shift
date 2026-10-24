@@ -1,395 +1,266 @@
 "use client";
 
 import React, { useState } from "react";
+import { saveEmployeeAction } from "@/actions/employeeActions";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import {
-  createEmployeeAction,
-  updateEmployeeAction,
-  saveEmployeeAction,
-} from "@/actions/employeeActions";
+import { User, Phone, Lock, Building2, Shield, DollarSign, Calendar, AlertCircle, CheckCircle2, X } from "lucide-react";
 
 export interface EmployeeFormProps {
-  employee?: any;
   initialData?: any;
   branches?: any[];
   roles?: any[];
-  locale?: string;
-  mode?: string;
+  mode?: "create" | "edit";
+  onClose?: () => void;
   redirectTo?: string;
-  onSuccess?: () => void;
-  onCancel?: () => void;
-  [key: string]: any; // يمنع أي خطأ مستقبلي في حالة تمرير أي خاصية إضافية
+  [key: string]: any;
 }
 
 export function EmployeeForm({
-  employee,
   initialData,
   branches = [],
   roles = [],
-  locale = "ar",
-  mode,
+  mode = "create",
+  onClose,
   redirectTo,
-  onSuccess,
-  onCancel,
 }: EmployeeFormProps) {
   const router = useRouter();
-  const isAr = locale === "ar";
-  
-  // دمج البيانات من initialData أو employee
-  const targetData = initialData || employee;
-  const isEditing = mode === "edit" || !!targetData?.id;
-
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [formData, setFormData] = useState({
-    id: targetData?.id || "",
-    name: targetData?.name || targetData?.fullNameAr || targetData?.fullNameEn || "",
-    phone: targetData?.phone || "",
-    password: targetData?.password || "123456",
-    email: targetData?.email || "",
-    role: targetData?.role || "EMPLOYEE",
-    jobTitle: targetData?.jobTitle || "",
-    employeeCode: targetData?.employeeCode || "",
-    branchId: targetData?.branchId || (branches[0]?.id ?? ""),
-    roleId: targetData?.roleId || "",
-    monthlySalary: targetData?.monthlySalary ? String(targetData.monthlySalary) : "",
-    hourlyRate: targetData?.hourlyRate ? String(targetData.hourlyRate) : "",
-    isActive: targetData?.isActive !== undefined ? Boolean(targetData.isActive) : true,
-    canUseAttendanceTerminal:
-      targetData?.canUseAttendanceTerminal !== undefined
-        ? Boolean(targetData.canUseAttendanceTerminal)
-        : true,
-    notes: targetData?.notes || "",
+    id: initialData?.id || "",
+    name: initialData?.fullNameAr || initialData?.name || "",
+    phone: initialData?.phone || "",
+    password: "",
+    code: initialData?.code || "",
+    baseSalary: initialData?.baseSalary || 0,
+    branchId: initialData?.branchId || initialData?.primaryBranchId || "",
+    roleId: initialData?.roleId || initialData?.role || "",
+    vacationDays: initialData?.vacationDays || 21,
+    isActive: initialData?.isActive ?? initialData?.active ?? true,
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
+  const showToast = (text: string, type: "success" | "error" = "success") => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    if (type === "checkbox") {
-      const checked = (e.target as HTMLInputElement).checked;
-      setFormData((prev) => ({ ...prev, [name]: checked }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    const checked = (e.target as HTMLInputElement).checked;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
-      let result: any;
-      if (isEditing && formData.id) {
-        result = await updateEmployeeAction(formData.id, formData);
-      } else {
-        result = await createEmployeeAction(formData);
-      }
-
-      if (result && result.success) {
-        toast.success(
-          isAr
-            ? isEditing
-              ? "تم تحديث بيانات الموظف بنجاح"
-              : "تم إنشاء الموظف بنجاح"
-            : isEditing
-            ? "Employee updated successfully"
-            : "Employee created successfully"
-        );
-
-        if (redirectTo) {
-          router.push(redirectTo);
-        } else {
+      const res = await saveEmployeeAction(formData);
+      if (res && (res.success || !res.error)) {
+        showToast(mode === "edit" ? "تم تعديل بيانات الموظف بنجاح" : "تم إضافة الموظف بنجاح", "success");
+        setTimeout(() => {
+          if (onClose) onClose();
+          if (redirectTo) router.push(redirectTo);
+          else router.push("/admin/employees");
           router.refresh();
-        }
-
-        if (onSuccess) {
-          onSuccess();
-        }
+        }, 800);
       } else {
-        const message =
-          result?.error ||
-          (isAr ? "تعذر حفظ بيانات الموظف" : "Failed to save employee");
-        setError(message);
-        toast.error(message);
+        showToast(res?.error || "حدث خطأ أثناء حفظ البيانات", "error");
       }
-    } catch (err: any) {
-      const msg =
-        err?.message || (isAr ? "حدث خطأ أثناء الاتصال بالخادم" : "An error occurred");
-      setError(msg);
-      toast.error(msg);
+    } catch (err) {
+      showToast("حدث خطأ غير متوقع", "error");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 bg-white p-6 rounded-xl shadow-sm border border-gray-100"
-    >
-      <div className="border-b pb-4 mb-4">
-        <h2 className="text-xl font-bold text-gray-800">
-          {isEditing
-            ? isAr
-              ? "تعديل بيانات الموظف"
-              : "Edit Employee"
-            : isAr
-            ? "إضافة موظف جديد"
-            : "Add New Employee"}
-        </h2>
-        <p className="text-sm text-gray-500 mt-1">
-          {isAr
-            ? "أدخل بيانات الموظف للوصول ونظام الحضور والانصراف"
-            : "Enter employee details for access and attendance system"}
-        </p>
-      </div>
-
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
-          {error}
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6" dir="rtl">
+      {feedback && (
+        <div
+          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
+            feedback.type === "success"
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+          }`}
+        >
+          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+          <span className="font-medium text-sm">{feedback.text}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "الاسم الكامل *" : "Full Name *"}
-          </label>
-          <input
-            type="text"
-            name="name"
-            required
-            value={formData.name}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder={isAr ? "مثال: أحمد محمد" : "e.g. John Doe"}
-          />
-        </div>
-
-        {/* Phone (Login ID) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "رقم الهاتف (اسم المستخدم للدخول) *" : "Phone Number (Login ID) *"}
-          </label>
-          <input
-            type="text"
-            name="phone"
-            required
-            value={formData.phone}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="01000000000"
-          />
-        </div>
-
-        {/* Password */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "كلمة المرور *" : "Password *"}
-          </label>
-          <input
-            type="password"
-            name="password"
-            required
-            value={formData.password}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="123456"
-          />
-        </div>
-
-        {/* Email */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "البريد الإلكتروني" : "Email Address"}
-          </label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="employee@example.com"
-          />
-        </div>
-
-        {/* System Role */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "نوع الحساب / الصلاحية *" : "System Role *"}
-          </label>
-          <select
-            name="role"
-            value={formData.role}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          >
-            <option value="EMPLOYEE">{isAr ? "موظف عادي" : "Employee"}</option>
-            <option value="MANAGER">{isAr ? "مدير فرع" : "Branch Manager"}</option>
-            <option value="ADMIN">{isAr ? "مدير نظام" : "Admin"}</option>
-            <option value="SUPER_ADMIN">{isAr ? "مدير عام" : "Super Admin"}</option>
-          </select>
-        </div>
-
-        {/* Branch */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "الفرع التابع له *" : "Assigned Branch *"}
-          </label>
-          <select
-            name="branchId"
-            value={formData.branchId}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          >
-            <option value="">{isAr ? "-- اختر الفرع --" : "-- Select Branch --"}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {isAr ? b.nameAr || b.nameEn || b.name : b.nameEn || b.nameAr || b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Employee Code */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "كود الموظف" : "Employee Code"}
-          </label>
-          <input
-            type="text"
-            name="employeeCode"
-            value={formData.employeeCode}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="EMP-101"
-          />
-        </div>
-
-        {/* Job Title */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "المسمى الوظيفي" : "Job Title"}
-          </label>
-          <input
-            type="text"
-            name="jobTitle"
-            value={formData.jobTitle}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder={isAr ? "محاسب / بائع" : "Accountant / Cashier"}
-          />
-        </div>
-
-        {/* Monthly Salary */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "الراتب الشهري" : "Monthly Salary"}
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            name="monthlySalary"
-            value={formData.monthlySalary}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="0.00"
-          />
-        </div>
-
-        {/* Hourly Rate */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {isAr ? "أجر الساعة" : "Hourly Rate"}
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            name="hourlyRate"
-            value={formData.hourlyRate}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-            placeholder="0.00"
-          />
-        </div>
-      </div>
-
-      {/* Checkboxes */}
-      <div className="flex flex-wrap gap-6 pt-2 border-t border-gray-100">
-        <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
-          <input
-            type="checkbox"
-            name="isActive"
-            checked={formData.isActive}
-            onChange={handleChange}
-            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-          />
-          <span className="text-sm font-medium text-gray-700">
-            {isAr ? "حساب نشط" : "Active Account"}
-          </span>
-        </label>
-
-        <label className="flex items-center space-x-2 space-x-reverse cursor-pointer">
-          <input
-            type="checkbox"
-            name="canUseAttendanceTerminal"
-            checked={formData.canUseAttendanceTerminal}
-            onChange={handleChange}
-            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-          />
-          <span className="text-sm font-medium text-gray-700">
-            {isAr ? "مسموح بتسجيل الحضور الذاتي" : "Can Use Attendance Terminal"}
-          </span>
-        </label>
-      </div>
-
-      {/* Notes */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {isAr ? "ملاحظات" : "Notes"}
-        </label>
-        <textarea
-          name="notes"
-          rows={3}
-          value={formData.notes}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          placeholder={isAr ? "أي ملاحظات إضافية..." : "Any additional notes..."}
-        />
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            {isAr ? "إلغاء" : "Cancel"}
+      <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <User className="text-blue-500" />
+          {mode === "edit" ? "تعديل بيانات موظف" : "إضافة موظف جديد"}
+        </h2>
+        {onClose && (
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full">
+            <X size={18} />
           </button>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
-        >
-          {loading
-            ? isAr
-              ? "جاري الحفظ..."
-              : "Saving..."
-            : isAr
-            ? "حفظ الموظف"
-            : "Save Employee"}
-        </button>
       </div>
-    </form>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300">الاسم الكامل *</label>
+            <input
+              type="text"
+              name="name"
+              required
+              value={formData.name}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="مثال: أحمد محمد"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
+              <Phone size={14} className="text-blue-400" /> رقم التليفون (اسم المستخدم) *
+            </label>
+            <input
+              type="text"
+              name="phone"
+              required
+              value={formData.phone}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+              dir="ltr"
+              placeholder="01012345678"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
+              <Lock size={14} className="text-amber-400" /> كلمة المرور {mode === "edit" ? "(اتركها فارغة للإبقاء على الحالية)" : "*"}
+            </label>
+            <input
+              type="password"
+              name="password"
+              required={mode === "create"}
+              value={formData.password}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+              dir="ltr"
+              placeholder={mode === "create" ? "الافتراضي: 123456" : "••••••"}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300">كود الموظف (اختياري)</label>
+            <input
+              type="text"
+              name="code"
+              value={formData.code}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="اختياري — افتراضي رقم الهاتف"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
+              <Building2 size={14} className="text-blue-400" /> الفرع
+            </label>
+            <select
+              name="branchId"
+              value={formData.branchId}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">-- اختر الفرع --</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.nameAr || b.nameEn || b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
+              <Shield size={14} className="text-purple-400" /> الدور / المسمى
+            </label>
+            <select
+              name="roleId"
+              value={formData.roleId}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              <option value="">-- بدون دور (موظف عادي) --</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nameAr || r.name || r.nameEn}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
+              <DollarSign size={14} className="text-emerald-400" /> الراتب الأساسي
+            </label>
+            <input
+              type="number"
+              name="baseSalary"
+              value={formData.baseSalary}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+              dir="ltr"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
+              <Calendar size={14} className="text-amber-400" /> أيام الإجازة السنوية
+            </label>
+            <input
+              type="number"
+              name="vacationDays"
+              value={formData.vacationDays}
+              onChange={handleChange}
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
+              dir="ltr"
+            />
+          </div>
+        </div>
+
+        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
+          الموظف يسجل الدخول برقم التليفون + كلمة المرور. الافتراضي للإضافة الجديدة: 123456
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              إلغاء
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all disabled:opacity-50"
+          >
+            {loading ? "جاري الحفظ..." : "حفظ الموظف"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
