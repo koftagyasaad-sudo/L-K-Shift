@@ -14,50 +14,107 @@ export async function getRolesAction() {
   }
 }
 
+export async function getRoleByIdAction(id: string) {
+  try {
+    const found = await db
+      .select()
+      .from(customRoles)
+      .where(eq(customRoles.id, String(id)))
+      .limit(1);
+    return found[0] || null;
+  } catch (error) {
+    console.error("Error fetching role by id:", error);
+    return null;
+  }
+}
+
 export async function saveRoleAction(data: any) {
   try {
-    // Payload Mapping: دمج nameAr و nameEn في الحقول الأساسية دون إرسال أعمدة غير موجودة
-    const payload = {
-      name: data.nameAr || data.name || "دور جديد",
-      description: data.description || data.nameEn || "",
-      permissions: Array.isArray(data.permissions) ? data.permissions : [],
-      isActive: data.isActive ?? true,
+    const id = data.id || data.roleId;
+    const nameAr = data.nameAr || data.name || "دور جديد";
+    const nameEn = data.nameEn || data.name || "";
+    const name = data.name || nameAr;
+    const description = data.description || nameEn || "";
+    const permissions = Array.isArray(data.permissions) ? data.permissions : [];
+    const isActive = data.isActive ?? true;
+
+    // تجهيز كائن البيانات لتلبية متطلبات جميع أعمدة الجدول في Drizzle Schema
+    const payload: any = {
+      nameAr,
+      nameEn,
+      name,
+      description,
+      permissions,
+      isActive,
     };
 
-    if (data.id) {
-      await db.update(customRoles).set(payload).where(eq(customRoles.id, data.id));
+    if (id) {
+      await db
+        .update(customRoles)
+        .set(payload)
+        .where(eq(customRoles.id, String(id)));
     } else {
       await db.insert(customRoles).values(payload);
     }
+
     revalidatePath("/admin/roles");
+    revalidatePath("/roles");
     return { success: true };
   } catch (error: any) {
     console.error("saveRoleAction error:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: error?.message || "حدث خطأ أثناء حفظ بيانات الدور",
+    };
   }
+}
+
+export async function createRoleAction(data: any) {
+  return await saveRoleAction(data);
+}
+
+export async function updateRoleAction(id: string, data: any) {
+  return await saveRoleAction({ ...data, id });
 }
 
 export async function deleteRoleAction(id: string) {
   try {
-    await db.delete(customRoles).where(eq(customRoles.id, id));
+    await db.delete(customRoles).where(eq(customRoles.id, String(id)));
     revalidatePath("/admin/roles");
+    revalidatePath("/roles");
     return { success: true };
   } catch (error: any) {
     console.error("deleteRoleAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "فشل حذف الدور" };
   }
 }
 
-export async function toggleRoleStatusAction(id: string, currentStatus?: boolean) {
+export async function toggleRoleStatusAction(
+  id: string,
+  currentStatus?: boolean
+) {
   try {
-    const roleData = await db.select().from(customRoles).where(eq(customRoles.id, id)).limit(1);
+    const roleData = await db
+      .select()
+      .from(customRoles)
+      .where(eq(customRoles.id, String(id)))
+      .limit(1);
+
     if (!roleData.length) throw new Error("Role not found");
-    const newStatus = currentStatus !== undefined ? !currentStatus : !(roleData[0].isActive);
-    await db.update(customRoles).set({ isActive: newStatus }).where(eq(customRoles.id, id));
+
+    const newStatus =
+      currentStatus !== undefined ? !currentStatus : !roleData[0].isActive;
+
+    await db
+      .update(customRoles)
+      .set({ isActive: newStatus })
+      .where(eq(customRoles.id, String(id)));
+
     revalidatePath("/admin/roles");
+    revalidatePath("/roles");
     return { success: true };
   } catch (error: any) {
     console.error("toggleRoleStatusAction error:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: error?.message || "فشل تغيير حالة الدور" };
   }
 }
