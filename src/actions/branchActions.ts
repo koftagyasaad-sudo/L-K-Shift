@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export type BranchData = {
-  id: string; // إجباري لضمان التوافق التام مع الواجهات
+  id: string;
   nameAr?: string | null;
   nameEn?: string | null;
   name?: string | null;
@@ -20,9 +20,21 @@ export type BranchData = {
   [key: string]: any;
 };
 
-export async function getBranchesAction() {
+export async function getBranchesAction(): Promise<BranchData[]> {
   try {
-    return await db.select().from(branches);
+    const list = await db.select().from(branches);
+    return (list || []).map((b: any) => ({
+      id: String(b.id),
+      nameAr: b.nameAr || b.name || "فرع بدون اسم",
+      nameEn: b.nameEn || "",
+      address: b.address || "",
+      latitude: String(b.latitude || "30.0444"),
+      longitude: String(b.longitude || "31.2357"),
+      geofenceRadius: Number(b.geofenceRadius || b.radiusMeters || 100),
+      radiusMeters: Number(b.radiusMeters || b.geofenceRadius || 100),
+      qrSecretKey: b.qrSecretKey || "",
+      isActive: b.isActive ?? true,
+    }));
   } catch (error) {
     console.error("Error fetching branches:", error);
     return [];
@@ -36,7 +48,15 @@ export async function getBranchByIdAction(id: string) {
       .from(branches)
       .where(eq(branches.id, String(id)))
       .limit(1);
-    return found[0] || null;
+
+    if (!found[0]) return null;
+
+    const b = found[0];
+    return {
+      success: true,
+      data: b,
+      ...b,
+    };
   } catch (error) {
     console.error("Error fetching branch by id:", error);
     return null;
