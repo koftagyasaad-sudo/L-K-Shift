@@ -26,11 +26,9 @@ interface PageProps {
 export default function EditBranchPage({ params }: PageProps) {
   const router = useRouter();
 
-  // فك الـ Asynchronous Params لتوافق Next.js 15+ في الـ Client Components
   const resolvedParams = use(params);
   const { locale, id: branchId } = resolvedParams;
 
-  // إدارة حالات النموذج
   const [name, setName] = useState<string>('');
   const [code, setCode] = useState<string>('');
   const [latitude, setLatitude] = useState<string>('');
@@ -38,13 +36,11 @@ export default function EditBranchPage({ params }: PageProps) {
   const [radiusMeters, setRadiusMeters] = useState<number>(100);
   const [isActive, setIsActive] = useState<boolean>(true);
 
-  // حالات المعالجة والاتصال
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // جلب بيانات الفرع
   useEffect(() => {
     let isMounted = true;
 
@@ -85,7 +81,6 @@ export default function EditBranchPage({ params }: PageProps) {
             setRadiusMeters(
               Number(branch.radiusMeters || branch.geofenceRadius || 100)
             );
-            // منع انهيار الـ Type Checking عبر الإسناد المنطقي الصارم
             setIsActive(branch.isActive ?? true);
           } else {
             setError('لم يتم العثور على الفرع المطلوب');
@@ -93,7 +88,10 @@ export default function EditBranchPage({ params }: PageProps) {
         }
       } catch (err: unknown) {
         if (isMounted) {
-          const message = err instanceof Error ? err.message : 'حدث خطأ غير متوقع أثناء تحميل البيانات';
+          const message =
+            err instanceof Error
+              ? err.message
+              : 'حدث خطأ غير متوقع أثناء تحميل البيانات';
           setError(message);
         }
       } finally {
@@ -112,7 +110,6 @@ export default function EditBranchPage({ params }: PageProps) {
     };
   }, [branchId]);
 
-  // حفظ التعديلات
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -146,7 +143,8 @@ export default function EditBranchPage({ params }: PageProps) {
       setSuccessMessage('تم تحديث بيانات الفرع بنجاح');
       router.refresh();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ التعديلات';
+      const message =
+        err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ التعديلات';
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -172,12 +170,12 @@ export default function EditBranchPage({ params }: PageProps) {
             تعديل بيانات الفرع
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            تحديث النطاق الجغرافي (Geofence)، الإحداثيات، وحالة تشغيل الفرع
+            تحديث النطاق الجغرافي والإحداثيات وحالة تشغيل الفرع
           </p>
         </div>
         <Link
           href={`/${locale}/admin/branches`}
-          className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none"
         >
           العودة لقائمة الفروع
         </Link>
@@ -195,4 +193,120 @@ export default function EditBranchPage({ params }: PageProps) {
       {successMessage && (
         <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
           <div className="flex items-center gap-3">
-            <span className
+            <span className="font-semibold text-emerald-900">نجاح:</span>
+            <p className="text-sm">{successMessage}</p>
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div>
+            <label htmlFor="branchName" className="block text-sm font-medium text-slate-700">
+              اسم الفرع <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="branchName"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none sm:text-sm"
+              placeholder="مثال: فرع كفر الشيخ الرئيسي"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="branchCode" className="block text-sm font-medium text-slate-700">
+              كود الفرع (Branch Code)
+            </label>
+            <input
+              type="text"
+              id="branchCode"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none sm:text-sm"
+              placeholder="مثال: BR-01"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="latitude" className="block text-sm font-medium text-slate-700">
+              خط العرض (Latitude)
+            </label>
+            <input
+              type="number"
+              step="any"
+              id="latitude"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none sm:text-sm"
+              placeholder="31.1107"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="longitude" className="block text-sm font-medium text-slate-700">
+              خط الطول (Longitude)
+            </label>
+            <input
+              type="number"
+              step="any"
+              id="longitude"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none sm:text-sm"
+              placeholder="30.9388"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label htmlFor="radiusMeters" className="block text-sm font-medium text-slate-700">
+              نصف قطر النطاق الجغرافي للبصمة (بالمتر)
+            </label>
+            <input
+              type="number"
+              id="radiusMeters"
+              min={10}
+              max={5000}
+              value={radiusMeters}
+              onChange={(e) => setRadiusMeters(Number(e.target.value))}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none sm:text-sm"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <label htmlFor="isActive" className="text-sm font-medium text-slate-900">
+                تفعيل الفرع ضمن خطة التشغيل والشفتات النشطة
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
+          <Link
+            href={`/${locale}/admin/branches`}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none"
+          >
+            إلغاء
+          </Link>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
