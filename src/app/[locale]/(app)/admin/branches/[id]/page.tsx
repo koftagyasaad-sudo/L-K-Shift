@@ -1,30 +1,198 @@
-import React from 'react';
-import BranchesClient from './BranchesClient';
+'use client';
 
-// منع التوليد الاستاتيكي الخاطئ أثناء التجميع لضمان جاهزية الخادم
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+import React, { useState, useEffect, use } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+
+interface BranchData {
+  id: string | number;
+  name?: string | null;
+  code?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  radiusMeters?: number | null;
+  geofenceRadius?: number | null;
+  isActive?: boolean | null;
+  address?: string | null;
+}
 
 interface PageProps {
   params: Promise<{
     locale: string;
+    id: string;
   }>;
 }
 
-// تأمين حدود الأنواع (Type Boundary) لمنع انهيار الـ Build في حال اختلاف الـ Props الداخلية للمكون
-const SafeBranchesClient = BranchesClient as React.ComponentType<{
-  locale?: string;
-  [key: string]: any;
-}>;
+export default function EditBranchPage({ params }: PageProps) {
+  const router = useRouter();
 
-export default async function AdminBranchesPage({ params }: PageProps) {
-  // فك الـ Route Parameters غير المتزامنة وفق معايير Next.js 15 الرسمية
-  const resolvedParams = await params;
-  const locale = resolvedParams?.locale || 'ar';
+  // فك الـ Asynchronous Params لتوافق Next.js 15+ في الـ Client Components
+  const resolvedParams = use(params);
+  const { locale, id: branchId } = resolvedParams;
+
+  // إدارة حالات النموذج
+  const [name, setName] = useState<string>('');
+  const [code, setCode] = useState<string>('');
+  const [latitude, setLatitude] = useState<string>('');
+  const [longitude, setLongitude] = useState<string>('');
+  const [radiusMeters, setRadiusMeters] = useState<number>(100);
+  const [isActive, setIsActive] = useState<boolean>(true);
+
+  // حالات المعالجة والاتصال
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // جلب بيانات الفرع
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchBranch() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await fetch(`/api/admin/branches/${branchId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          throw new Error('فشل استرداد بيانات الفرع من الخادم');
+        }
+
+        const data = await response.json();
+        const branch: BranchData = data?.branch || data;
+
+        if (isMounted) {
+          if (branch && branch.id) {
+            setName(branch.name || '');
+            setCode(branch.code || '');
+            setLatitude(
+              branch.latitude !== null && branch.latitude !== undefined
+                ? String(branch.latitude)
+                : ''
+            );
+            setLongitude(
+              branch.longitude !== null && branch.longitude !== undefined
+                ? String(branch.longitude)
+                : ''
+            );
+            setRadiusMeters(
+              Number(branch.radiusMeters || branch.geofenceRadius || 100)
+            );
+            // منع انهيار الـ Type Checking عبر الإسناد المنطقي الصارم
+            setIsActive(branch.isActive ?? true);
+          } else {
+            setError('لم يتم العثور على الفرع المطلوب');
+          }
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          const message = err instanceof Error ? err.message : 'حدث خطأ غير متوقع أثناء تحميل البيانات';
+          setError(message);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    if (branchId) {
+      fetchBranch();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [branchId]);
+
+  // حفظ التعديلات
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    const payload = {
+      name: name.trim(),
+      code: code.trim(),
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
+      radiusMeters: Number(radiusMeters),
+      geofenceRadius: Number(radiusMeters),
+      isActive: Boolean(isActive),
+    };
+
+    try {
+      const response = await fetch(`/api/admin/branches/${branchId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل تحديث بيانات الفرع');
+      }
+
+      setSuccessMessage('تم تحديث بيانات الفرع بنجاح');
+      router.refresh();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ التعديلات';
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] w-full items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+          <p className="text-sm font-medium text-slate-500">جاري تحميل بيانات الفرع...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <main className="w-full min-h-screen">
-      <SafeBranchesClient locale={locale} />
-    </main>
-  );
-}
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8" dir="rtl">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            تعديل بيانات الفرع
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            تحديث النطاق الجغرافي (Geofence)، الإحداثيات، وحالة تشغيل الفرع
+          </p>
+        </div>
+        <Link
+          href={`/${locale}/admin/branches`}
+          className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        >
+          العودة لقائمة الفروع
+        </Link>
+      </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-800">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-rose-900">تنبيه:</span>
+            <p className="text-sm">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+          <div className="flex items-center gap-3">
+            <span className
