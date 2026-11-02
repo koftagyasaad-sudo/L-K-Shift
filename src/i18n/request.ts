@@ -1,12 +1,21 @@
-import { getRequestConfig } from "next-intl/server";
-import { isValidLocale, routing } from "./routing";
+import { getRequestConfig } from 'next-intl/server';
+import { notFound } from 'next/navigation';
+
+// قائمة اللغات المدعومة في التطبيق
+const locales = ['ar', 'en'];
 
 export default getRequestConfig(async ({ requestLocale }) => {
-  const requested = await requestLocale;
-  const locale = isValidLocale(requested) ? requested : routing.defaultLocale;
+  // فك لغة الطلب غير المتزامنة لتوافق Next.js 15+
+  let locale = await requestLocale;
+
+  // التحقق من صلاحية اللغة أو الرجوع للغة العربية كافتراضي
+  if (!locale || !locales.includes(locale)) {
+    locale = 'ar';
+  }
 
   return {
     locale,
+    // استدعاء ملف الترجمة المطابق من مجلد messages
     messages: (await import(`../../messages/${locale}.json`)).default,
   };
 });
