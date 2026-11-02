@@ -1,24 +1,34 @@
-import { getBranchesAction, type BranchData } from "@/actions/branchActions";
-import { BranchEmployeeManager } from "@/components/admin/branch-employee-manager";
+import React from 'react';
 
-export default async function BranchesPage() {
-  const branchesList = await getBranchesAction();
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-  const formattedBranches: BranchData[] = (branchesList || []).map((b: any) => ({
-    id: String(b.id || Math.random().toString()),
-    nameAr: b.nameAr || b.name || "فرع بدون اسم",
-    nameEn: b.nameEn || "",
-    address: b.address || "",
-    latitude: String(b.latitude || "30.0444"),
-    longitude: String(b.longitude || "31.2357"),
-    geofenceRadius: Number(b.geofenceRadius || b.radiusMeters || 100),
-    radiusMeters: Number(b.radiusMeters || b.geofenceRadius || 100),
-    isActive: b.isActive ?? true,
-  }));
+interface PageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
+
+export default async function PublicBranchesPage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const locale = resolvedParams?.locale || 'ar';
 
   return (
-    <div className="container mx-auto py-6">
-      <BranchEmployeeManager initialBranches={formattedBranches} />
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          {locale === 'ar' ? 'فروعنا' : 'Our Branches'}
+        </h1>
+        <p className="mt-2 text-sm text-slate-600">
+          {locale === 'ar' ? 'قائمة الفروع ومواقعها الجغرافية' : 'List of our branches and geographic locations'}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm text-slate-500">
+          {locale === 'ar' ? 'يتم تحديث بيانات الفروع...' : 'Loading branch locations...'}
+        </p>
+      </div>
     </div>
   );
 }
