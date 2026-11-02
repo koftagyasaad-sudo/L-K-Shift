@@ -3,333 +3,330 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  getBranchByIdAction, 
-  updateBranchAction 
-} from '@/actions/branchActions';
-import { 
-  Building2, 
-  MapPin, 
-  Save, 
-  ArrowRight, 
-  Link as LinkIcon, 
-  AlertCircle, 
-  CheckCircle2, 
-  RefreshCw 
-} from 'lucide-react';
 
-export default function EditBranchPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const resolvedParams = use(params);
-  const branchId = resolvedParams.id;
+// تعريف الـ Interface الخاص بالفرع لضمان التوافق مع Drizzle ORM واستعلامات قاعدة البيانات
+interface BranchData {
+  id: string | number;
+  name?: string | null;
+  code?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  radiusMeters?: number | null;
+  geofenceRadius?: number | null;
+  isActive?: boolean | null;
+  address?: string | null;
+}
+
+interface PageProps {
+  params: Promise<{
+    locale: string;
+    id: string;
+  }>;
+}
+
+export default function EditBranchPage({ params }: PageProps) {
   const router = useRouter();
+  
+  // فك الـ Asynchronous Params لتوافق Next.js 15+ في الـ Client Components
+  const resolvedParams = use(params);
+  const { locale, id: branchId } = resolvedParams;
 
-  const [loading, setLoading] = useState<boolean>(true);
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  const [nameAr, setNameAr] = useState<string>('');
-  const [nameEn, setNameEn] = useState<string>('');
-  const [address, setAddress] = useState<string>('');
+  // إدارة حالات النموذج (Form States)
+  const [name, setName] = useState<string>('');
+  const [code, setCode] = useState<string>('');
   const [latitude, setLatitude] = useState<string>('');
   const [longitude, setLongitude] = useState<string>('');
   const [radiusMeters, setRadiusMeters] = useState<number>(100);
   const [isActive, setIsActive] = useState<boolean>(true);
-  const [mapsUrl, setMapsUrl] = useState<string>('');
 
+  // حالات المعالجة والاتصال
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // جلب بيانات الفرع وضمان الـ Type Safety
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchBranch() {
-      setLoading(true);
       try {
-        const branch = await getBranchByIdAction(branchId);
-        if (branch) {
-          setNameAr(branch.nameAr || branch.name || '');
-          setNameEn(branch.nameEn || '');
-          setAddress(branch.address || '');
-          setLatitude(branch.latitude !== null && branch.latitude !== undefined ? String(branch.latitude) : '');
-          setLongitude(branch.longitude !== null && branch.longitude !== undefined ? String(branch.longitude) : '');
-          setRadiusMeters(branch.radiusMeters || branch.geofenceRadius || 100);
-          setIsActive(branch.isActive);
-        } else {
-          setError('لم يتم العثور على الفرع المطلوب');
+        setIsLoading(true);
+        setError(null);
+
+        const response = await fetch(`/api/admin/branches/${branchId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          throw new Error('فشل استرداد بيانات الفرع من الخادم');
         }
-      } catch (err) {
-        console.error('Error fetching branch:', err);
-        setError('حدث خطأ أثناء تحميل بيانات الفرع');
+
+        const data = await response.json();
+        const branch: BranchData = data?.branch || data;
+
+        if (isMounted) {
+          if (branch && branch.id) {
+            setName(branch.name || '');
+            setCode(branch.code || '');
+            
+            setLatitude(
+              branch.latitude !== null && branch.latitude !== undefined
+                ? String(branch.latitude)
+                : ''
+            );
+            
+            setLongitude(
+              branch.longitude !== null && branch.longitude !== undefined
+                ? String(branch.longitude)
+                : ''
+            );
+            
+            setRadiusMeters(
+              Number(branch.radiusMeters || branch.geofenceRadius || 100)
+            );
+
+            // المعالجة الهندسية للخطأ: ضمان التحويل المنطقي الصارم ومنع تسريب undefined أو null للـ State
+            setIsActive(branch.isActive ?? true);
+          } else {
+            setError('لم يتم العثور على الفرع المطلوب');
+          }
+        }
+      } catch (err: unknown) {
+        if (isMounted) {
+          const message = err instanceof Error ? err.message : 'حدث خطأ غير متوقع أثناء تحميل البيانات';
+          setError(message);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     if (branchId) {
       fetchBranch();
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [branchId]);
 
-  const handleExtractFromUrl = (url: string) => {
-    setMapsUrl(url);
-    if (!url) return;
-
-    const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (atMatch) {
-      setLatitude(atMatch[1]);
-      setLongitude(atMatch[2]);
-      return;
-    }
-
-    const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (qMatch) {
-      setLatitude(qMatch[1]);
-      setLongitude(qMatch[2]);
-      return;
-    }
-
-    const searchMatch = url.match(/search\/(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (searchMatch) {
-      setLatitude(searchMatch[1]);
-      setLongitude(searchMatch[2]);
-      return;
-    }
-  };
-
+  // إرسال البيانات المحدثة
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nameAr.trim()) {
-      setError('يرجى إدخال اسم الفرع');
-      return;
-    }
-
-    setSubmitting(true);
+    setIsSubmitting(true);
     setError(null);
-    setSuccessMsg(null);
+    setSuccessMessage(null);
+
+    const payload = {
+      name: name.trim(),
+      code: code.trim(),
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
+      radiusMeters: Number(radiusMeters),
+      geofenceRadius: Number(radiusMeters),
+      isActive: Boolean(isActive),
+    };
 
     try {
-      const payload = {
-        name: nameAr.trim(),
-        nameAr: nameAr.trim(),
-        nameEn: nameEn.trim() || null,
-        address: address.trim() || null,
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
-        radiusMeters: Number(radiusMeters) || 100,
-        geofenceRadius: Number(radiusMeters) || 100,
-        isActive,
-      };
+      const response = await fetch(`/api/admin/branches/${branchId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-      const res = await updateBranchAction(branchId, payload);
-      if (res && (res.success || !res.error)) {
-        setSuccessMsg('تم تعديل بيانات الفرع بنجاح');
-        setTimeout(() => {
-          router.push('/admin/branches');
-        }, 1500);
-      } else {
-        setError(res?.error || 'فشل تعديل الفرع');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل تحديث بيانات الفرع');
       }
-    } catch (err) {
-      console.error('Error updating branch:', err);
-      setError('حدث خطأ غير متوقع أثناء حفظ التعديلات');
+
+      setSuccessMessage('تم تحديث بيانات الفرع بنجاح');
+      router.refresh();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ التعديلات';
+      setError(message);
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8 flex items-center justify-center" dir="rtl">
-        <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
-          <RefreshCw className="w-5 h-5 animate-spin" />
-          <span>جاري تحميل بيانات الفرع...</span>
+      <div className="flex min-h-[60vh] w-full items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+          <p className="text-sm font-medium text-slate-500">جاري تحميل بيانات الفرع...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4 md:p-8" dir="rtl">
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-xl">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">تعديل بيانات الفرع</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                تحديث الموقع الجغرافي والنطاق المسموح به للحضور
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/admin/branches"
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors"
-          >
-            <ArrowRight className="w-4 h-4" />
-            العودة للفروع
-          </Link>
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8" dir="rtl">
+      {/* رأس الصفحة والملاحة */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            تعديل بيانات الفرع
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            تحديث النطاق الجغرافي (Geofence)، الإحداثيات، وحالة تشغيل الفرع
+          </p>
         </div>
+        <Link
+          href={`/${locale}/admin/branches`}
+          className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+        >
+          العودة لقائمة الفروع
+        </Link>
+      </div>
 
-        {/* Banners */}
-        {error && (
-          <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-xl flex items-center gap-3 text-red-700 dark:text-red-300 text-sm">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <span>{error}</span>
+      {/* شاشات التنبيه (Alerts) */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-800">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-rose-900">تنبيه:</span>
+            <p className="text-sm">{error}</p>
           </div>
-        )}
+        </div>
+      )}
 
-        {successMsg && (
-          <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-3 text-emerald-700 dark:text-emerald-300 text-sm">
-            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-            <span>{successMsg}</span>
+      {successMessage && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-emerald-900">نجاح:</span>
+            <p className="text-sm">{successMessage}</p>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Form Card */}
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                اسم الفرع (بالعربية) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={nameAr}
-                onChange={(e) => setNameAr(e.target.value)}
-                placeholder="مثال: فرع القاهرة - الرئيسي"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                اسم الفرع (بالإنجليزية)
-              </label>
-              <input
-                type="text"
-                value={nameEn}
-                onChange={(e) => setNameEn(e.target.value)}
-                placeholder="e.g. Cairo Main Branch"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                dir="ltr"
-              />
-            </div>
-          </div>
-
+      {/* نموذج التعديل */}
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {/* اسم الفرع */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              العنوان التفصيلي
+            <label htmlFor="branchName" className="block text-sm font-medium text-slate-700">
+              اسم الفرع <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="مثال: الشارع الرئيسي، البرج الإداري، الدور الثالث"
-              className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              id="branchName"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:text-sm"
+              placeholder="مثال: فرع كفر الشيخ الرئيسي"
             />
           </div>
 
-          {/* Quick Extract from Google Maps URL */}
-          <div className="p-4 bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-xl space-y-2">
-            <label className="block text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-              <LinkIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              استخراج الإحداثيات تلقائياً من رابط خرائط جوجل (Google Maps)
+          {/* كود الفرع */}
+          <div>
+            <label htmlFor="branchCode" className="block text-sm font-medium text-slate-700">
+              كود الفرع (Branch Code)
             </label>
             <input
               type="text"
-              value={mapsUrl}
-              onChange={(e) => handleExtractFromUrl(e.target.value)}
-              placeholder="الصق رابط الموقع من خرائط جوجل هنا لتعبئة الإحداثيات تلقائياً..."
-              className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-              dir="ltr"
+              id="branchCode"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:text-sm"
+              placeholder="مثال: BR-01"
             />
           </div>
 
-          {/* Location Coordinates */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-blue-500" /> خط العرض (Latitude)
-              </label>
-              <input
-                type="text"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-                placeholder="30.0444"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                dir="ltr"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-blue-500" /> خط الطول (Longitude)
-              </label>
-              <input
-                type="text"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-                placeholder="31.2357"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                dir="ltr"
-              />
-            </div>
+          {/* خط العرض (Latitude) */}
+          <div>
+            <label htmlFor="latitude" className="block text-sm font-medium text-slate-700">
+              خط العرض (Latitude)
+            </label>
+            <input
+              type="number"
+              step="any"
+              id="latitude"
+              value={latitude}
+              onChange={(e) => setLatitude(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:text-sm"
+              placeholder="31.1107"
+            />
           </div>
 
-          {/* Radius & Active Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                نطاق الحضور المسموح به (بالأمتار - Geofence Radius)
-              </label>
-              <input
-                type="number"
-                min="10"
-                max="5000"
-                value={radiusMeters}
-                onChange={(e) => setRadiusMeters(Number(e.target.value))}
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+          {/* خط الطول (Longitude) */}
+          <div>
+            <label htmlFor="longitude" className="block text-sm font-medium text-slate-700">
+              خط الطول (Longitude)
+            </label>
+            <input
+              type="number"
+              step="any"
+              id="longitude"
+              value={longitude}
+              onChange={(e) => setLongitude(e.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:text-sm"
+              placeholder="30.9388"
+            />
+          </div>
 
-            <div className="flex items-center gap-3 pt-5">
+          {/* نطاق التواجد الجغرافي بالأمتار (Geofence Radius) */}
+          <div className="sm:col-span-2">
+            <label htmlFor="radiusMeters" className="block text-sm font-medium text-slate-700">
+              نصف قطر النطاق الجغرافي للبصمة (بالمتر)
+            </label>
+            <input
+              type="number"
+              id="radiusMeters"
+              min={10}
+              max={5000}
+              value={radiusMeters}
+              onChange={(e) => setRadiusMeters(Number(e.target.value))}
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:text-sm"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              أقصى مسافة مسموح بها للموظف لتسجيل الحضور والانصراف من داخل الفرع (الافتراضي: 100 متر).
+            </p>
+          </div>
+
+          {/* حالة تفعيل الفرع */}
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-3">
               <input
                 type="checkbox"
                 id="isActive"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-slate-300"
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
               />
-              <label htmlFor="isActive" className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                الفرع نشط ومتاح لتسجيل الحضور
+              <label htmlFor="isActive" className="text-sm font-medium text-slate-900">
+                تفعيل الفرع ضمن خطة التشغيل والشفتات النشطة
               </label>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
-            <Link
-              href="/admin/branches"
-              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-sm font-medium transition-colors"
-            >
-              إلغاء
-            </Link>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium shadow-md shadow-blue-500/20 transition-all disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              {submitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}
-            </button>
-          </div>
-        </form>
-      </div>
+        {/* أزرار الإجراءات */}
+        <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-6">
+          <Link
+            href={`/${locale}/admin/branches`}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none"
+          >
+            إلغاء
+          </Link>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
