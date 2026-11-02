@@ -1,7 +1,23 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
-import BranchesClient, { BranchData } from './BranchesClient';
+import BranchesClient from './BranchesClient';
+
+// عزل تعريف العقد البرمجي (Data Contract) داخل المنسق
+// مع توفير مرونة هيكلية تمنع تعارض الخصائص مع المكون الفرعي
+export interface BranchData {
+  id: string;
+  name: string;
+  nameAr?: string;
+  nameEn?: string;
+  address?: string;
+  latitude?: string;
+  longitude?: string;
+  geofenceRadius?: number;
+  radiusMeters?: number;
+  isActive: boolean;
+  [key: string]: any; // Index Signature لضمان التوافق التام مع أي حقول إضافية يطلبها BranchesClient
+}
 
 interface PageProps {
   params: Promise<{
@@ -10,7 +26,7 @@ interface PageProps {
 }
 
 export default function BranchesPage({ params }: PageProps) {
-  // فك الـ Asynchronous Params لتوافق Next.js 15+ في Client Components
+  // فك الـ Asynchronous Params لتوافق Next.js 15+ و React 19 في الـ Client Components
   const resolvedParams = use(params);
   const { locale } = resolvedParams;
 
@@ -44,7 +60,7 @@ export default function BranchesPage({ params }: PageProps) {
           : data?.branches || data?.data || [];
 
         if (isMounted) {
-          // التحويل الهيكلي الصارم لضمان استيفاء عقد BranchData كاملاً ومنع أخطاء TypeScript
+          // تطهير وهندسة البيانات المستلمة لضمان التوافق الصارم ومنع الأخطاء غير المتوقعة
           const formatted: BranchData[] = rawList.map((b: any) => {
             const fallbackName = b?.name || b?.nameAr || b?.nameEn || 'فرع بدون اسم';
 
