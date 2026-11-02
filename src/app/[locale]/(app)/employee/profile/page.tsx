@@ -27,16 +27,12 @@ export default async function EmployeeProfilePage({ params }: PageProps) {
     redirect(`/${locale}/login`);
   }
 
-  // 2. استعلام بيانات المستخدم مع تطهير الأعمدة وتأمين الـ Aliasing
+  // 2. استعلام الحقول الفعلية والمؤكدة فقط في جدول users
   const userResults = await db
     .select({
       id: users.id,
       phone: users.phone,
       name: users.name,
-      // المعالجة الهندسية: توجيه الحقول إلى users.name لمنع أخطاء Drizzle وتأمين التوافق مع الـ UI
-      fullNameAr: users.name,
-      fullNameEn: users.name,
-      email: users.email,
       role: users.role,
       updatedAt: users.updatedAt,
     })
@@ -48,17 +44,25 @@ export default async function EmployeeProfilePage({ params }: PageProps) {
       return [];
     });
 
-  const currentUser = userResults[0];
+  const rawUser = userResults[0];
 
-  if (!currentUser) {
+  if (!rawUser) {
     notFound();
   }
+
+  // 3. بناء كائن البيانات الموحد (DTO) لدعم واجهة المستخدم بأمان تام
+  const currentUser = {
+    ...rawUser,
+    fullNameAr: rawUser.name,
+    fullNameEn: rawUser.name,
+    email: (session?.user as { email?: string | null })?.email || null,
+  };
 
   const isRtl = locale === 'ar';
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة */}
+      {/* رأس الصفحة والملاحة */}
       <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
