@@ -1,62 +1,74 @@
-import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
-import { getTranslations, setRequestLocale } from 'next-intl/server';
+import React from 'react';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { auth } from '@/auth';
 
-// 1. عزل التصيير الديناميكي لمنع انهيار الـ Build أثناء فحص اتصالات Drizzle
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 2. ضبط Types متوافقة 100% مع Next.js 15+ Asynchronous APIs
 interface PageProps {
   params: Promise<{
     locale: string;
   }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-// 3. مكون تحميل هيكلي (Fallback UI) للحفاظ على تجربة المستخدم ومنع وميض الشاشة
-function LoadingSkeleton() {
-  return (
-    <div className="flex min-h-screen w-full items-center justify-center p-6">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-    </div>
-  );
-}
-
-// 4. استدعاء البيانات بأمان عبر طبقة الخدمة المعزولة (Server Data Fetching)
-async function ContentSection({ locale }: { locale: string }) {
-  // تفعيل الـ locale لتجنب تحذيرات next-intl
-  setRequestLocale(locale);
-  const t = await getTranslations({ locale, namespace: 'Index' });
-
-  return (
-    <main className="flex flex-col items-center justify-center min-h-[80vh] px-4 py-8">
-      <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-5xl">
-        {t('title')}
-      </h1>
-      <p className="mt-4 text-base text-muted-foreground sm:text-lg">
-        {t('description')}
-      </p>
-    </main>
-  );
-}
-
-// 5. نقطة الدخول الرئيسية للصفحة
-export default async function Page({ params, searchParams }: PageProps) {
-  // فك الـ Promises لتوافق المحرك البرمجي دون تعارض
+export default async function HomePage({ params }: PageProps) {
+  // فك الـ Asynchronous Params لتوافق Next.js 15+
   const resolvedParams = await params;
-  const resolvedSearchParams = await searchParams;
-  const { locale } = resolvedParams;
+  const locale = resolvedParams?.locale || 'ar';
+  const isRtl = locale === 'ar';
 
-  // التحقق من وجود اللغة المدعومة لمنع أخطاء الـ Routing
-  const supportedLocales = ['ar', 'en']; // مطابقة للغات المعرفة في middleware.ts
-  if (!supportedLocales.includes(locale)) {
-    notFound();
+  // فحص الجلسة مع عزل أي استثناء لتفادي كسر الخادم في حال وجود خلل في مفاتيح البيئة
+  let session = null;
+  try {
+    session = await auth();
+  } catch (error) {
+    console.error('Session resolution error in HomePage:', error);
+  }
+
+  // إذا كان المستخدم مسجل الدخول، يتم توجيهه تلقائياً إلى بوابته المناسبة
+  if (session?.user) {
+    const role = (session.user as { role?: string })?.role;
+    if (role === 'admin') {
+      redirect(`/${locale}/admin/branches`);
+    } else {
+      redirect(`/${locale}/employee`);
+    }
   }
 
   return (
-    <Suspense fallback={<LoadingSkeleton />}>
-      <ContentSection locale={locale} />
-    </Suspense>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12 sm:px-6 lg:px-8" dir={isRtl ? 'rtl' : 'ltr'}>
+      <div className="w-full max-w-md space-y-8 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+        <div>
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
+            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="mt-6 text-3xl font-bold tracking-tight text-slate-900">
+            {isRtl ? 'منظومة إدارة الشفتات والحضور' : 'Shift & Attendance System'}
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            {isRtl ? 'بوابة البصمة الذكية وإدارة العمليات' : 'Smart Geofence Attendance & Operations'}
+          </p>
+        </div>
+
+        <div className="space-y-4 pt-4">
+          <Link
+            href={`/${locale}/login`}
+            className="flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+          >
+            {isRtl ? 'تسجيل الدخول' : 'Sign In'}
+          </Link>
+
+          <Link
+            href={`/${locale}/branches`}
+            className="flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none"
+          >
+            {isRtl ? 'استعراض الفروع' : 'View Branches'}
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
