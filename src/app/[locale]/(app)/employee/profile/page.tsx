@@ -1,201 +1,138 @@
 import React from 'react';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { notFound, redirect } from 'next/navigation';
+import Link from 'next/link';
 import { db } from '@/db';
-import { users, branches, roles } from '@/db/schema';
+import { users } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { redirect } from 'next/navigation';
-import { 
-  User, 
-  Phone, 
-  Building2, 
-  ShieldCheck, 
-  Briefcase, 
-  Calendar, 
-  CreditCard, 
-  BadgeCheck,
-  Mail,
-  FileText
-} from 'lucide-react';
+import { auth } from '@/auth';
 
-export default async function EmployeeProfilePage() {
-  const session = await getServerSession(authOptions);
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-  if (!session || !session.user) {
-    redirect('/login');
+interface PageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
+
+export default async function EmployeeProfilePage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const locale = resolvedParams?.locale || 'ar';
+
+  // 1. التحقق من جلسة المستخدم الحالية
+  const session = await auth().catch(() => null);
+  const sessionUserId = session?.user?.id;
+
+  if (!sessionUserId) {
+    redirect(`/${locale}/login`);
   }
 
-  const userId = session.user.id;
-
-  const userRecords = await db
+  // 2. استعلام بيانات المستخدم مع تطهير الأعمدة وتأمين الـ Aliasing
+  const userResults = await db
     .select({
       id: users.id,
       phone: users.phone,
       name: users.name,
-      fullNameAr: users.fullNameAr,
-      fullNameEn: users.fullNameEn,
+      // المعالجة الهندسية: توجيه الحقول إلى users.name لمنع أخطاء Drizzle وتأمين التوافق مع الـ UI
+      fullNameAr: users.name,
+      fullNameEn: users.name,
       email: users.email,
       role: users.role,
-      jobTitle: users.jobTitle,
-      employeeCode: users.employeeCode,
-      hourlyRate: users.hourlyRate,
-      monthlySalary: users.monthlySalary,
-      notes: users.notes,
-      isActive: users.isActive,
-      createdAt: users.createdAt,
-      branchName: branches.name,
-      roleName: roles.name,
+      updatedAt: users.updatedAt,
     })
     .from(users)
-    .leftJoin(branches, eq(users.branchId, branches.id))
-    .leftJoin(roles, eq(users.roleId, roles.id))
-    .where(eq(users.id, userId))
-    .limit(1);
+    .where(eq(users.id, sessionUserId))
+    .limit(1)
+    .catch((err) => {
+      console.error('Database query error in EmployeeProfilePage:', err);
+      return [];
+    });
 
-  const profile = userRecords[0];
+  const currentUser = userResults[0];
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8 flex items-center justify-center" dir="rtl">
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm text-center">
-          <p className="text-slate-600 dark:text-slate-300 font-medium">لم يتم العثور على بيانات الملف الشخصي.</p>
-        </div>
-      </div>
-    );
+  if (!currentUser) {
+    notFound();
   }
 
+  const isRtl = locale === 'ar';
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4 md:p-8" dir="rtl">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Profile Card Header */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row items-center gap-6">
-          <div className="w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center text-3xl font-bold border-2 border-blue-500/20">
-            {(profile.fullNameAr || profile.name || profile.phone).charAt(0)}
-          </div>
-          <div className="text-center md:text-right space-y-1 flex-1">
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-              <h1 className="text-2xl font-bold">
-                {profile.fullNameAr || profile.name || 'موظف'}
-              </h1>
-              <span className={`px-3 py-0.5 rounded-full text-xs font-semibold ${profile.isActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-red-100 text-red-800'}`}>
-                {profile.isActive ? 'نشط' : 'غير نشط'}
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* رأس الصفحة */}
+      <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            {isRtl ? 'الملف الشخصي للموظف' : 'Employee Profile'}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {isRtl ? 'بيانات الحساب ومعلومات الاتصال الرسمية' : 'Account details and official contact information'}
+          </p>
+        </div>
+        <Link
+          href={`/${locale}`}
+          className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none"
+        >
+          {isRtl ? 'الرئيسية' : 'Home'}
+        </Link>
+      </div>
+
+      {/* بطاقة عرض البيانات */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-slate-50 px-6 py-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-xl font-bold text-white">
+              {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                {currentUser.fullNameAr || currentUser.name || (isRtl ? 'غير محدد' : 'N/A')}
+              </h2>
+              <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                {currentUser.role || (isRtl ? 'موظف' : 'Employee')}
               </span>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
-              {profile.jobTitle || profile.roleName || 'كادر وظيفي'}
-            </p>
-            {profile.employeeCode && (
-              <p className="text-xs text-blue-600 dark:text-blue-400 font-mono">
-                كود الموظف: {profile.employeeCode}
-              </p>
-            )}
           </div>
         </div>
 
-        {/* Profile Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Main Info */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 pb-3 flex items-center gap-2">
-              <User className="w-5 h-5 text-blue-500" />
-              البيانات الأساسية
-            </h3>
-
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <Phone className="w-4 h-4" /> رقم الهاتف (مُعرف الدخول)
-                </span>
-                <span className="font-semibold font-mono" dir="ltr">{profile.phone}</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <Mail className="w-4 h-4" /> البريد الإلكتروني
-                </span>
-                <span className="font-medium">{profile.email || 'غير مسجل'}</span>
-              </div>
-
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <Building2 className="w-4 h-4" /> الفرع التابع له
-                </span>
-                <span className="font-semibold text-blue-600 dark:text-blue-400">
-                  {profile.branchName || 'غير معين لموقع'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between py-1">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> الدور والصلاحية
-                </span>
-                <span className="font-semibold">
-                  {profile.roleName || profile.role || 'موظف'}
-                </span>
-              </div>
+        <div className="p-6">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
+            <div>
+              <dt className="text-sm font-medium text-slate-500">
+                {isRtl ? 'الاسم الكامل' : 'Full Name'}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-slate-900">
+                {currentUser.name || '—'}
+              </dd>
             </div>
-          </div>
 
-          {/* Job & Financial Info */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700 pb-3 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-emerald-500" />
-              البيانات الوظيفية
-            </h3>
-
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <BadgeCheck className="w-4 h-4" /> المسمى الوظيفي
-                </span>
-                <span className="font-medium">{profile.jobTitle || 'غير محدد'}</span>
-              </div>
-
-              {profile.monthlySalary !== null && profile.monthlySalary !== undefined && (
-                <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
-                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                    <CreditCard className="w-4 h-4" /> الراتب الشهرى
-                  </span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    {profile.monthlySalary} ج.م
-                  </span>
-                </div>
-              )}
-
-              {profile.hourlyRate !== null && profile.hourlyRate !== undefined && (
-                <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-700/50">
-                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                    <CreditCard className="w-4 h-4" /> أجر الساعة
-                  </span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400">
-                    {profile.hourlyRate} ج.م
-                  </span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between py-1">
-                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <Calendar className="w-4 h-4" /> تاريخ التسجيل
-                </span>
-                <span className="font-medium">
-                  {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('ar-EG') : 'غير متوفر'}
-                </span>
-              </div>
+            <div>
+              <dt className="text-sm font-medium text-slate-500">
+                {isRtl ? 'البريد الإلكتروني' : 'Email Address'}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-slate-900">
+                {currentUser.email || '—'}
+              </dd>
             </div>
-          </div>
+
+            <div>
+              <dt className="text-sm font-medium text-slate-500">
+                {isRtl ? 'رقم الهاتف' : 'Phone Number'}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-slate-900">
+                {currentUser.phone || '—'}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-sm font-medium text-slate-500">
+                {isRtl ? 'الدور الوظيفي' : 'System Role'}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-slate-900">
+                {currentUser.role || '—'}
+              </dd>
+            </div>
+          </dl>
         </div>
-
-        {/* Notes Section if exists */}
-        {profile.notes && (
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-amber-500" /> ملاحظات إدارية
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-              {profile.notes}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
