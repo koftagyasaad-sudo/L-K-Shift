@@ -21,6 +21,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
   let totalUsers = 0;
   let totalBranches = 0;
 
+  // استعلام الإحصائيات مع الحماية من أي توقف في اتصال قاعدة البيانات
   try {
     const userRes = await db.select({ count: sql<number>`count(*)` }).from(users);
     totalUsers = Number(userRes[0]?.count || 0);
@@ -86,14 +87,14 @@ export default async function AdminDashboardPage({ params }: PageProps) {
 
         <div className="rounded-2xl border border-white/5 bg-[#121526]/80 p-5 shadow-lg backdrop-blur-md">
           <span className="text-xs font-medium text-slate-400">
-            {isRtl ? 'الأدوار والصلاحيات' : 'Role Controls'}
+            {isRtl ? 'سجلات الحضور' : 'Attendance Logs'}
           </span>
           <div className="mt-4">
             <Link
-              href={`/${locale}/admin/roles`}
+              href={`/${locale}/admin/attendance-review`}
               className="inline-flex items-center gap-1 text-xs font-semibold text-orange-400 hover:text-orange-300 transition"
             >
-              {isRtl ? 'إدارة الصلاحيات' : 'Manage Roles'}
+              {isRtl ? 'مراجعة الحضور' : 'Review Attendance'}
               <span aria-hidden="true">&larr;</span>
             </Link>
           </div>
@@ -103,7 +104,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
       {/* الروابط السريعة */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Link
-          href={`/${locale}/branches`}
+          href={`/${locale}/admin/branches`}
           className="group rounded-2xl border border-white/5 bg-[#121526]/60 p-6 transition hover:border-orange-500/40 hover:bg-[#161a30]"
         >
           <h2 className="text-base font-bold text-white group-hover:text-orange-400 transition">
@@ -127,14 +128,14 @@ export default async function AdminDashboardPage({ params }: PageProps) {
         </Link>
 
         <Link
-          href={`/${locale}/admin/roles`}
+          href={`/${locale}/admin/attendance-review`}
           className="group rounded-2xl border border-white/5 bg-[#121526]/60 p-6 transition hover:border-emerald-500/40 hover:bg-[#161a30]"
         >
           <h2 className="text-base font-bold text-white group-hover:text-emerald-400 transition">
-            {isRtl ? 'هيكل الأدوار والصلاحيات' : 'Roles & Permissions'}
+            {isRtl ? 'مراجعة الحضور الميداني' : 'Attendance Review'}
           </h2>
           <p className="mt-2 text-xs text-slate-400">
-            {isRtl ? 'تخصيص صلاحيات شاشات النظام والعمليات.' : 'Control screen access and operational scopes.'}
+            {isRtl ? 'مراجعة واعتماد بصمات الموظفين وساعات العمل.' : 'Audit check-in logs and branch geofence proofs.'}
           </p>
         </Link>
       </div>
