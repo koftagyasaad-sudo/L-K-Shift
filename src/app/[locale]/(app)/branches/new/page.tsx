@@ -30,7 +30,7 @@ export default function NewBranchPage({ params }: PageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // استخراج الإحداثيات تلقائياً إن أمكن من رابط خرائط جوجل
+  // استخراج الإحداثيات تلقائياً إن وجدت في رابط الخريطة
   const handleMapsUrlChange = (url: string) => {
     setGoogleMapsUrl(url);
     const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
@@ -74,8 +74,8 @@ export default function NewBranchPage({ params }: PageProps) {
         throw new Error(data.message || 'فشل حفظ بيانات الفرع');
       }
 
-      // التوجيه الصحيح بالبادئة اللغوية للقضاء على خطأ 404 نهائياً
-      router.push(`/${locale}/admin/branches`);
+      // توجيه سليم ومنضبط بمعمارية i18n
+      router.push(`/${locale}/branches`);
       router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ الفرع';
@@ -87,7 +87,6 @@ export default function NewBranchPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر العودة الآمن */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -98,7 +97,7 @@ export default function NewBranchPage({ params }: PageProps) {
           </p>
         </div>
         <Link
-          href={`/${locale}/admin/branches`}
+          href={`/${locale}/branches`}
           className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[0.08] transition"
         >
           {isRtl ? 'العودة للفروع' : 'Back to Branches'}
@@ -111,7 +110,6 @@ export default function NewBranchPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* نموذج الإضافة المكتمل */}
       <div className="rounded-2xl border border-white/5 bg-[#121526]/80 p-6 sm:p-8 shadow-xl backdrop-blur-md">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -125,7 +123,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={nameAr}
                 onChange={(e) => setNameAr(e.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
-                placeholder={isRtl ? 'كفتجي دسوق' : 'Branch Arabic Name'}
+                placeholder={isRtl ? 'كفتجي دسوق' : 'Branch Name'}
               />
             </div>
 
@@ -138,7 +136,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={nameEn}
                 onChange={(e) => setNameEn(e.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
-                placeholder="koftagy d"
+                placeholder="Koftagy Desouk"
               />
             </div>
 
@@ -177,7 +175,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
-                placeholder={isRtl ? 'المدينة، الحي، الشارع...' : 'City, district, street...'}
+                placeholder={isRtl ? 'المدينة، الحي، الشارع...' : 'City, Street...'}
               />
             </div>
 
@@ -248,7 +246,7 @@ export default function NewBranchPage({ params }: PageProps) {
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
             <Link
-              href={`/${locale}/admin/branches`}
+              href={`/${locale}/branches`}
               className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition"
             >
               {isRtl ? 'إلغاء' : 'Cancel'}
