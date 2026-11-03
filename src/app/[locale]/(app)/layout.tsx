@@ -23,7 +23,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const [userRole, setUserRole] = useState<string>('مدير النظام');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // مزامنة الثيم والمصادقة محلياً
+  // استرجاع وتطبيق المصادقة والثيم المحفوظ
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
@@ -35,29 +35,19 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     if (savedName) setUserName(savedName);
     if (savedRole) setUserRole(savedRole);
 
-    // استعادة الثيم المحفوظ وتطبيقه على مستوى الـ HTML root
     const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
     setTheme(savedTheme);
-    if (savedTheme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-    }
   }, [locale, router]);
 
-  // دالة تبديل المظهر وحفظه
+  // دالة تبديل المظهر وحفظه في المتصفح والـ DOM
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
     localStorage.setItem('theme', nextTheme);
-    if (nextTheme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-    }
   };
 
-  // شبكة الملاحة المعتمدة مطابقة تماماً لشجرة المجلدات الحقيقية
+  const isDark = theme === 'dark';
+
   const navItems = [
     {
       name: isRtl ? 'لوحة التحكم' : 'Dashboard',
@@ -106,7 +96,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     },
     {
       name: isRtl ? 'مراجعة الحضور' : 'Attendance Review',
-      // التصحيح المعماري الحاسم للمسار الفعلي لمنع خطأ 404
       href: `/${locale}/admin/attendance-review`,
       icon: (
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -117,22 +106,37 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#080911] text-slate-100 transition-colors duration-300" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* القائمة الجانبية (Sidebar) */}
+    <div
+      className={`flex min-h-screen transition-colors duration-300 ${
+        isDark ? 'bg-[#080911] text-slate-100' : 'bg-slate-100 text-slate-900'
+      }`}
+      dir={isRtl ? 'rtl' : 'ltr'}
+    >
+      {/* القائمة الجانبية (Sidebar) - تدعم الثيمين بالكامل */}
       <aside
-        className={`fixed inset-y-0 z-40 flex flex-col border-white/5 bg-gradient-to-b from-[#101322] via-[#0d0f1b] to-[#080911] shadow-2xl transition-all duration-300 ${
-          isRtl ? 'right-0 border-l' : 'left-0 border-r'
-        } ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}
+        className={`fixed inset-y-0 z-40 flex flex-col shadow-2xl transition-all duration-300 ${
+          isRtl ? 'right-0' : 'left-0'
+        } ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${
+          isDark
+            ? 'border-white/5 bg-gradient-to-b from-[#101322] via-[#0d0f1b] to-[#080911]'
+            : 'border-slate-200 bg-white text-slate-800'
+        } ${isRtl ? 'border-l' : 'border-r'}`}
       >
-        <div className="flex h-20 items-center justify-between px-5 border-b border-white/5">
+        <div
+          className={`flex h-20 items-center justify-between px-5 border-b ${
+            isDark ? 'border-white/5' : 'border-slate-200'
+          }`}
+        >
           {!isSidebarCollapsed && (
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white font-black text-lg shadow-lg shadow-orange-500/20">
                 LK
               </div>
               <div>
-                <h1 className="text-base font-extrabold tracking-wide text-white">L-K Shift</h1>
-                <p className="text-[10px] text-slate-400 font-medium">
+                <h1 className={`text-base font-extrabold tracking-wide ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  L-K Shift
+                </h1>
+                <p className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                   {isRtl ? 'نظام الحضور والورديات' : 'Attendance & Shifts'}
                 </p>
               </div>
@@ -147,7 +151,10 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
 
         <nav className="flex-1 space-y-1.5 px-3 py-6 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href.includes('/dashboard') && pathname === `/${locale}/admin`);
+            const isActive =
+              pathname === item.href ||
+              (item.href.includes('/dashboard') && pathname === `/${locale}/admin`);
+
             return (
               <Link
                 key={item.href}
@@ -155,11 +162,17 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                 className={`group flex items-center gap-3.5 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all duration-200 ${
                   isActive
                     ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-lg shadow-orange-500/25'
-                    : 'text-slate-400 hover:bg-white/[0.04] hover:text-white'
+                    : isDark
+                    ? 'text-slate-400 hover:bg-white/[0.04] hover:text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}
                 title={isSidebarCollapsed ? item.name : undefined}
               >
-                <span className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+                <span
+                  className={`transition-transform duration-200 group-hover:scale-110 ${
+                    isActive ? 'text-white' : isDark ? 'text-slate-400 group-hover:text-white' : 'text-slate-500 group-hover:text-slate-900'
+                  }`}
+                >
                   {item.icon}
                 </span>
                 {!isSidebarCollapsed && <span>{item.name}</span>}
@@ -168,10 +181,14 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           })}
         </nav>
 
-        <div className="border-t border-white/5 p-3">
+        <div className={`border-t p-3 ${isDark ? 'border-white/5' : 'border-slate-200'}`}>
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] py-2.5 text-xs font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white transition"
+            className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-medium transition ${
+              isDark
+                ? 'border border-white/5 bg-white/[0.02] text-slate-400 hover:bg-white/[0.05] hover:text-white'
+                : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
           >
             <span>{isSidebarCollapsed ? '»' : isRtl ? '« طي القائمة' : 'Collapse »'}</span>
           </button>
@@ -186,35 +203,44 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             : isRtl ? 'mr-64' : 'ml-64'
         }`}
       >
-        {/* الشريط العلوي (Header) */}
-        <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-white/5 bg-[#080911]/80 px-6 backdrop-blur-xl">
+        {/* الشريط العلوي (Header) - متجاوب مع الثيمين */}
+        <header
+          className={`sticky top-0 z-30 flex h-20 items-center justify-between border-b px-6 backdrop-blur-xl transition-colors duration-300 ${
+            isDark
+              ? 'border-white/5 bg-[#080911]/80 text-white'
+              : 'border-slate-200 bg-white/80 text-slate-900 shadow-sm'
+          }`}
+        >
           <div className="flex items-center gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-orange-500 font-bold text-white shadow-md">
               {userName.charAt(0)}
             </div>
             <div className="hidden sm:block text-right" dir={isRtl ? 'rtl' : 'ltr'}>
-              <h2 className="text-sm font-bold text-white leading-tight">{userName}</h2>
-              <span className="text-[11px] font-medium text-emerald-400">{userRole}</span>
+              <h2 className={`text-sm font-bold leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {userName}
+              </h2>
+              <span className="text-[11px] font-medium text-emerald-500">{userRole}</span>
             </div>
           </div>
 
-          {/* أزرار الإجراءات: تغيير الثيم + تبديل اللغة + تسجيل الخروج */}
           <div className="flex items-center gap-3">
-            {/* زر تبديل المظهر (Theme Toggle) المستعاد بالكامل */}
+            {/* زر تبديل الثيم الفعّال */}
             <button
               onClick={toggleTheme}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
-              title={theme === 'dark' ? (isRtl ? 'التبديل إلى الوضع الفاتح' : 'Switch to Light Mode') : (isRtl ? 'التبديل إلى الوضع الداكن' : 'Switch to Dark Mode')}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
+                isDark
+                  ? 'border-white/10 bg-white/[0.03] text-amber-400 hover:bg-white/[0.08]'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+              title={isDark ? (isRtl ? 'التبديل إلى الوضع الفاتح' : 'Switch to Light Mode') : (isRtl ? 'التبديل إلى الوضع الداكن' : 'Switch to Dark Mode')}
               aria-label="Toggle Theme"
             >
-              {theme === 'dark' ? (
-                // أيقونة الشمس للوضع الفاتح
-                <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {isDark ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               ) : (
-                // أيقونة القمر للوضع الداكن
-                <svg className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                 </svg>
               )}
@@ -223,7 +249,11 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             {/* زر تبديل اللغة */}
             <Link
               href={isRtl ? `/en${pathname.replace('/ar', '')}` : `/ar${pathname.replace('/en', '')}`}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/[0.08] transition"
+              className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                isDark
+                  ? 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
             >
               {isRtl ? 'EN' : 'عربي'}
             </Link>
@@ -234,7 +264,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                 localStorage.removeItem('isAuthenticated');
                 router.replace(`/${locale}/login`);
               }}
-              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition"
             >
               {isRtl ? 'خروج' : 'Logout'}
             </button>
