@@ -21,20 +21,43 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>('Omar Abd Elhalim');
   const [userRole, setUserRole] = useState<string>('مدير النظام');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // فحص المصادقة المحلي السريع
+  // مزامنة الثيم والمصادقة محلياً
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
       router.replace(`/${locale}/login`);
     }
+
     const savedName = localStorage.getItem('userName');
     const savedRole = localStorage.getItem('userRole');
     if (savedName) setUserName(savedName);
     if (savedRole) setUserRole(savedRole);
+
+    // استعادة الثيم المحفوظ وتطبيقه على مستوى الـ HTML root
+    const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
+    setTheme(savedTheme);
+    if (savedTheme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
   }, [locale, router]);
 
-  // شبكة الروابط المعمارية المعتمدة للمنظومة بالكامل
+  // دالة تبديل المظهر وحفظه
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('theme', nextTheme);
+    if (nextTheme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+    }
+  };
+
+  // شبكة الملاحة المعتمدة مطابقة تماماً لشجرة المجلدات الحقيقية
   const navItems = [
     {
       name: isRtl ? 'لوحة التحكم' : 'Dashboard',
@@ -83,7 +106,8 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     },
     {
       name: isRtl ? 'مراجعة الحضور' : 'Attendance Review',
-      href: `/${locale}/admin/attendance`,
+      // التصحيح المعماري الحاسم للمسار الفعلي لمنع خطأ 404
+      href: `/${locale}/admin/attendance-review`,
       icon: (
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -93,14 +117,13 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#080911] text-slate-100" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* القائمة الجانبية (Sidebar) المتناسقة مع هوية L-K Shift */}
+    <div className="flex min-h-screen bg-[#080911] text-slate-100 transition-colors duration-300" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* القائمة الجانبية (Sidebar) */}
       <aside
         className={`fixed inset-y-0 z-40 flex flex-col border-white/5 bg-gradient-to-b from-[#101322] via-[#0d0f1b] to-[#080911] shadow-2xl transition-all duration-300 ${
           isRtl ? 'right-0 border-l' : 'left-0 border-r'
         } ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}
       >
-        {/* اللوجو واسم النظام */}
         <div className="flex h-20 items-center justify-between px-5 border-b border-white/5">
           {!isSidebarCollapsed && (
             <div className="flex items-center gap-3">
@@ -122,7 +145,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           )}
         </div>
 
-        {/* روابط التنقل الرئيسية */}
         <nav className="flex-1 space-y-1.5 px-3 py-6 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href.includes('/dashboard') && pathname === `/${locale}/admin`);
@@ -146,7 +168,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           })}
         </nav>
 
-        {/* زر طي القائمة في الأسفل */}
         <div className="border-t border-white/5 p-3">
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -167,7 +188,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
       >
         {/* الشريط العلوي (Header) */}
         <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-white/5 bg-[#080911]/80 px-6 backdrop-blur-xl">
-          {/* بيانات المستخدم المسجل */}
           <div className="flex items-center gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-orange-500 font-bold text-white shadow-md">
               {userName.charAt(0)}
@@ -178,14 +198,37 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             </div>
           </div>
 
-          {/* تبديل اللغة والإشعارات */}
+          {/* أزرار الإجراءات: تغيير الثيم + تبديل اللغة + تسجيل الخروج */}
           <div className="flex items-center gap-3">
+            {/* زر تبديل المظهر (Theme Toggle) المستعاد بالكامل */}
+            <button
+              onClick={toggleTheme}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.08] hover:text-white"
+              title={theme === 'dark' ? (isRtl ? 'التبديل إلى الوضع الفاتح' : 'Switch to Light Mode') : (isRtl ? 'التبديل إلى الوضع الداكن' : 'Switch to Dark Mode')}
+              aria-label="Toggle Theme"
+            >
+              {theme === 'dark' ? (
+                // أيقونة الشمس للوضع الفاتح
+                <svg className="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+              ) : (
+                // أيقونة القمر للوضع الداكن
+                <svg className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              )}
+            </button>
+
+            {/* زر تبديل اللغة */}
             <Link
               href={isRtl ? `/en${pathname.replace('/ar', '')}` : `/ar${pathname.replace('/en', '')}`}
               className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/[0.08] transition"
             >
               {isRtl ? 'EN' : 'عربي'}
             </Link>
+
+            {/* زر تسجيل الخروج */}
             <button
               onClick={() => {
                 localStorage.removeItem('isAuthenticated');
@@ -198,7 +241,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           </div>
         </header>
 
-        {/* مساحة الرندر الرئيسية للصفحات */}
+        {/* مساحة الرندر الرئيسية */}
         <main className="flex-1 p-6 sm:p-8 overflow-x-hidden">
           {children}
         </main>
