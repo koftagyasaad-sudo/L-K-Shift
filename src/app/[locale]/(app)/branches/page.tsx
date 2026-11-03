@@ -1,5 +1,5 @@
 import React from 'react';
-import BranchesClient from '../admin/branches/BranchesClient';
+import BranchesClient from './BranchesClient';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -10,13 +10,12 @@ interface PageProps {
   }>;
 }
 
-// عزل الـ Types لتفادي أي أخطاء تجميع في Vercel
 const SafeBranchesClient = BranchesClient as React.ComponentType<{
   locale?: string;
   [key: string]: any;
 }>;
 
-export default async function BranchesPage({ params }: PageProps) {
+export default async function AdminBranchesPage({ params }: PageProps) {
   const resolvedParams = await params;
   const locale = resolvedParams?.locale || 'ar';
 
