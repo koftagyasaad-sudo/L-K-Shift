@@ -1,157 +1,102 @@
-import { NextResponse } from "next/server";
-import { db } from "@/db";
-import { users, branches } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import bcrypt from "bcryptjs";
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/db';
+import { users, branches } from '@/db/schema';
+import { desc, eq } from 'drizzle-orm';
 
-export async function GET() {
+// 1. استرجاع قائمة الموظفين
+export async function GET(request: NextRequest) {
   try {
-    const data = await db
+    const { searchParams } = new URL(request.url);
+    const branchId = searchParams.get('branchId');
+
+    let query = db
       .select({
         id: users.id,
         name: users.name,
+        fullName: users.fullName,
+        fullNameAr: users.fullNameAr,
         phone: users.phone,
-        email: users.email,
         role: users.role,
+        branchId: users.branchId,
         jobTitle: users.jobTitle,
         employeeCode: users.employeeCode,
-        branchId: users.branchId,
-        roleId: users.roleId,
-        hourlyRate: users.hourlyRate,
-        monthlySalary: users.monthlySalary,
+        basicSalary: users.basicSalary,
+        annualLeaveDays: users.annualLeaveDays,
         isActive: users.isActive,
-        canUseAttendanceTerminal: users.canUseAttendanceTerminal,
-        notes: users.notes,
         createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        branchNameAr: branches.nameAr,
-        branchNameEn: branches.nameEn,
       })
       .from(users)
-      .leftJoin(branches, eq(users.branchId, branches.id))
       .orderBy(desc(users.createdAt));
 
-    return NextResponse.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    console.error("GET /api/employees error:", error);
-    const message =
-      error instanceof Error ? error.message : "حدث خطأ أثناء جلب الموظفين";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    const employeeList = await query;
+    return NextResponse.json(employeeList, { status: 200 });
+  } catch (error: any) {
+    console.error('Error fetching employees:', error);
+    return NextResponse.json(
+      { message: 'فشل استرجاع بيانات الموظفين', error: error?.message },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(req: Request) {
+// 2. إنشاء موظف جديد وتأمين كافة أعمدة البصمة
+export async function POST(request: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await request.json();
 
-    const name =
-      body.name ||
-      body.fullNameAr ||
-      body.fullNameEn ||
-      body.fullName ||
-      "";
-    const phone = body.phone ? String(body.phone).trim() : "";
-    const email = body.email ? String(body.email).trim() : null;
-    const rawPassword =
-      body.password && String(body.password).trim().length > 0
-        ? String(body.password).trim()
-        : "123456";
-
-    if (!name.trim()) {
-      return NextResponse.json(
-        { success: false, error: "اسم الموظف مطلوب" },
-        { status: 400 }
-      );
-    }
-
-    if (!phone) {
-      return NextResponse.json(
-        { success: false, error: "رقم الهاتف مطلوب (اسم الدخول)" },
-        { status: 400 }
-      );
-    }
-
-    // Check if phone already exists
-    const existingPhone = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.phone, phone))
-      .limit(1);
-
-    if (existingPhone.length > 0) {
-      return NextResponse.json(
-        { success: false, error: "رقم الهاتف مسجل لموظف آخر بالفعل" },
-        { status: 400 }
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(rawPassword, 10);
-    const userId = crypto.randomUUID();
-
+    const name = body.name || body.fullName || body.fullNameAr;
+    const phone = body.phone ? String(body.phone).trim() : null;
+    const password = body.password ? String(body.password).trim() : '123456';
+    const role = body.role || 'employee';
     const branchId = body.branchId || body.branch_id || null;
-    const roleId = body.roleId || body.role_id || null;
-    const role = body.role ? String(body.role).trim() : "employee";
-    const jobTitle = body.jobTitle || body.job_title || null;
-    const employeeCode = body.employeeCode || body.employee_code || null;
-    const hourlyRate =
-      body.hourlyRate !== undefined && body.hourlyRate !== null
-        ? String(body.hourlyRate)
-        : body.hourly_rate !== undefined && body.hourly_rate !== null
-        ? String(body.hourly_rate)
-        : null;
-    const monthlySalary =
-      body.monthlySalary !== undefined && body.monthlySalary !== null
-        ? String(body.monthlySalary)
-        : body.monthly_salary !== undefined && body.monthly_salary !== null
-        ? String(body.monthly_salary)
-        : null;
-    const isActive =
-      body.isActive !== undefined
-        ? Boolean(body.isActive)
-        : body.is_active !== undefined
-        ? Boolean(body.is_active)
-        : true;
-    const canUseAttendanceTerminal =
-      body.canUseAttendanceTerminal !== undefined
-        ? Boolean(body.canUseAttendanceTerminal)
-        : body.can_use_attendance_terminal !== undefined
-        ? Boolean(body.can_use_attendance_terminal)
-        : true;
-    const notes = body.notes ? String(body.notes).trim() : null;
+    const employeeCode = body.employeeCode || body.code || null;
+    const basicSalary = Number(body.basicSalary || body.base_salary || 0);
+    const annualLeaveDays = Number(body.annualLeaveDays || 21);
+    const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
+    const canUseAttendanceTerminal = body.canUseAttendanceTerminal !== undefined ? Boolean(body.canUseAttendanceTerminal) : true;
 
-    const [createdUser] = await db
+    if (!name || !phone) {
+      return NextResponse.json(
+        { message: 'الاسم الكامل ورقم التليفون حقول مطلوبة' },
+        { status: 400 }
+      );
+    }
+
+    // إدراج الموظف في جدول users مع مطابقة الأعمدة
+    const newEmployee = await db
       .insert(users)
       .values({
-        id: userId,
-        name: name.trim(),
+        name,
+        fullName: name,
+        fullNameAr: name,
         phone,
-        email,
-        password: hashedPassword,
+        password,
+        passwordHash: password,
         role,
-        jobTitle,
-        employeeCode,
         branchId,
-        roleId,
-        hourlyRate,
-        monthlySalary,
+        employeeCode,
+        code: employeeCode,
+        basicSalary,
+        baseSalary: basicSalary,
+        annualLeaveDays,
         isActive,
         canUseAttendanceTerminal,
-        notes,
+        status: isActive ? 'active' : 'inactive',
       })
       .returning();
 
-    return NextResponse.json({
-      success: true,
-      message: "تم إنشاء الموظف بنجاح",
-      data: createdUser,
-    });
-  } catch (error) {
-    console.error("POST /api/employees error:", error);
-    const message =
-      error instanceof Error ? error.message : "حدث خطأ أثناء إنشاء الموظف";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      { message: 'تم حفظ الموظف بنجاح', employee: newEmployee[0] },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error('Error creating employee:', error);
+    return NextResponse.json(
+      {
+        message: error?.message || 'فشل حفظ بيانات الموظف في قاعدة البيانات',
+        error: error?.message,
+      },
+      { status: 500 }
+    );
   }
 }
