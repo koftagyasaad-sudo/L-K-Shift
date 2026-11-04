@@ -23,7 +23,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const [userRole, setUserRole] = useState<string>('مدير النظام');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // استرجاع وتطبيق المصادقة والثيم المحفوظ
+  // مزامنة حالة المصادقة والثيم مع عنصر HTML الجذري
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
@@ -35,15 +35,27 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     if (savedName) setUserName(savedName);
     if (savedRole) setUserRole(savedRole);
 
+    // تفعيل كلاس dark على جذر الصفحة (HTML) فور التحميل
     const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
     setTheme(savedTheme);
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, [locale, router]);
 
-  // دالة تبديل المظهر وحفظه في المتصفح والـ DOM
+  // دالة تبديل المظهر وتحديث محرك الـ CSS الجذري
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
     localStorage.setItem('theme', nextTheme);
+
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   };
 
   const isDark = theme === 'dark';
@@ -112,7 +124,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
       }`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* القائمة الجانبية (Sidebar) - تدعم الثيمين بالكامل */}
+      {/* القائمة الجانبية (Sidebar) */}
       <aside
         className={`fixed inset-y-0 z-40 flex flex-col shadow-2xl transition-all duration-300 ${
           isRtl ? 'right-0' : 'left-0'
@@ -170,7 +182,11 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
               >
                 <span
                   className={`transition-transform duration-200 group-hover:scale-110 ${
-                    isActive ? 'text-white' : isDark ? 'text-slate-400 group-hover:text-white' : 'text-slate-500 group-hover:text-slate-900'
+                    isActive
+                      ? 'text-white'
+                      : isDark
+                      ? 'text-slate-400 group-hover:text-white'
+                      : 'text-slate-500 group-hover:text-slate-900'
                   }`}
                 >
                   {item.icon}
@@ -203,7 +219,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             : isRtl ? 'mr-64' : 'ml-64'
         }`}
       >
-        {/* الشريط العلوي (Header) - متجاوب مع الثيمين */}
+        {/* الشريط العلوي (Header) */}
         <header
           className={`sticky top-0 z-30 flex h-20 items-center justify-between border-b px-6 backdrop-blur-xl transition-colors duration-300 ${
             isDark
@@ -224,7 +240,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* زر تبديل الثيم الفعّال */}
+            {/* زر تبديل الثيم المطور */}
             <button
               onClick={toggleTheme}
               className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
