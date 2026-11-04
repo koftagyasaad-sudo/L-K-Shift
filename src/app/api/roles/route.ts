@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع قائمة الأدوار المسجلة
+// 1. استرجاع قائمة الأدوار
 export async function GET() {
   try {
     const raw = await db.execute(sql`
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 3. تحديث دور قائم
+// 3. تحديث دور مخصص
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
@@ -89,7 +89,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// 4. حذف دور
+// 4. حذف دور مخصص (مع حماية الأدوار النظامية)
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -101,7 +101,6 @@ export async function DELETE(request: NextRequest) {
 
     const roleId = parseInt(String(rawId), 10);
 
-    // حماية أدوار النظام الأساسية من الحذف
     await db.execute(sql`
       DELETE FROM custom_roles 
       WHERE id = ${roleId} AND is_system = false;
