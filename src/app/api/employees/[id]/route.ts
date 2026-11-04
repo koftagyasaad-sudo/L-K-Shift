@@ -1,234 +1,120 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, branches, roles, adminBranchScopes } from '@/db/schema';
-import { eq } from 'drizzle-orm';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import bcrypt from 'bcryptjs';
+import { sql } from 'drizzle-orm';
 
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+interface RouteContext {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+// 1. استرجاع موظف بالمعرف
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 401 });
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json({ message: 'معرف الموظف مطلوب' }, { status: 400 });
     }
 
-    const resolvedParams = await context.params;
-    const employeeId = resolvedParams.id;
+    const employeeId = parseInt(id, 10);
+    const raw = await db.execute(sql`
+      SELECT 
+        u.id,
+        u.full_name_ar as name,
+        u.full_name_ar as "fullName",
+        u.phone,
+        u.job_role as role,
+        u.primary_branch_id as "branchId",
+        u.monthly_salary as "basicSalary",
+        u.annual_leave_days as "annualLeaveDays",
+        u.is_active as "isActive",
+        b.name_ar as "branchName"
+      FROM users u
+      LEFT JOIN branches b ON u.primary_branch_id = b.id
+      WHERE u.id = ${employeeId}
+      LIMIT 1;
+    `);
 
-    if (!employeeId) {
-      return NextResponse.json({ error: 'معرف الموظف مطلوب' }, { status: 400 });
+    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    if (!rows.length) {
+      return NextResponse.json({ message: 'الموظف غير موجود' }, { status: 404 });
     }
 
-    const userRecords = await db
-      .select({
-        id: users.id,
-        phone: users.phone,
-        name: users.name,
-        fullNameAr: users.fullNameAr,
-        fullNameEn: users.fullNameEn,
-        email: users.email,
-        role: users.role,
-        systemRole: users.systemRole,
-        jobTitle: users.jobTitle,
-        employeeCode: users.employeeCode,
-        hourlyRate: users.hourlyRate,
-        monthlySalary: users.monthlySalary,
-        canUseAttendanceTerminal: users.canUseAttendanceTerminal,
-        branchId: users.branchId,
-        primaryBranchId: users.primaryBranchId,
-        roleId: users.roleId,
-        isActive: users.isActive,
-        notes: users.notes,
-        createdAt: users.createdAt,
-        updatedAt: users.updatedAt,
-        branchName: branches.name,
-        roleName: roles.name,
-      })
-      .from(users)
-      .leftJoin(branches, eq(users.branchId, branches.id))
-      .leftJoin(roles, eq(users.roleId, roles.id))
-      .where(eq(users.id, employeeId))
-      .limit(1);
-
-    if (!userRecords || userRecords.length === 0) {
-      return NextResponse.json({ error: 'لم يتم العثور على الموظف' }, { status: 404 });
-    }
-
-    const scopes = await db
-      .select({ branchId: adminBranchScopes.branchId })
-      .from(adminBranchScopes)
-      .where(eq(adminBranchScopes.userId, employeeId));
-
-    const branchScopes = scopes.map((s) => String(s.branchId));
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...userRecords[0],
-        branchScopes,
-      },
-    });
+    return NextResponse.json(rows[0], { status: 200 });
   } catch (error: any) {
-    console.error('Error fetching employee details:', error);
+    console.error('Error fetching employee by ID:', error);
     return NextResponse.json(
-      { error: error?.message || 'حدث خطأ أثناء جلب بيانات الموظف' },
+      { message: 'خطأ أثناء استرجاع بيانات الموظف', error: error?.message },
       { status: 500 }
     );
   }
 }
 
-export async function PUT(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  return PATCH(request, context);
-}
-
-export async function PATCH(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+// 2. تحديث موظف بالمعرف
+export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 401 });
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json({ message: 'معرف الموظف مفقود' }, { status: 400 });
     }
 
-    const resolvedParams = await context.params;
-    const employeeId = resolvedParams.id;
-
-    if (!employeeId) {
-      return NextResponse.json({ error: 'معرف الموظف مطلوب' }, { status: 400 });
-    }
-
-    const existingUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, employeeId))
-      .limit(1);
-
-    if (!existingUsers || existingUsers.length === 0) {
-      return NextResponse.json({ error: 'الموظف غير موجود' }, { status: 404 });
-    }
-
-    const existingUser = existingUsers[0];
+    const employeeId = parseInt(id, 10);
     const body = await request.json();
 
-    const {
-      phone,
-      password,
-      name,
-      fullNameAr,
-      fullNameEn,
-      email,
-      role,
-      systemRole,
-      jobTitle,
-      employeeCode,
-      hourlyRate,
-      monthlySalary,
-      canUseAttendanceTerminal,
-      can_use_attendance_terminal,
-      branchId,
-      primaryBranchId,
-      roleId,
-      isActive,
-      notes,
-      branchScopes,
-    } = body;
+    const name = body.name || body.fullName || body.fullNameAr;
+    const phone = body.phone ? String(body.phone).trim() : null;
+    const role = body.role || 'موظف';
+    const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
+    const basicSalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
+    const annualLeaveDays = parseInt(body.annualLeaveDays || '21', 10) || 21;
+    const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
-    const resolvedName = fullNameAr || name || existingUser.fullNameAr || existingUser.name || 'موظف';
-    const resolvedBranchId = branchId || primaryBranchId || existingUser.branchId || existingUser.primaryBranchId || null;
-    const resolvedCanUseTerminal = canUseAttendanceTerminal !== undefined 
-      ? Boolean(canUseAttendanceTerminal) 
-      : can_use_attendance_terminal !== undefined 
-      ? Boolean(can_use_attendance_terminal) 
-      : Boolean(existingUser.canUseAttendanceTerminal ?? true);
+    await db.execute(sql`
+      UPDATE users
+      SET 
+        full_name_ar = ${name},
+        full_name_en = ${name},
+        name = ${name},
+        phone = ${phone},
+        job_role = ${role},
+        role = ${role},
+        primary_branch_id = ${branchId},
+        branch_id = ${branchId},
+        monthly_salary = ${basicSalary},
+        annual_leave_days = ${annualLeaveDays},
+        is_active = ${isActive},
+        updated_at = NOW()
+      WHERE id = ${employeeId};
+    `);
 
-    const updateData: Record<string, any> = {
-      phone: phone ? String(phone).trim() : existingUser.phone,
-      name: resolvedName,
-      fullNameAr: resolvedName,
-      fullNameEn: fullNameEn !== undefined ? (fullNameEn ? String(fullNameEn).trim() : null) : existingUser.fullNameEn,
-      email: email !== undefined ? (email ? String(email).trim() : null) : existingUser.email,
-      role: role ? String(role) : existingUser.role,
-      systemRole: systemRole ? String(systemRole) : (role ? String(role) : existingUser.systemRole),
-      jobTitle: jobTitle !== undefined ? (jobTitle ? String(jobTitle).trim() : null) : existingUser.jobTitle,
-      employeeCode: employeeCode !== undefined ? (employeeCode ? String(employeeCode).trim() : null) : existingUser.employeeCode,
-      hourlyRate: hourlyRate !== undefined ? (hourlyRate !== null ? Number(hourlyRate) : null) : existingUser.hourlyRate,
-      monthlySalary: monthlySalary !== undefined ? (monthlySalary !== null ? Number(monthlySalary) : null) : existingUser.monthlySalary,
-      canUseAttendanceTerminal: resolvedCanUseTerminal,
-      branchId: resolvedBranchId,
-      primaryBranchId: resolvedBranchId,
-      roleId: roleId !== undefined ? (roleId ? String(roleId) : null) : existingUser.roleId,
-      isActive: isActive !== undefined ? Boolean(isActive) : existingUser.isActive,
-      notes: notes !== undefined ? (notes ? String(notes) : null) : existingUser.notes,
-      updatedAt: new Date(),
-    };
-
-    if (password && String(password).trim() !== '') {
-      updateData.password = await bcrypt.hash(String(password).trim(), 10);
-    }
-
-    await db.update(users).set(updateData).where(eq(users.id, employeeId));
-
-    if (Array.isArray(branchScopes)) {
-      await db.delete(adminBranchScopes).where(eq(adminBranchScopes.userId, employeeId));
-      if (branchScopes.length > 0) {
-        const scopeValues = branchScopes.map((bId: string) => ({
-          userId: employeeId,
-          branchId: String(bId),
-          createdAt: new Date(),
-        }));
-        await db.insert(adminBranchScopes).values(scopeValues);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'تم تحديث بيانات الموظف بنجاح',
-      id: employeeId,
-    });
+    return NextResponse.json({ message: 'تم تحديث بيانات الموظف بنجاح' }, { status: 200 });
   } catch (error: any) {
-    console.error('Error updating employee:', error);
+    console.error('Error updating employee by ID:', error);
     return NextResponse.json(
-      { error: error?.message || 'حدث خطأ أثناء تحديث بيانات الموظف' },
+      { message: 'فشل تحديث بيانات الموظف', error: error?.message },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+// 3. حذف موظف
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'غير مصرح بالوصول' }, { status: 401 });
+    const { id } = await context.params;
+
+    if (!id) {
+      return NextResponse.json({ message: 'معرف الموظف مفقود' }, { status: 400 });
     }
 
-    const resolvedParams = await context.params;
-    const employeeId = resolvedParams.id;
-
-    if (!employeeId) {
-      return NextResponse.json({ error: 'معرف الموظف مطلوب' }, { status: 400 });
-    }
-
-    await db.delete(users).where(eq(users.id, employeeId));
-
-    return NextResponse.json({
-      success: true,
-      message: 'تم حذف الموظف بنجاح',
-    });
+    const employeeId = parseInt(id, 10);
+    await db.execute(sql`DELETE FROM users WHERE id = ${employeeId};`);
+    return NextResponse.json({ message: 'تم حذف الموظف بنجاح' }, { status: 200 });
   } catch (error: any) {
-    console.error('Error deleting employee:', error);
+    console.error('Error deleting employee by ID:', error);
     return NextResponse.json(
-      { error: error?.message || 'حدث خطأ أثناء حذف الموظف' },
+      { message: 'فشل حذف الموظف', error: error?.message },
       { status: 500 }
     );
   }
