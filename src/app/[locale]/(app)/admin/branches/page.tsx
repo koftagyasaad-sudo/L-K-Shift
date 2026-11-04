@@ -1,8 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { db } from '@/db';
-import { branches } from '@/db/schema';
-import { desc, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,21 +19,33 @@ export default async function AdminBranchesPage({ params }: PageProps) {
 
   let branchesList: any[] = [];
 
-  // جلب الفروع مباشرة من قاعدة بيانات Neon مع حماية كاملة
+  // جلب الفروع من الحقول الحقيقية لقاعدة بيانات Neon
   try {
-    branchesList = await db.select().from(branches).orderBy(desc(branches.createdAt));
-  } catch {
-    try {
-      const raw = await db.execute(sql`SELECT * FROM branches ORDER BY created_at DESC`);
-      branchesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    } catch (err) {
-      console.error('Failed to load branches from DB:', err);
-    }
+    const raw = await db.execute(sql`
+      SELECT 
+        id, 
+        name_ar as "nameAr", 
+        name_en as "nameEn", 
+        name_ar as "name",
+        address, 
+        latitude::text, 
+        longitude::text, 
+        geofence_radius as "radiusMeters",
+        geofence_radius as "geofenceRadius",
+        is_active as "isActive",
+        created_at as "createdAt"
+      FROM branches 
+      ORDER BY id ASC;
+    `);
+
+    branchesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+  } catch (error) {
+    console.error('Failed to load branches from DB:', error);
   }
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر الإضافة المباشر */}
+      {/* رأس الصفحة مع زر الإضافة */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
@@ -55,7 +66,7 @@ export default async function AdminBranchesPage({ params }: PageProps) {
         </Link>
       </div>
 
-      {/* جدول الفروع المتكامل */}
+      {/* جدول الفروع */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
         {branchesList.length === 0 ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
@@ -75,7 +86,6 @@ export default async function AdminBranchesPage({ params }: PageProps) {
               <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
                 <tr>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'اسم الفرع' : 'Branch'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'المشرف / الهاتف' : 'Manager / Phone'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'العنوان' : 'Address'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'نصف القطر (GPS)' : 'Geofence'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'الحالة' : 'Status'}</th>
@@ -90,10 +100,6 @@ export default async function AdminBranchesPage({ params }: PageProps) {
                       {branch.nameEn && (
                         <div className="text-xs font-normal text-slate-400">{branch.nameEn}</div>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
-                      <div>{branch.managerName || '—'}</div>
-                      <div className="text-xs text-slate-400">{branch.phone || ''}</div>
                     </td>
                     <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-xs truncate">
                       {branch.address || '—'}
