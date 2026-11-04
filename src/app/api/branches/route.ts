@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { branches } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 
 // 1. استرجاع الفروع (الكل أو فرع محدد عبر ?id=...)
 export async function GET(request: NextRequest) {
@@ -10,24 +9,52 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('id');
 
     if (branchId) {
-      const singleBranch = await db
-        .select()
-        .from(branches)
-        .where(eq(branches.id, branchId))
-        .limit(1);
+      const parsedId = parseInt(branchId, 10);
+      const raw = await db.execute(sql`
+        SELECT 
+          id, 
+          name_ar as "nameAr", 
+          name_en as "nameEn", 
+          name_ar as "name",
+          address, 
+          latitude::text, 
+          longitude::text, 
+          geofence_radius as "radiusMeters",
+          geofence_radius as "geofenceRadius",
+          is_active as "isActive",
+          created_at as "createdAt"
+        FROM branches 
+        WHERE id = ${parsedId}
+        LIMIT 1;
+      `);
 
-      if (!singleBranch.length) {
+      const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+      if (!rows.length) {
         return NextResponse.json({ message: 'الفرع غير موجود' }, { status: 404 });
       }
 
-      return NextResponse.json(singleBranch[0], { status: 200 });
+      return NextResponse.json(rows[0], { status: 200 });
     }
 
-    const allBranches = await db
-      .select()
-      .from(branches)
-      .orderBy(desc(branches.createdAt));
+    // جلب جميع الفروع المسجلة
+    const allBranchesRaw = await db.execute(sql`
+      SELECT 
+        id, 
+        name_ar as "nameAr", 
+        name_en as "nameEn", 
+        name_ar as "name",
+        address, 
+        latitude::text, 
+        longitude::text, 
+        geofence_radius as "radiusMeters",
+        geofence_radius as "geofenceRadius",
+        is_active as "isActive",
+        created_at as "createdAt"
+      FROM branches 
+      ORDER BY id ASC;
+    `);
 
+    const allBranches = Array.isArray(allBranchesRaw) ? allBranchesRaw : (allBranchesRaw as any)?.rows || [];
     return NextResponse.json(allBranches, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching branches:', error);
@@ -43,44 +70,26 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const name = body.name || body.nameAr;
-    const nameAr = body.nameAr || body.name;
-    const nameEn = body.nameEn || body.name || '';
-    const code = body.code || '';
-    const phone = body.phone || '';
-    const managerName = body.managerName || '';
+    const nameAr = body.nameAr || body.name || 'فرع جديد';
+    const nameEn = body.nameEn || nameAr;
     const address = body.address || '';
-    const googleMapsUrl = body.googleMapsUrl || '';
-    const latitude = body.latitude ? String(body.latitude).trim() : null;
-    const longitude = body.longitude ? String(body.longitude).trim() : null;
-    const radiusMeters = Number(body.radiusMeters || body.geofenceRadius || 100);
-    const geofenceRadius = radiusMeters;
+    const latitude = parseFloat(body.latitude) || 30.0444;
+    const longitude = parseFloat(body.longitude) || 31.2357;
+    const radiusMeters = parseInt(body.radiusMeters || body.geofenceRadius || '100', 10);
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
+    const qrSecret = `qr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    if (!name) {
-      return NextResponse.json({ message: 'اسم الفرع مطلوب' }, { status: 400 });
-    }
+    const insertResult = await db.execute(sql`
+      INSERT INTO branches (
+        name_ar, name_en, type, address, latitude, longitude, geofence_radius, qr_secret_key, is_active, created_at, updated_at
+      ) VALUES (
+        ${nameAr}, ${nameEn}, 'BRANCH', ${address}, ${latitude}, ${longitude}, ${radiusMeters}, ${qrSecret}, ${isActive}, NOW(), NOW()
+      )
+      RETURNING id, name_ar as "nameAr", name_en as "nameEn", is_active as "isActive";
+    `);
 
-    const inserted = await db
-      .insert(branches)
-      .values({
-        name,
-        nameAr,
-        nameEn,
-        code,
-        phone,
-        managerName,
-        address,
-        googleMapsUrl,
-        latitude,
-        longitude,
-        radiusMeters,
-        geofenceRadius,
-        isActive,
-      })
-      .returning();
-
-    return NextResponse.json(inserted[0] || { message: 'تم إنشاء الفرع بنجاح' }, { status: 201 });
+    const rows = Array.isArray(insertResult) ? insertResult : (insertResult as any)?.rows || [];
+    return NextResponse.json(rows[0] || { message: 'تم إنشاء الفرع بنجاح' }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating branch:', error);
     return NextResponse.json(
@@ -94,45 +103,35 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const id = body.id || new URL(request.url).searchParams.get('id');
+    const rawId = body.id || new URL(request.url).searchParams.get('id');
 
-    if (!id) {
+    if (!rawId) {
       return NextResponse.json({ message: 'معرف الفرع مفقود' }, { status: 400 });
     }
 
-    const name = body.name || body.nameAr;
+    const branchId = parseInt(rawId, 10);
     const nameAr = body.nameAr || body.name;
-    const nameEn = body.nameEn || body.name || '';
-    const code = body.code || '';
-    const phone = body.phone || '';
-    const managerName = body.managerName || '';
+    const nameEn = body.nameEn || nameAr;
     const address = body.address || '';
-    const googleMapsUrl = body.googleMapsUrl || '';
-    const latitude = body.latitude ? String(body.latitude).trim() : null;
-    const longitude = body.longitude ? String(body.longitude).trim() : null;
-    const radiusMeters = Number(body.radiusMeters || body.geofenceRadius || 100);
-    const geofenceRadius = radiusMeters;
+    const latitude = parseFloat(body.latitude) || 30.0444;
+    const longitude = parseFloat(body.longitude) || 31.2357;
+    const radiusMeters = parseInt(body.radiusMeters || body.geofenceRadius || '100', 10);
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
-    await db
-      .update(branches)
-      .set({
-        name,
-        nameAr,
-        nameEn,
-        code,
-        phone,
-        managerName,
-        address,
-        googleMapsUrl,
-        latitude,
-        longitude,
-        radiusMeters,
-        geofenceRadius,
-        isActive,
-        updatedAt: new Date(),
-      })
-      .where(eq(branches.id, id));
+    // استعلام تحديث متطابق تماماً مع هيكل جدول branches في PostgreSQL
+    await db.execute(sql`
+      UPDATE branches 
+      SET 
+        name_ar = ${nameAr},
+        name_en = ${nameEn},
+        address = ${address},
+        latitude = ${latitude},
+        longitude = ${longitude},
+        geofence_radius = ${radiusMeters},
+        is_active = ${isActive},
+        updated_at = NOW()
+      WHERE id = ${branchId};
+    `);
 
     return NextResponse.json({ message: 'تم تحديث بيانات الفرع بنجاح' }, { status: 200 });
   } catch (error: any) {
@@ -148,13 +147,14 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const rawId = searchParams.get('id');
 
-    if (!id) {
+    if (!rawId) {
       return NextResponse.json({ message: 'معرف الفرع مفقود' }, { status: 400 });
     }
 
-    await db.delete(branches).where(eq(branches.id, id));
+    const branchId = parseInt(rawId, 10);
+    await db.execute(sql`DELETE FROM branches WHERE id = ${branchId};`);
     return NextResponse.json({ message: 'تم حذف الفرع بنجاح' }, { status: 200 });
   } catch (error: any) {
     console.error('Error deleting branch:', error);
