@@ -2,18 +2,50 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع قائمة الموظفين المتوافقة تماماً مع قاعدة بيانات Neon
-export async function GET() {
+// 1. استرجاع قائمة الموظفين (الكل أو موظف محدد عبر ?id=...)
+export async function GET(request: NextRequest) {
   try {
-    const raw = await db.execute(sql`
+    const { searchParams } = new URL(request.url);
+    const employeeId = searchParams.get('id');
+
+    if (employeeId) {
+      const parsedId = parseInt(employeeId, 10);
+      const singleRaw = await db.execute(sql`
+        SELECT 
+          u.id,
+          u.full_name_ar as name,
+          u.full_name_ar as "fullName",
+          u.phone,
+          u.job_role as role,
+          u.primary_branch_id as "branchId",
+          u.monthly_salary as "basicSalary",
+          u.annual_leave_days as "annualLeaveDays",
+          u.is_active as "isActive",
+          b.name_ar as "branchName"
+        FROM users u
+        LEFT JOIN branches b ON u.primary_branch_id = b.id
+        WHERE u.id = ${parsedId}
+        LIMIT 1;
+      `);
+
+      const singleRows = Array.isArray(singleRaw) ? singleRaw : (singleRaw as any)?.rows || [];
+      if (!singleRows.length) {
+        return NextResponse.json({ message: 'الموظف غير موجود' }, { status: 404 });
+      }
+
+      return NextResponse.json(singleRows[0], { status: 200 });
+    }
+
+    const allRaw = await db.execute(sql`
       SELECT 
         u.id,
         u.full_name_ar as name,
         u.full_name_ar as "fullName",
         u.phone,
         u.job_role as role,
-        u.job_role as "jobRole",
         u.primary_branch_id as "branchId",
+        u.monthly_salary as "basicSalary",
+        u.annual_leave_days as "annualLeaveDays",
         u.is_active as "isActive",
         b.name_ar as "branchName",
         u.created_at as "createdAt"
@@ -22,8 +54,8 @@ export async function GET() {
       ORDER BY u.id ASC;
     `);
 
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    return NextResponse.json(rows, { status: 200 });
+    const allRows = Array.isArray(allRaw) ? allRaw : (allRaw as any)?.rows || [];
+    return NextResponse.json(allRows, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching employees:', error);
     return NextResponse.json(
@@ -33,7 +65,7 @@ export async function GET() {
   }
 }
 
-// 2. إضافة موظف جديد بالحقول الحقيقية لقاعدة البيانات
+// 2. إضافة موظف جديد بالحقول الحقيقية المتوافقة مع قاعدة البيانات
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -43,7 +75,7 @@ export async function POST(request: NextRequest) {
     const password = body.password ? String(body.password).trim() : '123456';
     const role = body.role || 'موظف';
     const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
-    const monthlySalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
+    const basicSalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
     const annualLeaveDays = parseInt(body.annualLeaveDays || '21', 10) || 21;
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
@@ -54,32 +86,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // الإدراج في الحقول الحقيقية المعتمدة لجدول users
+    // إدراج متوافق مع كافة حقول جدول users
     const insertResult = await db.execute(sql`
       INSERT INTO users (
         full_name_ar,
         full_name_en,
+        name,
         phone,
         password_hash,
         system_role,
         job_role,
+        role,
         primary_branch_id,
-        is_active,
+        branch_id,
         monthly_salary,
         annual_leave_days,
+        is_active,
         created_at,
         updated_at
       ) VALUES (
+        ${name},
         ${name},
         ${name},
         ${phone},
         ${password},
         'EMPLOYEE',
         ${role},
+        ${role},
         ${branchId},
-        ${isActive},
-        ${monthlySalary},
+        ${branchId},
+        ${basicSalary},
         ${annualLeaveDays},
+        ${isActive},
         NOW(),
         NOW()
       )
@@ -116,15 +154,23 @@ export async function PUT(request: NextRequest) {
     const phone = body.phone ? String(body.phone).trim() : null;
     const role = body.role || 'موظف';
     const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
+    const basicSalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
+    const annualLeaveDays = parseInt(body.annualLeaveDays || '21', 10) || 21;
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
     await db.execute(sql`
       UPDATE users
       SET 
         full_name_ar = ${name},
+        full_name_en = ${name},
+        name = ${name},
         phone = ${phone},
         job_role = ${role},
+        role = ${role},
         primary_branch_id = ${branchId},
+        branch_id = ${branchId},
+        monthly_salary = ${basicSalary},
+        annual_leave_days = ${annualLeaveDays},
         is_active = ${isActive},
         updated_at = NOW()
       WHERE id = ${employeeId};
@@ -135,28 +181,6 @@ export async function PUT(request: NextRequest) {
     console.error('Error updating employee:', error);
     return NextResponse.json(
       { message: 'فشل تحديث بيانات الموظف', error: error?.message },
-      { status: 500 }
-    );
-  }
-}
-
-// 4. حذف موظف
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const rawId = searchParams.get('id');
-
-    if (!rawId) {
-      return NextResponse.json({ message: 'معرف الموظف مفقود' }, { status: 400 });
-    }
-
-    const employeeId = parseInt(String(rawId), 10);
-    await db.execute(sql`DELETE FROM users WHERE id = ${employeeId};`);
-    return NextResponse.json({ message: 'تم حذف الموظف بنجاح' }, { status: 200 });
-  } catch (error: any) {
-    console.error('Error deleting employee:', error);
-    return NextResponse.json(
-      { message: 'فشل حذف الموظف', error: error?.message },
       { status: 500 }
     );
   }
