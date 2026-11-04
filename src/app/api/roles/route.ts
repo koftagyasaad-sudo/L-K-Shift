@@ -1,82 +1,80 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { db } from "@/db";
-import { customRoles } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/db';
+import { sql } from 'drizzle-orm';
 
-export async function GET(req: NextRequest) {
+// 1. استرجاع قائمة الأدوار
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    // محاولة الاستعلام من جدول custom_roles المعتمد في Schema النظام
+    const raw = await db.execute(sql`
+      SELECT 
+        id, 
+        name, 
+        name_ar as "nameAr", 
+        permissions, 
+        is_system as "isSystem",
+        created_at as "createdAt"
+      FROM custom_roles 
+      ORDER BY id ASC;
+    `);
+
+    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    return NextResponse.json(rows, { status: 200 });
+  } catch {
+    // محاولة احتياطية من جدول roles في حال وجوده
+    try {
+      const fallback = await db.execute(sql`
+        SELECT 
+          id, 
+          name, 
+          name_ar as "nameAr", 
+          permissions, 
+          is_active as "isActive"
+        FROM roles 
+        ORDER BY id ASC;
+      `);
+      const fbRows = Array.isArray(fallback) ? fallback : (fallback as any)?.rows || [];
+      return NextResponse.json(fbRows, { status: 200 });
+    } catch (err: any) {
+      console.error('Error fetching roles:', err);
       return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
+        { message: 'فشل استرجاع الأدوار', error: err?.message },
+        { status: 500 }
       );
     }
-
-    const rolesList = await db
-      .select()
-      .from(customRoles)
-      .orderBy(desc(customRoles.createdAt));
-
-    return NextResponse.json({
-      success: true,
-      data: rolesList,
-    });
-  } catch (error: any) {
-    console.error("Error fetching roles:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Internal Server Error" },
-      { status: 500 }
-    );
   }
 }
 
-export async function POST(req: NextRequest) {
+// 2. إضافة دور جديد
+export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+    const body = await request.json();
+    const name = body.name || body.nameAr || 'دور جديد';
+    const nameAr = body.nameAr || name;
+    const permissions = body.permissions || ['attendance.view'];
+    const permissionsJson = JSON.stringify(permissions);
+
+    try {
+      const raw = await db.execute(sql`
+        INSERT INTO custom_roles (name, name_ar, permissions, is_system, created_at)
+        VALUES (${name}, ${nameAr}, ${permissionsJson}::jsonb, false, NOW())
+        RETURNING id, name, name_ar as "nameAr";
+      `);
+      const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+      return NextResponse.json(rows[0] || { message: 'تم حفظ الدور بنجاح' }, { status: 201 });
+    } catch {
+      const raw2 = await db.execute(sql`
+        INSERT INTO roles (name, name_ar, permissions, is_active)
+        VALUES (${name}, ${nameAr}, ${permissionsJson}::jsonb, true)
+        RETURNING id, name, name_ar as "nameAr";
+      `);
+      const rows2 = Array.isArray(raw2) ? raw2 : (raw2 as any)?.rows || [];
+      return NextResponse.json(rows2[0] || { message: 'تم حفظ الدور بنجاح' }, { status: 201 });
     }
-
-    const body = await req.json();
-    const { name, nameAr, nameEn, description, permissions } = body;
-
-    const finalNameAr = nameAr || name || "دور مخصص";
-    const finalNameEn = nameEn || name || "Custom Role";
-
-    const id = crypto.randomUUID();
-
-    const rolePayload: any = {
-      id,
-      nameAr: finalNameAr,
-      nameEn: finalNameEn,
-      description: description || null,
-      permissions: permissions || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const [newRole] = await db
-      .insert(customRoles)
-      .values(rolePayload)
-      .returning();
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: newRole,
-      },
-      { status: 201 }
-    );
   } catch (error: any) {
-    console.error("Error creating role:", error);
+    console.error('Error creating role:', error);
     return NextResponse.json(
-      { success: false, error: error.message || "Internal Server Error" },
+      { message: 'فشل حفظ الدور', error: error?.message },
       { status: 500 }
     );
   }
