@@ -73,7 +73,7 @@ export default function EmployeeForm({
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    // كائن البيانات المطابق لقاعدة بيانات المشروع ومسار /api/employees
+    // كائن البيانات المطابق بدقة للأعمدة الفعلية في قاعدة البيانات
     const payload = {
       name: name.trim(),
       fullName: name.trim(),
@@ -86,12 +86,10 @@ export default function EmployeeForm({
       basicSalary: Number(basicSalary) || 0,
       annualLeaveDays: Number(annualLeaveDays) || 21,
       isActive: true,
-      canUseAttendanceTerminal: true,
     };
 
     try {
       const isEdit = Boolean(initialData?.id);
-      // استخدام المسار الحقيقي المباشر /api/employees
       const endpoint = isEdit ? `/api/employees?id=${initialData?.id}` : '/api/employees';
 
       const response = await fetch(endpoint, {
@@ -121,7 +119,7 @@ export default function EmployeeForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رسالة الخطأ مع تباين واضح في الثيمين */}
+      {/* رسالة الخطأ مع تباين فائق للثيمين */}
       {errorMessage && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-sm font-medium text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
           <div className="flex items-center gap-2">
@@ -131,7 +129,7 @@ export default function EmployeeForm({
         </div>
       )}
 
-      {/* حقول النموذج - متوافقة بالكامل مع الثيم النهاري والليلي */}
+      {/* حقول النموذج - متوافقة بنسبة 100% مع الوضع النهاري والليلي */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {/* الاسم الكامل */}
         <div>
@@ -143,7 +141,7 @@ export default function EmployeeForm({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder={isRtl ? 'أدخل الاسم رباعي' : 'Enter full name'}
           />
         </div>
@@ -158,7 +156,7 @@ export default function EmployeeForm({
             required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder="01xxxxxxxxx"
           />
         </div>
@@ -173,7 +171,7 @@ export default function EmployeeForm({
             required={!initialData?.id}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder={initialData?.id ? (isRtl ? 'اتركه فارغاً لعدم التغيير' : 'Leave empty to keep current') : '••••••'}
           />
         </div>
@@ -187,7 +185,7 @@ export default function EmployeeForm({
             type="text"
             value={employeeCode}
             onChange={(e) => setEmployeeCode(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder="EMP-001"
           />
         </div>
@@ -200,7 +198,7 @@ export default function EmployeeForm({
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
             <option value="">
               {isLoadingBranches
@@ -227,7 +225,7 @@ export default function EmployeeForm({
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
             <option value="employee">{isRtl ? 'موظف' : 'Staff'}</option>
             <option value="admin">{isRtl ? 'مدير نظام' : 'Admin'}</option>
@@ -246,7 +244,7 @@ export default function EmployeeForm({
             type="number"
             value={basicSalary}
             onChange={(e) => setBasicSalary(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             min="0"
           />
         </div>
@@ -260,7 +258,7 @@ export default function EmployeeForm({
             type="number"
             value={annualLeaveDays}
             onChange={(e) => setAnnualLeaveDays(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             min="0"
           />
         </div>
@@ -278,7 +276,7 @@ export default function EmployeeForm({
         <button
           type="button"
           onClick={() => router.push(`/${locale}/admin/employees`)}
-          className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-850 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {isRtl ? 'إلغاء' : 'Cancel'}
         </button>
