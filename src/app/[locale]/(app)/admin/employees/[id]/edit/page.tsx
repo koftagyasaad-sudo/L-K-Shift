@@ -18,7 +18,6 @@ export default function EditEmployeePage({ params }: PageProps) {
   const employeeId = resolvedParams?.id;
   const isRtl = locale === 'ar';
 
-  // حالات الحقول
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('موظف');
@@ -27,16 +26,12 @@ export default function EditEmployeePage({ params }: PageProps) {
   const [annualLeaveDays, setAnnualLeaveDays] = useState('21');
   const [isActive, setIsActive] = useState(true);
 
-  // قائمة الفروع
   const [branchList, setBranchList] = useState<any[]>([]);
-
-  // حالات التحميل والتنبيهات
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // تحميل بيانات الموظف والفروع
   useEffect(() => {
     if (!employeeId) return;
 
@@ -45,15 +40,13 @@ export default function EditEmployeePage({ params }: PageProps) {
         setIsLoading(true);
         setErrorMessage(null);
 
-        // جلب الفروع المسجلة
         const branchesRes = await fetch('/api/branches', { cache: 'no-store' });
         if (branchesRes.ok) {
           const bData = await branchesRes.json();
           setBranchList(Array.isArray(bData) ? bData : bData?.branches || []);
         }
 
-        // جلب بيانات الموظف
-        const empRes = await fetch(`/api/employees/${employeeId}`, { cache: 'no-store' });
+        const empRes = await fetch(`/api/employees?id=${employeeId}`, { cache: 'no-store' });
         if (!empRes.ok) {
           throw new Error('فشل جلب بيانات الموظف المسجل');
         }
@@ -76,7 +69,6 @@ export default function EditEmployeePage({ params }: PageProps) {
     loadData();
   }, [employeeId]);
 
-  // إرسال التحديث
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) return;
@@ -97,7 +89,7 @@ export default function EditEmployeePage({ params }: PageProps) {
     };
 
     try {
-      const res = await fetch(`/api/employees/${employeeId}`, {
+      const res = await fetch(`/api/employees?id=${employeeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -136,7 +128,6 @@ export default function EditEmployeePage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر العودة */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
@@ -156,7 +147,6 @@ export default function EditEmployeePage({ params }: PageProps) {
         </Link>
       </div>
 
-      {/* رسائل التنبيه والنجاح */}
       {errorMessage && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-sm font-medium text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
           <div className="flex items-center gap-2">
@@ -175,11 +165,9 @@ export default function EditEmployeePage({ params }: PageProps) {
         </div>
       )}
 
-      {/* نموذج التعديل المتوافق مع الثيمين */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/10 dark:bg-[#121526] dark:shadow-xl sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* الاسم الكامل */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'الاسم الكامل' : 'Full Name'} <span className="text-rose-500">*</span>
@@ -193,7 +181,6 @@ export default function EditEmployeePage({ params }: PageProps) {
               />
             </div>
 
-            {/* رقم الهاتف */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'رقم التليفون' : 'Phone Number'} <span className="text-rose-500">*</span>
@@ -207,7 +194,6 @@ export default function EditEmployeePage({ params }: PageProps) {
               />
             </div>
 
-            {/* الفرع المسند */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'الفرع المسند' : 'Assigned Branch'}
@@ -226,7 +212,6 @@ export default function EditEmployeePage({ params }: PageProps) {
               </select>
             </div>
 
-            {/* الدور الوظيفي */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'الدور الوظيفي' : 'Role'}
@@ -244,7 +229,6 @@ export default function EditEmployeePage({ params }: PageProps) {
               </select>
             </div>
 
-            {/* الراتب الأساسي */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'الراتب الأساسي' : 'Base Salary'}
@@ -258,7 +242,6 @@ export default function EditEmployeePage({ params }: PageProps) {
               />
             </div>
 
-            {/* أيام الإجازة السنوية */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'أيام الإجازة السنوية' : 'Annual Leave Days'}
@@ -272,7 +255,6 @@ export default function EditEmployeePage({ params }: PageProps) {
               />
             </div>
 
-            {/* تفعيل الموظف */}
             <div className="sm:col-span-2 pt-2">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -288,7 +270,6 @@ export default function EditEmployeePage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* أزرار الإجراءات */}
           <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-6 dark:border-white/5">
             <Link
               href={`/${locale}/admin/employees`}
