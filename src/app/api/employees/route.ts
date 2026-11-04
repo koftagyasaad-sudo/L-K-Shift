@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع قائمة الموظفين (الكل أو موظف محدد عبر ?id=...)
+// 1. استرجاع قائمة الموظفين أو موظف مفرد
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -28,12 +28,11 @@ export async function GET(request: NextRequest) {
         LIMIT 1;
       `);
 
-      const singleRows = Array.isArray(singleRaw) ? singleRaw : (singleRaw as any)?.rows || [];
-      if (!singleRows.length) {
+      const rows = Array.isArray(singleRaw) ? singleRaw : (singleRaw as any)?.rows || [];
+      if (!rows.length) {
         return NextResponse.json({ message: 'الموظف غير موجود' }, { status: 404 });
       }
-
-      return NextResponse.json(singleRows[0], { status: 200 });
+      return NextResponse.json(rows[0], { status: 200 });
     }
 
     const allRaw = await db.execute(sql`
@@ -65,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. إضافة موظف جديد بالحقول الحقيقية المتوافقة مع قاعدة البيانات
+// 2. إضافة موظف جديد بالحقول الحقيقية فقط لجدول users
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -86,19 +85,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // إدراج متوافق مع كافة حقول جدول users
     const insertResult = await db.execute(sql`
       INSERT INTO users (
         full_name_ar,
         full_name_en,
-        name,
         phone,
         password_hash,
-        system_role,
         job_role,
-        role,
         primary_branch_id,
-        branch_id,
         monthly_salary,
         annual_leave_days,
         is_active,
@@ -107,13 +101,9 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         ${name},
         ${name},
-        ${name},
         ${phone},
         ${password},
-        'EMPLOYEE',
         ${role},
-        ${role},
-        ${branchId},
         ${branchId},
         ${basicSalary},
         ${annualLeaveDays},
@@ -163,12 +153,9 @@ export async function PUT(request: NextRequest) {
       SET 
         full_name_ar = ${name},
         full_name_en = ${name},
-        name = ${name},
         phone = ${phone},
         job_role = ${role},
-        role = ${role},
         primary_branch_id = ${branchId},
-        branch_id = ${branchId},
         monthly_salary = ${basicSalary},
         annual_leave_days = ${annualLeaveDays},
         is_active = ${isActive},
@@ -181,6 +168,28 @@ export async function PUT(request: NextRequest) {
     console.error('Error updating employee:', error);
     return NextResponse.json(
       { message: 'فشل تحديث بيانات الموظف', error: error?.message },
+      { status: 500 }
+    );
+  }
+}
+
+// 4. حذف موظف
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const rawId = searchParams.get('id');
+
+    if (!rawId) {
+      return NextResponse.json({ message: 'معرف الموظف مفقود' }, { status: 400 });
+    }
+
+    const employeeId = parseInt(String(rawId), 10);
+    await db.execute(sql`DELETE FROM users WHERE id = ${employeeId};`);
+    return NextResponse.json({ message: 'تم حذف الموظف بنجاح' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error deleting employee:', error);
+    return NextResponse.json(
+      { message: 'فشل حذف الموظف', error: error?.message },
       { status: 500 }
     );
   }
