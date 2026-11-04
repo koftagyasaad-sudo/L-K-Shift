@@ -32,11 +32,11 @@ export default function EmployeeForm({
   const router = useRouter();
   const isRtl = locale === 'ar';
 
-  // حالة الفروع مع إمكانية التحميل الذاتي إن كانت فارغة
+  // حالة الفروع المستدعاة من المسار الحقيقي
   const [branchList, setBranchList] = useState(initialBranches);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
 
-  // حقول النموذج
+  // حقول بيانات الموظف
   const [name, setName] = useState(initialData?.name || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [password, setPassword] = useState('');
@@ -46,20 +46,24 @@ export default function EmployeeForm({
   const [basicSalary, setBasicSalary] = useState(initialData?.basicSalary ? String(initialData.basicSalary) : '0');
   const [annualLeaveDays, setAnnualLeaveDays] = useState(initialData?.annualLeaveDays ? String(initialData.annualLeaveDays) : '21');
 
+  // حالات الإرسال والتنبيهات
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // جلب الفروع تلقائياً لضمان عدم ظهور القائمة فارغة نهائياً
+  // جلب الفروع من المسار المسطح المعتمد /api/branches
   useEffect(() => {
     if (branchList.length === 0) {
       setIsLoadingBranches(true);
-      fetch('/api/admin/branches')
-        .then((res) => res.json())
+      fetch('/api/branches', { cache: 'no-store' })
+        .then((res) => {
+          if (!res.ok) throw new Error('فشل جلب قائمة الفروع');
+          return res.json();
+        })
         .then((data) => {
           const list = Array.isArray(data) ? data : data?.branches || data?.data || [];
           setBranchList(list);
         })
-        .catch((err) => console.error('Failed to auto-fetch branches:', err))
+        .catch((err) => console.error('Error fetching branches in employee form:', err))
         .finally(() => setIsLoadingBranches(false));
     }
   }, [branchList.length]);
@@ -69,7 +73,7 @@ export default function EmployeeForm({
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    // Payload متوافق 100% مع أعمدة قاعدة البيانات بعد الترقية
+    // كائن البيانات المطابق لقاعدة بيانات المشروع ومسار /api/employees
     const payload = {
       name: name.trim(),
       fullName: name.trim(),
@@ -82,11 +86,13 @@ export default function EmployeeForm({
       basicSalary: Number(basicSalary) || 0,
       annualLeaveDays: Number(annualLeaveDays) || 21,
       isActive: true,
+      canUseAttendanceTerminal: true,
     };
 
     try {
       const isEdit = Boolean(initialData?.id);
-      const endpoint = isEdit ? `/api/admin/employees/${initialData?.id}` : '/api/admin/employees';
+      // استخدام المسار الحقيقي المباشر /api/employees
+      const endpoint = isEdit ? `/api/employees?id=${initialData?.id}` : '/api/employees';
 
       const response = await fetch(endpoint, {
         method: isEdit ? 'PUT' : 'POST',
@@ -115,16 +121,21 @@ export default function EmployeeForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* رسالة الخطأ مع تباين واضح في الثيمين */}
       {errorMessage && (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-400">
-          {errorMessage}
+        <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-sm font-medium text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{isRtl ? 'خطأ:' : 'Error:'}</span>
+            <span>{errorMessage}</span>
+          </div>
         </div>
       )}
 
+      {/* حقول النموذج - متوافقة بالكامل مع الثيم النهاري والليلي */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {/* الاسم الكامل */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'الاسم الكامل' : 'Full Name'} <span className="text-rose-500">*</span>
           </label>
           <input
@@ -132,14 +143,14 @@ export default function EmployeeForm({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder={isRtl ? 'أدخل الاسم رباعي' : 'Enter full name'}
           />
         </div>
 
         {/* رقم التليفون */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'رقم التليفون (اسم المستخدم)' : 'Phone Number'} <span className="text-rose-500">*</span>
           </label>
           <input
@@ -147,14 +158,14 @@ export default function EmployeeForm({
             required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder="01xxxxxxxxx"
           />
         </div>
 
         {/* كلمة المرور */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'كلمة المرور' : 'Password'} <span className="text-rose-500">*</span>
           </label>
           <input
@@ -162,36 +173,44 @@ export default function EmployeeForm({
             required={!initialData?.id}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder={initialData?.id ? (isRtl ? 'اتركه فارغاً لعدم التغيير' : 'Leave empty to keep current') : '••••••'}
           />
         </div>
 
         {/* كود الموظف */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'كود الموظف (اختياري)' : 'Employee Code'}
           </label>
           <input
             type="text"
             value={employeeCode}
             onChange={(e) => setEmployeeCode(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white placeholder-slate-500 focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
             placeholder="EMP-001"
           />
         </div>
 
-        {/* اختيار الفرع (مربوط بقاعدة البيانات) */}
+        {/* اختيار الفرع */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'الفرع' : 'Branch'}
           </label>
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
-            <option value="">{isLoadingBranches ? (isRtl ? 'جاري تحميل الفروع...' : 'Loading...') : (isRtl ? '-- اختر الفرع --' : '-- Select Branch --')}</option>
+            <option value="">
+              {isLoadingBranches
+                ? isRtl
+                  ? 'جاري تحميل الفروع...'
+                  : 'Loading branches...'
+                : isRtl
+                ? '-- اختر الفرع --'
+                : '-- Select Branch --'}
+            </option>
             {branchList.map((b: any) => (
               <option key={b.id} value={String(b.id)}>
                 {b.nameAr || b.name}
@@ -202,13 +221,13 @@ export default function EmployeeForm({
 
         {/* الدور الوظيفي */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'الدور / المسمى' : 'Role'}
           </label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
             <option value="employee">{isRtl ? 'موظف' : 'Staff'}</option>
             <option value="admin">{isRtl ? 'مدير نظام' : 'Admin'}</option>
@@ -220,51 +239,53 @@ export default function EmployeeForm({
 
         {/* الراتب الأساسي */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'الراتب الأساسي' : 'Base Salary'}
           </label>
           <input
             type="number"
             value={basicSalary}
             onChange={(e) => setBasicSalary(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             min="0"
           />
         </div>
 
         {/* أيام الإجازة السنوية */}
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             {isRtl ? 'أيام الإجازة السنوية' : 'Annual Leave Days'}
           </label>
           <input
             type="number"
             value={annualLeaveDays}
             onChange={(e) => setAnnualLeaveDays(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-2.5 text-white focus:border-orange-500 focus:outline-none sm:text-sm"
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             min="0"
           />
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-xs text-amber-400">
+      {/* الملاحظة التوجيهية */}
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-semibold text-amber-700 dark:text-amber-400">
         {isRtl
           ? 'الموظف يسجل الدخول برقم التليفون + كلمة المرور. الافتراضي للإضافة الجديدة: 123456'
-          : 'Staff login uses Phone + Password. Default password for new staff: 123456'}
+          : 'Staff login uses Phone + Password. Default password: 123456'}
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-4">
+      {/* أزرار الإجراءات */}
+      <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-6 dark:border-white/5">
         <button
           type="button"
           onClick={() => router.push(`/${locale}/admin/employees`)}
-          className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 transition"
+          className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-850 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           {isRtl ? 'إلغاء' : 'Cancel'}
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50"
+          className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ الموظف' : 'Save Employee')}
         </button>
