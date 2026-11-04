@@ -1,10 +1,16 @@
-import React from 'react';
-import Link from 'next/link';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+import React, { useState, useEffect, use } from 'react';
+import Link from 'next/link';
+
+interface EmployeeItem {
+  id: number | string;
+  name?: string;
+  phone?: string;
+  role?: string;
+  branchName?: string;
+  isActive?: boolean;
+}
 
 interface PageProps {
   params: Promise<{
@@ -12,32 +18,58 @@ interface PageProps {
   }>;
 }
 
-export default async function AdminEmployeesPage({ params }: PageProps) {
-  const resolvedParams = await params;
+export default function AdminEmployeesPage({ params }: PageProps) {
+  const resolvedParams = use(params);
   const locale = resolvedParams?.locale || 'ar';
   const isRtl = locale === 'ar';
 
-  let employeesList: any[] = [];
+  const [employeesList, setEmployeesList] = useState<EmployeeItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [deletingId, setDeletingId] = useState<number | string | null>(null);
 
-  // جلب مباشر ومحصن للموظفين من جدول users مع اسم الفرع التابع له
-  try {
-    const raw = await db.execute(sql`
-      SELECT 
-        u.id,
-        u.full_name_ar as name,
-        u.phone,
-        u.job_role as role,
-        u.is_active as "isActive",
-        b.name_ar as "branchName"
-      FROM users u
-      LEFT JOIN branches b ON u.primary_branch_id = b.id
-      ORDER BY u.id ASC;
-    `);
+  const fetchEmployees = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/employees', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setEmployeesList(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to load employees:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    employeesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-  } catch (error) {
-    console.error('Failed to load employees from DB:', error);
-  }
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const handleDeleteEmployee = async (id: number | string, name?: string) => {
+    const confirmMessage = isRtl
+      ? `هل أنت متأكد من حذف الموظف "${name || 'المحدد'}" نهائياً؟`
+      : `Are you sure you want to delete employee "${name || 'selected'}"?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      setDeletingId(id);
+      const res = await fetch(`/api/employees?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        throw new Error('فشل حذف الموظف');
+      }
+
+      setEmployeesList((prev) => prev.filter((item) => String(item.id) !== String(id)));
+    } catch (err) {
+      alert(isRtl ? 'حدث خطأ أثناء محاولة حذف الموظف' : 'Failed to delete employee');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -49,8 +81,8 @@ export default async function AdminEmployeesPage({ params }: PageProps) {
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {isRtl
-              ? 'قائمة حسابات الموظفين والصلاحيات المسندة'
-              : 'Staff accounts and assigned branch authorizations'}
+              ? 'قائمة حسابات الموظفين، الفروع المسندة، والتحكم بالصلاحيات'
+              : 'Staff directory, branch allocations, and access permissions'}
           </p>
         </div>
 
@@ -62,9 +94,13 @@ export default async function AdminEmployeesPage({ params }: PageProps) {
         </Link>
       </div>
 
-      {/* جدول عرض الموظفين */}
+      {/* جدول الموظفين مع زري التعديل والحذف */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
-        {employeesList.length === 0 ? (
+        {isLoading ? (
+          <div className="flex min-h-[300px] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+          </div>
+        ) : employeesList.length === 0 ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
             <p className="text-base font-medium">
               {isRtl ? 'لا يوجد موظفون مسجلون حالياً' : 'No employees registered yet'}
@@ -90,7 +126,7 @@ export default async function AdminEmployeesPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {employeesList.map((emp: any) => (
+                {employeesList.map((emp) => (
                   <tr key={emp.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
                     <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
                       {emp.name || 'موظف'}
@@ -118,12 +154,22 @@ export default async function AdminEmployeesPage({ params }: PageProps) {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <Link
-                        href={`/${locale}/admin/employees/${emp.id}/edit`}
-                        className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400"
-                      >
-                        {isRtl ? 'تعديل' : 'Edit'}
-                      </Link>
+                      <div className="flex items-center justify-center gap-3">
+                        <Link
+                          href={`/${locale}/admin/employees/${emp.id}/edit`}
+                          className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400"
+                        >
+                          {isRtl ? 'تعديل' : 'Edit'}
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                          disabled={deletingId === emp.id}
+                          className="text-xs font-bold text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400"
+                        >
+                          {deletingId === emp.id ? (isRtl ? 'جاري الحذف...' : 'Deleting...') : (isRtl ? 'حذف' : 'Delete')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
