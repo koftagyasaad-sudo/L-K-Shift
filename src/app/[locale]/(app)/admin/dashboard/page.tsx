@@ -1,7 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { db } from '@/db';
-import { users, branches } from '@/db/schema';
 import { sql } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
@@ -22,27 +21,41 @@ export default async function AdminDashboardPage({ params }: PageProps) {
   let totalBranches = 0;
   let branchesList: any[] = [];
 
-  // 1. استعلام الإحصائيات الإجمالية
+  // 1. حساب الإحصائيات المركزية
   try {
-    const userRes = await db.select({ count: sql<number>`count(*)` }).from(users);
-    totalUsers = Number(userRes[0]?.count || 0);
+    const userRes = await db.execute(sql`SELECT count(*)::int as count FROM users;`);
+    const uRows = Array.isArray(userRes) ? userRes : (userRes as any)?.rows || [];
+    totalUsers = Number(uRows[0]?.count || 0);
 
-    const branchRes = await db.select({ count: sql<number>`count(*)` }).from(branches);
-    totalBranches = Number(branchRes[0]?.count || 0);
+    const branchRes = await db.execute(sql`SELECT count(*)::int as count FROM branches;`);
+    const bRows = Array.isArray(branchRes) ? branchRes : (branchRes as any)?.rows || [];
+    totalBranches = Number(bRows[0]?.count || 0);
   } catch (error) {
     console.error('Failed to load dashboard metrics:', error);
   }
 
-  // 2. استعلام بيانات الفروع المسجلة لعرضها مباشرة داخل لوحة التحكم
+  // 2. استعلام بيانات الفروع مع المطابقة المزدوجة للأسماء لمنع "فرع بدون اسم"
   try {
-    branchesList = await db.select().from(branches).limit(10);
-  } catch {
-    try {
-      const raw = await db.execute(sql`SELECT * FROM branches ORDER BY created_at DESC LIMIT 10`);
-      branchesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    } catch (err) {
-      console.error('Failed to fetch branches list for dashboard:', err);
-    }
+    const raw = await db.execute(sql`
+      SELECT 
+        id, 
+        name_ar as "nameAr", 
+        name_en as "nameEn", 
+        name_ar, 
+        name_en, 
+        address, 
+        latitude::text, 
+        longitude::text, 
+        geofence_radius as "radiusMeters",
+        geofence_radius as "geofenceRadius",
+        is_active as "isActive",
+        created_at as "createdAt"
+      FROM branches 
+      ORDER BY id ASC;
+    `);
+    branchesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+  } catch (err) {
+    console.error('Failed to fetch branches list for dashboard:', err);
   }
 
   return (
@@ -65,9 +78,9 @@ export default async function AdminDashboardPage({ params }: PageProps) {
         <div className="absolute -bottom-10 -left-10 h-48 w-48 rounded-full bg-white/10 blur-2xl pointer-events-none" />
       </div>
 
-      {/* كروت الإحصائيات الحية - متوافقة بالكامل مع الوضع النهاري والليلي */}
+      {/* كروت الإحصائيات المتوافقة مع الثيمين */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {/* إجمالي الفروع */}
+        {/* الفروع المسجلة */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -103,7 +116,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* حالة البصمة الجغرافية */}
+        {/* محرك الـ Geofence */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -145,7 +158,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* القسم الميداني: استعراض الفروع المسجلة داخل الداشبورد مباشرة */}
+      {/* استعراض الفروع المسجلة ونطاق التغطية */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80">
         <div className="flex flex-col gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between dark:border-white/5">
           <div>
@@ -161,13 +174,13 @@ export default async function AdminDashboardPage({ params }: PageProps) {
 
           <div className="flex items-center gap-3">
             <Link
-              href={`/${locale}/branches/new`}
+              href={`/${locale}/admin/branches/new`}
               className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:opacity-95"
             >
               {isRtl ? '+ إضافة فرع' : '+ Add Branch'}
             </Link>
             <Link
-              href={`/${locale}/branches`}
+              href={`/${locale}/admin/branches`}
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300 dark:hover:bg-white/[0.08]"
             >
               {isRtl ? 'عرض الكل' : 'View All'}
@@ -187,7 +200,6 @@ export default async function AdminDashboardPage({ params }: PageProps) {
               <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
                 <tr>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'اسم الفرع' : 'Branch Name'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'المشرف / الهاتف' : 'Manager / Phone'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'العنوان' : 'Address'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'نصف القطر (GPS)' : 'Geofence'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'الحالة' : 'Status'}</th>
@@ -195,55 +207,55 @@ export default async function AdminDashboardPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {branchesList.map((branch: any) => (
-                  <tr key={branch.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
-                    <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                      <div>{branch.nameAr || branch.name || 'فرع بدون اسم'}</div>
-                      {branch.nameEn && (
-                        <div className="text-xs font-normal text-slate-400">{branch.nameEn}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
-                      <div>{branch.managerName || '—'}</div>
-                      <div className="text-xs text-slate-400">{branch.phone || ''}</div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-xs truncate">
-                      {branch.address || '—'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300">
-                      {branch.radiusMeters || branch.geofenceRadius || 100} م
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                          branch.isActive ?? true
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'
-                        }`}
-                      >
-                        {branch.isActive ?? true ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Inactive')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <Link
-                        href={`/${locale}/branches/${branch.id}`}
-                        className="text-xs font-bold text-orange-600 hover:text-orange-500 hover:underline dark:text-orange-400 dark:hover:text-orange-300"
-                      >
-                        {isRtl ? 'تعديل' : 'Edit'}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {branchesList.map((branch: any) => {
+                  const branchName = branch.nameAr || branch.name_ar || branch.name || 'فرع بدون اسم';
+                  const branchEn = branch.nameEn || branch.name_en || '';
+                  return (
+                    <tr key={branch.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
+                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                        <div>{branchName}</div>
+                        {branchEn && (
+                          <div className="text-xs font-normal text-slate-400">{branchEn}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-xs truncate">
+                        {branch.address || '—'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300">
+                        {branch.radiusMeters || branch.geofenceRadius || branch.geofence_radius || 100} م
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                            branch.isActive ?? branch.is_active ?? true
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'
+                          }`}
+                        >
+                          {branch.isActive ?? branch.is_active ?? true ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Inactive')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <Link
+                          href={`/${locale}/admin/branches/${branch.id}`}
+                          className="text-xs font-bold text-orange-600 hover:text-orange-500 hover:underline dark:text-orange-400 dark:hover:text-orange-300"
+                        >
+                          {isRtl ? 'تعديل' : 'Edit'}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* الروابط السريعة للعمليات */}
+      {/* الروابط السريعة */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Link
-          href={`/${locale}/branches`}
+          href={`/${locale}/admin/branches`}
           className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-orange-500/50 hover:shadow-md dark:border-white/5 dark:bg-[#121526]/60 dark:hover:border-orange-500/40 dark:hover:bg-[#161a30]"
         >
           <h2 className="text-base font-bold text-slate-900 transition group-hover:text-orange-600 dark:text-white dark:group-hover:text-orange-400">
