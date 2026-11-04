@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, branches } from '@/db/schema';
+import { users } from '@/db/schema';
 import { desc, eq } from 'drizzle-orm';
 
 // 1. استرجاع قائمة الموظفين
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const branchId = searchParams.get('branchId');
-
-    let query = db
+    const employeeList = await db
       .select({
         id: users.id,
         name: users.name,
@@ -18,7 +15,6 @@ export async function GET(request: NextRequest) {
         phone: users.phone,
         role: users.role,
         branchId: users.branchId,
-        jobTitle: users.jobTitle,
         employeeCode: users.employeeCode,
         basicSalary: users.basicSalary,
         annualLeaveDays: users.annualLeaveDays,
@@ -28,7 +24,6 @@ export async function GET(request: NextRequest) {
       .from(users)
       .orderBy(desc(users.createdAt));
 
-    const employeeList = await query;
     return NextResponse.json(employeeList, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching employees:', error);
@@ -39,7 +34,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. إنشاء موظف جديد وتأمين كافة أعمدة البصمة
+// 2. إضافة موظف جديد بالأعمدة الفعلية المعتمدة فقط
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -53,7 +48,6 @@ export async function POST(request: NextRequest) {
     const basicSalary = Number(body.basicSalary || body.base_salary || 0);
     const annualLeaveDays = Number(body.annualLeaveDays || 21);
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
-    const canUseAttendanceTerminal = body.canUseAttendanceTerminal !== undefined ? Boolean(body.canUseAttendanceTerminal) : true;
 
     if (!name || !phone) {
       return NextResponse.json(
@@ -62,7 +56,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // إدراج الموظف في جدول users مع مطابقة الأعمدة
+    // إدراج الموظف في جدول users دون أي حقول غير معرّفة
     const newEmployee = await db
       .insert(users)
       .values({
@@ -80,7 +74,6 @@ export async function POST(request: NextRequest) {
         baseSalary: basicSalary,
         annualLeaveDays,
         isActive,
-        canUseAttendanceTerminal,
         status: isActive ? 'active' : 'inactive',
       })
       .returning();
@@ -96,6 +89,59 @@ export async function POST(request: NextRequest) {
         message: error?.message || 'فشل حفظ بيانات الموظف في قاعدة البيانات',
         error: error?.message,
       },
+      { status: 500 }
+    );
+  }
+}
+
+// 3. تحديث بيانات موظف قائم
+export async function PUT(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const body = await request.json();
+    const id = searchParams.get('id') || body.id;
+
+    if (!id) {
+      return NextResponse.json({ message: 'معرف الموظف مفقود' }, { status: 400 });
+    }
+
+    const name = body.name || body.fullName || body.fullNameAr;
+    const phone = body.phone ? String(body.phone).trim() : null;
+    const role = body.role || 'employee';
+    const branchId = body.branchId || body.branch_id || null;
+    const employeeCode = body.employeeCode || body.code || null;
+    const basicSalary = Number(body.basicSalary || body.base_salary || 0);
+    const annualLeaveDays = Number(body.annualLeaveDays || 21);
+    const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
+
+    const updateData: any = {
+      name,
+      fullName: name,
+      fullNameAr: name,
+      phone,
+      role,
+      branchId,
+      employeeCode,
+      code: employeeCode,
+      basicSalary,
+      baseSalary: basicSalary,
+      annualLeaveDays,
+      isActive,
+      updatedAt: new Date(),
+    };
+
+    if (body.password) {
+      updateData.password = body.password;
+      updateData.passwordHash = body.password;
+    }
+
+    await db.update(users).set(updateData).where(eq(users.id, id));
+
+    return NextResponse.json({ message: 'تم تحديث بيانات الموظف بنجاح' }, { status: 200 });
+  } catch (error: any) {
+    console.error('Error updating employee:', error);
+    return NextResponse.json(
+      { message: 'فشل تحديث بيانات الموظف', error: error?.message },
       { status: 500 }
     );
   }
