@@ -21,9 +21,6 @@ export default function EditBranchPage({ params }: PageProps) {
   // حالات النموذج
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
-  const [code, setCode] = useState('');
-  const [phone, setPhone] = useState('');
-  const [managerName, setManagerName] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
@@ -38,14 +35,13 @@ export default function EditBranchPage({ params }: PageProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [mapsExtractedMessage, setMapsExtractedMessage] = useState<string | null>(null);
 
-  // استخراج الإحداثيات الذكي من رابط أو نص Google Maps فورياً
+  // استخراج الإحداثيات الذكي من رابط أو نص Google Maps
   const handleMapsUrlInput = (url: string) => {
     setGoogleMapsUrl(url);
     setMapsExtractedMessage(null);
 
     if (!url.trim()) return;
 
-    // 1. استخراج الإحداثيات من نمط @lat,lng
     const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
     if (atMatch) {
       setLatitude(atMatch[1]);
@@ -58,7 +54,6 @@ export default function EditBranchPage({ params }: PageProps) {
       return;
     }
 
-    // 2. استخراج الإحداثيات من نمط الاستعلام ?q=lat,lng
     const qMatch = url.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
     if (qMatch) {
       setLatitude(qMatch[1]);
@@ -71,7 +66,6 @@ export default function EditBranchPage({ params }: PageProps) {
       return;
     }
 
-    // 3. في حال لصق الإحداثيات المباشرة (31.1234, 30.5678)
     const rawCoordsMatch = url.match(/^(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)$/);
     if (rawCoordsMatch) {
       setLatitude(rawCoordsMatch[1]);
@@ -93,7 +87,6 @@ export default function EditBranchPage({ params }: PageProps) {
         setIsLoading(true);
         setErrorMessage(null);
 
-        // الاستدعاء المباشر للمسار الحقيقي الموحد
         const res = await fetch(`/api/branches?id=${branchId}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -107,13 +100,9 @@ export default function EditBranchPage({ params }: PageProps) {
         const data = await res.json();
         setNameAr(data.nameAr || data.name || '');
         setNameEn(data.nameEn || '');
-        setCode(data.code || '');
-        setPhone(data.phone || '');
-        setManagerName(data.managerName || '');
         setAddress(data.address || '');
-        setGoogleMapsUrl(data.googleMapsUrl || '');
-        setLatitude(data.latitude || '');
-        setLongitude(data.longitude || '');
+        setLatitude(data.latitude ? String(data.latitude) : '');
+        setLongitude(data.longitude ? String(data.longitude) : '');
         setRadiusMeters(String(data.radiusMeters || data.geofenceRadius || '100'));
         setIsActive(data.isActive ?? true);
       } catch (err: any) {
@@ -140,11 +129,7 @@ export default function EditBranchPage({ params }: PageProps) {
       name: nameAr.trim(),
       nameAr: nameAr.trim(),
       nameEn: nameEn.trim() || nameAr.trim(),
-      code: code.trim(),
-      phone: phone.trim(),
-      managerName: managerName.trim(),
       address: address.trim(),
-      googleMapsUrl: googleMapsUrl.trim(),
       latitude: latitude.trim(),
       longitude: longitude.trim(),
       radiusMeters: Number(radiusMeters) || 100,
@@ -153,7 +138,6 @@ export default function EditBranchPage({ params }: PageProps) {
     };
 
     try {
-      // إرسال التحديث لمسار /api/branches الموحد بطريقة PUT
       const res = await fetch('/api/branches', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -232,7 +216,7 @@ export default function EditBranchPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* بطاقة النموذج - متطابقة التباين في الوضعين */}
+      {/* بطاقة النموذج المتوافقة مع الثيمين */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/10 dark:bg-[#121526] dark:shadow-xl sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -251,45 +235,17 @@ export default function EditBranchPage({ params }: PageProps) {
               />
             </div>
 
-            {/* كود الفرع */}
+            {/* اسم الفرع بالإنجليزي */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'كود الفرع (Branch Code)' : 'Branch Code'}
+                {isRtl ? 'الاسم بالإنجليزية (English Name)' : 'English Name'}
               </label>
               <input
                 type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
+                value={nameEn}
+                onChange={(e) => setNameEn(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder="Koftagy D"
-              />
-            </div>
-
-            {/* المشرف / المدير */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'اسم المشرف / المدير' : 'Manager Name'}
-              </label>
-              <input
-                type="text"
-                value={managerName}
-                onChange={(e) => setManagerName(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder={isRtl ? 'اسم المدير المسؤول' : 'Manager Name'}
-              />
-            </div>
-
-            {/* رقم الهاتف */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'هاتف الفرع' : 'Branch Phone'}
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder="01xxxxxxxxx"
+                placeholder="Koftagy Desouk"
               />
             </div>
 
@@ -361,7 +317,7 @@ export default function EditBranchPage({ params }: PageProps) {
               />
             </div>
 
-            {/* العنوان النصي */}
+            {/* العنوان التفصيلي */}
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'العنوان التفصيلي' : 'Address'}
