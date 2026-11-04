@@ -1,7 +1,7 @@
 import React from 'react';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
-import EmployeeForm from '../employee-form';
+import EmployeeForm from '../../employee-form';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
