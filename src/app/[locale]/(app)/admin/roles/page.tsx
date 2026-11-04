@@ -1,10 +1,14 @@
-import React from 'react';
-import Link from 'next/link';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+import React, { useState, useEffect, use } from 'react';
+
+interface RoleItem {
+  id: number | string;
+  name: string;
+  nameAr?: string;
+  permissions?: string[] | Record<string, boolean>;
+  isSystem?: boolean;
+}
 
 interface PageProps {
   params: Promise<{
@@ -12,35 +16,137 @@ interface PageProps {
   }>;
 }
 
-export default async function AdminRolesPage({ params }: PageProps) {
-  const resolvedParams = await params;
+const AVAILABLE_PERMISSIONS = [
+  { id: 'attendance.view', labelAr: 'عرض الحضور والانصراف' },
+  { id: 'attendance.check_in', labelAr: 'تسجيل البصمة الذكية' },
+  { id: 'attendance.review', labelAr: 'مراجعة واعتماد الحضور' },
+  { id: 'attendance.override', labelAr: 'تعديل بصمات الحضور' },
+  { id: 'attendance.export', labelAr: 'تصدير تقارير الحضور' },
+  { id: 'employees.view', labelAr: 'عرض بيانات الموظفين' },
+  { id: 'employees.manage', labelAr: 'إدارة وحسابات الموظفين' },
+  { id: 'branches.view', labelAr: 'عرض الفروع والنطاق' },
+  { id: 'branches.manage', labelAr: 'إدارة وتعديل الفروع' },
+  { id: 'roles.manage', labelAr: 'إدارة الأدوار والصلاحيات' },
+];
+
+export default function AdminRolesPage({ params }: PageProps) {
+  const resolvedParams = use(params);
   const locale = resolvedParams?.locale || 'ar';
   const isRtl = locale === 'ar';
 
-  let rolesList: any[] = [];
+  const [rolesList, setRolesList] = useState<RoleItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [deletingId, setDeletingId] = useState<number | string | null>(null);
 
-  // جلب مباشر ومحصن للأدوار من جدول custom_roles
-  try {
-    const raw = await db.execute(sql`
-      SELECT 
-        id, 
-        name, 
-        name_ar as "nameAr", 
-        permissions, 
-        is_system as "isSystem",
-        created_at as "createdAt"
-      FROM custom_roles 
-      ORDER BY id ASC;
-    `);
+  // حالة النافذة المنبثقة للإضافة والتعديل (تمنع خطأ 404 نهائياً)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<RoleItem | null>(null);
+  const [roleNameAr, setRoleNameAr] = useState('');
+  const [roleCode, setRoleCode] = useState('');
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    rolesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-  } catch (error) {
-    console.error('Failed to load roles from DB:', error);
-  }
+  const fetchRoles = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/roles', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setRolesList(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to load roles:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
+  const openAddModal = () => {
+    setEditingRole(null);
+    setRoleNameAr('');
+    setRoleCode('');
+    setSelectedPermissions(['attendance.view', 'attendance.check_in']);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (role: RoleItem) => {
+    setEditingRole(role);
+    setRoleNameAr(role.nameAr || role.name);
+    setRoleCode(role.name);
+    let perms: string[] = [];
+    if (Array.isArray(role.permissions)) {
+      perms = role.permissions;
+    } else if (typeof role.permissions === 'object' && role.permissions !== null) {
+      perms = Object.keys(role.permissions);
+    }
+    setSelectedPermissions(perms);
+    setIsModalOpen(true);
+  };
+
+  const togglePermission = (permId: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+    );
+  };
+
+  const handleSaveRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roleNameAr.trim()) return;
+
+    try {
+      setIsSubmitting(true);
+      const isEdit = Boolean(editingRole?.id);
+      const payload = {
+        id: editingRole?.id,
+        name: roleCode.trim() || roleNameAr.trim(),
+        nameAr: roleNameAr.trim(),
+        permissions: selectedPermissions,
+      };
+
+      const res = await fetch('/api/roles', {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error('فشل حفظ الدور');
+
+      setIsModalOpen(false);
+      await fetchRoles();
+    } catch (err) {
+      alert(isRtl ? 'حدث خطأ أثناء حفظ الدور' : 'Failed to save role');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteRole = async (role: RoleItem) => {
+    if (role.isSystem) return;
+    const confirmMsg = isRtl
+      ? `هل أنت متأكد من حذف الدور المخصص "${role.nameAr || role.name}"؟`
+      : `Are you sure you want to delete custom role "${role.nameAr || role.name}"?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setDeletingId(role.id);
+      const res = await fetch(`/api/roles?id=${role.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('فشل حذف الدور');
+
+      setRolesList((prev) => prev.filter((r) => String(r.id) !== String(role.id)));
+    } catch (err) {
+      alert(isRtl ? 'حدث خطأ أثناء حذف الدور' : 'Failed to delete role');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر إضافة دور */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
@@ -53,27 +159,25 @@ export default async function AdminRolesPage({ params }: PageProps) {
           </p>
         </div>
 
-        <Link
-          href={`/${locale}/admin/roles/new`}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none"
+        <button
+          type="button"
+          onClick={openAddModal}
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none cursor-pointer"
         >
           {isRtl ? '+ إضافة دور مخصص' : '+ Add Custom Role'}
-        </Link>
+        </button>
       </div>
 
-      {/* جدول الأدوار والصلاحيات */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
-        {rolesList.length === 0 ? (
+        {isLoading ? (
+          <div className="flex min-h-[300px] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+          </div>
+        ) : rolesList.length === 0 ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
             <p className="text-base font-medium">
               {isRtl ? 'لا توجد أدوار مسجلة حالياً' : 'No roles registered yet'}
             </p>
-            <Link
-              href={`/${locale}/admin/roles/new`}
-              className="mt-4 inline-block text-sm font-bold text-orange-600 hover:underline dark:text-orange-400"
-            >
-              {isRtl ? 'إنشاء دور جديد الآن' : 'Create first role'} &larr;
-            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -88,7 +192,7 @@ export default async function AdminRolesPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {rolesList.map((role: any) => {
+                {rolesList.map((role) => {
                   let perms: string[] = [];
                   if (Array.isArray(role.permissions)) {
                     perms = role.permissions;
@@ -99,7 +203,7 @@ export default async function AdminRolesPage({ params }: PageProps) {
                   return (
                     <tr key={role.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
                       <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                        {role.nameAr || role.name_ar || role.name}
+                        {role.nameAr || role.name}
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                         {role.name}
@@ -128,24 +232,35 @@ export default async function AdminRolesPage({ params }: PageProps) {
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                            role.isSystem ?? role.is_system
+                            role.isSystem
                               ? 'bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400'
                               : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
                           }`}
                         >
-                          {role.isSystem ?? role.is_system ? (isRtl ? 'نظامي أساسي' : 'System') : (isRtl ? 'مخصص' : 'Custom')}
+                          {role.isSystem ? (isRtl ? 'نظامي أساسي' : 'System') : (isRtl ? 'مخصص' : 'Custom')}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        {role.isSystem ?? role.is_system ? (
+                        {role.isSystem ? (
                           <span className="text-xs font-medium text-slate-400">{isRtl ? 'محمي' : 'Locked'}</span>
                         ) : (
-                          <Link
-                            href={`/${locale}/admin/roles/${role.id}`}
-                            className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400"
-                          >
-                            {isRtl ? 'تعديل' : 'Edit'}
-                          </Link>
+                          <div className="flex items-center justify-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(role)}
+                              className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400 cursor-pointer"
+                            >
+                              {isRtl ? 'تعديل' : 'Edit'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRole(role)}
+                              disabled={deletingId === role.id}
+                              className="text-xs font-bold text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400 cursor-pointer"
+                            >
+                              {deletingId === role.id ? (isRtl ? 'جاري الحذف...' : 'Deleting...') : (isRtl ? 'حذف' : 'Delete')}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -156,6 +271,93 @@ export default async function AdminRolesPage({ params }: PageProps) {
           </div>
         )}
       </div>
+
+      {/* نافذة الإضافة والتعديل المنبثقة التفاعلية */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition dark:border-white/10 dark:bg-[#121526]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-white/5">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                {editingRole
+                  ? isRtl ? 'تعديل الدور المخصص' : 'Edit Custom Role'
+                  : isRtl ? 'إضافة دور مخصص جديد' : 'Add New Custom Role'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRole} className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'اسم الدور بالعربي' : 'Role Name (Arabic)'} <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={roleNameAr}
+                  onChange={(e) => setRoleNameAr(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  placeholder={isRtl ? 'مثال: مشرف فرع' : 'Supervisor'}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'المعرف البرمجي (Code)' : 'Role Code'}
+                </label>
+                <input
+                  type="text"
+                  value={roleCode}
+                  onChange={(e) => setRoleCode(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  placeholder="SUPERVISOR"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'تحديد الصلاحيات الممنوحة' : 'Permissions'}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-slate-200 dark:border-white/5 rounded-xl">
+                  {AVAILABLE_PERMISSIONS.map((perm) => (
+                    <label key={perm.id} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedPermissions.includes(perm.id)}
+                        onChange={() => togglePermission(perm.id)}
+                        className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                      />
+                      <span>{perm.labelAr}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50"
+                >
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ الدور' : 'Save Role')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
