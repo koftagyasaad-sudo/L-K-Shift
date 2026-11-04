@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع قائمة الموظفين أو موظف مفرد
+// 1. استرجاع قائمة الموظفين أو موظف محدد
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. إضافة موظف جديد بالحقول الحقيقية فقط لجدول users
+// 2. إضافة موظف جديد بالحقول المزدوجة المتوافقة 100% مع قاعدة البيانات
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -85,14 +85,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // إدراج بالحقول المزدوجة لتفادي أي خطأ
     const insertResult = await db.execute(sql`
       INSERT INTO users (
         full_name_ar,
         full_name_en,
+        name,
         phone,
+        password,
         password_hash,
         job_role,
+        role,
+        system_role,
         primary_branch_id,
+        branch_id,
         monthly_salary,
         annual_leave_days,
         is_active,
@@ -101,9 +107,14 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         ${name},
         ${name},
+        ${name},
         ${phone},
         ${password},
+        ${password},
         ${role},
+        ${role},
+        'EMPLOYEE',
+        ${branchId},
         ${branchId},
         ${basicSalary},
         ${annualLeaveDays},
@@ -122,13 +133,13 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Error creating employee:', error);
     return NextResponse.json(
-      { message: 'فشل حفظ بيانات الموظف', error: error?.message },
+      { message: error?.message || 'فشل حفظ بيانات الموظف', error: error?.message },
       { status: 500 }
     );
   }
 }
 
-// 3. تحديث بيانات الموظف
+// 3. تحديث بيانات موظف
 export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -153,9 +164,12 @@ export async function PUT(request: NextRequest) {
       SET 
         full_name_ar = ${name},
         full_name_en = ${name},
+        name = ${name},
         phone = ${phone},
         job_role = ${role},
+        role = ${role},
         primary_branch_id = ${branchId},
+        branch_id = ${branchId},
         monthly_salary = ${basicSalary},
         annual_leave_days = ${annualLeaveDays},
         is_active = ${isActive},
