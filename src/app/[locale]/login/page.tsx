@@ -1,140 +1,127 @@
-'use client';
+"use client";
 
-import React, { useState, use } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { useState, use } from "react";
+import { useRouter } from "next/navigation";
+import { ShieldCheck, ArrowRight, Loader2 } from "lucide-react";
 
-interface LoginPageProps {
-  params: Promise<{
-    locale: string;
-  }>;
-}
-
-export default function LoginPage({ params }: LoginPageProps) {
+export default function LoginPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = use(params);
+  const isRtl = locale === "ar";
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
-  const isRtl = locale === 'ar';
 
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim() || !password.trim()) return;
+    setError("");
+    setLoading(true);
 
-    setIsLoading(true);
-    setErrorMessage(null);
-
-    try {
-      // استخدام محرك NextAuth الأصلي لمطابقة بيانات الدخول في قاعدة البيانات
-      const result = await signIn('credentials', {
-        redirect: false,
-        phone: phone.trim(),
-        username: phone.trim(), // دعم احترازي لكلا التسميتين في الـ Provider
-        password: password.trim(),
-        callbackUrl: `/${locale}/admin/dashboard`,
-      });
-
-      if (result?.error) {
-        setErrorMessage(
-          isRtl
-            ? 'بيانات الدخول غير صحيحة، يرجى التأكد من رقم التليفون وكلمة المرور'
-            : 'Invalid credentials, please verify your phone and password'
+    setTimeout(() => {
+      // بيانات الدخول الأصلية المعتمدة
+      if ((username === "010" || username === "01068390982") && password === "123456") {
+        localStorage.setItem("isAuthenticated", "true");
+        localStorage.setItem("userName", "Omar Abd Elhalim");
+        localStorage.setItem("userRole", "مدير النظام");
+        localStorage.setItem(
+          "user",
+          JSON.stringify({ name: "Omar Abd Elhalim", role: "مدير النظام" })
         );
-      } else {
-        // تأمين حالة المصادقة محلياً لضمان تناسق القائمة الجانبية والموجه
-        localStorage.setItem('isAuthenticated', 'true');
-        
         // التوجيه الحاسم إلى لوحة التحكم بدلاً من صفحة العروض
-        router.replace(`/${locale}/admin/dashboard`);
-        router.refresh();
+        router.push(`/${locale}/admin/dashboard`);
+      } else {
+        setError(isRtl ? "بيانات الدخول غير صحيحة" : "Invalid credentials");
+        setLoading(false);
       }
-    } catch (err: any) {
-      console.error('Authentication Error:', err);
-      setErrorMessage(
-        isRtl
-          ? 'حدث خطأ أثناء محاولة تسجيل الدخول، يرجى المحاولة لاحقاً'
-          : 'An error occurred during sign in, please try again'
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    }, 1000);
   };
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-12 transition-colors duration-300 dark:bg-[#080911]"
-      dir={isRtl ? 'rtl' : 'ltr'}
+      className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      dir={isRtl ? "rtl" : "ltr"}
     >
-      <div className="w-full max-w-md space-y-8 rounded-3xl border border-slate-200 bg-white p-8 shadow-xl transition-colors duration-300 dark:border-white/10 dark:bg-[#121526]/90 dark:shadow-2xl dark:backdrop-blur-xl sm:p-10">
-        {/* اللوجو والعنوان الأصلي للمنظومة */}
-        <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 text-2xl font-black text-white shadow-lg shadow-orange-500/25">
-            LK
-          </div>
-          <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            L-K Shift
-          </h1>
-          <p className="mt-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {isRtl ? 'منظومة الحضور والورديات وإدارة الفروع' : 'Smart Attendance & Shift Operations'}
+      {/* خلفية زجاجية متحركة */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] animate-pulse"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-[100px] animate-pulse delay-1000"></div>
+
+      <div className="relative z-10 w-full max-w-md flex flex-col items-center">
+        {/* اللوجو */}
+        <div className="mb-6 flex flex-col items-center">
+          <img src="/Logo.png" alt="L-K Shift Logo" className="h-20 w-auto mb-4 drop-shadow-xl" />
+          <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
+          <p className="text-gray-400 text-sm mt-2">
+            {isRtl ? "نظام إدارة الحضور والورديات" : "Attendance & Shift Management"}
           </p>
         </div>
 
-        {/* رسائل التنبيه والخطأ */}
-        {errorMessage && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-xs font-bold text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* نموذج تسجيل الدخول المتوافق مع الثيمين */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              {isRtl ? 'رقم التليفون (اسم المستخدم)' : 'Phone Number'} <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-              placeholder={isRtl ? 'أدخل رقم التليفون المسجل' : '01xxxxxxxxx'}
-            />
+        {/* كارد تسجيل الدخول الزجاجي */}
+        <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-8 rounded-[2rem] shadow-2xl">
+          <div className="flex items-center gap-3 mb-8">
+            <ShieldCheck className="w-6 h-6 text-orange-500" />
+            <h2 className="text-xl font-bold text-white">{isRtl ? "تسجيل الدخول" : "Login"}</h2>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              {isRtl ? 'كلمة المرور' : 'Password'} <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-              placeholder="••••••••"
-            />
-          </div>
+          {error && (
+            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm text-center font-medium">
+              {error}
+            </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLoading
-              ? isRtl
-                ? 'جاري التحقق والدخول...'
-                : 'Signing in...'
-              : isRtl
-              ? 'تسجيل الدخول'
-              : 'Sign In'}
-          </button>
-        </form>
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">
+                {isRtl ? "رقم الدخول" : "Username"}
+              </label>
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={isRtl ? "أدخل رقم الدخول" : "Enter username"}
+                className="w-full px-5 py-3.5 bg-black/40 border border-white/10 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-2">
+                {isRtl ? "كلمة المرور" : "Password"}
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-5 py-3.5 bg-black/40 border border-white/10 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all text-left"
+                dir="ltr"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-4 flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  {isRtl ? "دخول" : "Login"}
+                  <ArrowRight className={`w-4 h-4 ${isRtl ? "rotate-180" : ""}`} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* حقوق النظام */}
+          <p className="text-center text-xs text-gray-500 mt-6">
+            © {new Date().getFullYear()} L-K Shift. {isRtl ? "جميع الحقوق محفوظة" : "All rights reserved"}
+          </p>
+        </div>
       </div>
     </div>
   );
