@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع سجلات الحضور مع تفاصيل الموظف والفرع
+// 1. استرجاع سجلات الحضور والانصراف
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,25 +14,25 @@ export async function GET(request: NextRequest) {
       SELECT 
         a.id,
         a.user_id as "userId",
-        COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
-        u.phone as "userPhone",
+        COALESCE(u.full_name_ar, u.name, a.user_name, 'موظف') as "userName",
+        COALESCE(u.phone, a.user_phone, '') as "userPhone",
         COALESCE(u.annual_leave_days, 21) as "totalLeaves",
         COALESCE(u.used_leave_days, 0) as "usedLeaves",
         COALESCE(u.monthly_permissions_hours, 0) as "permissionHours",
-        COALESCE(b.name_ar, b.name, '—') as "branchName",
+        COALESCE(b.name_ar, b.name, a.branch_name, '—') as "branchName",
         a.type,
         a.timestamp,
         a.distance_meters as "distanceMeters",
         a.is_verified_geofence as "isVerifiedGeofence",
         a.verification_method as "verificationMethod"
       FROM attendance_logs a
-      LEFT JOIN users u ON a.user_id = u.id
+      LEFT JOIN users u ON a.user_id = u.id::text
       LEFT JOIN branches b ON a.branch_id = b.id
       WHERE 1=1
     `;
 
     if (userId) {
-      query = sql`${query} AND a.user_id = ${parseInt(userId, 10)}`;
+      query = sql`${query} AND (a.user_id = ${userId} OR a.user_id = ${parseInt(userId, 10) || 0}::text)`;
     }
     if (fromDate) {
       query = sql`${query} AND a.timestamp >= ${fromDate}::timestamptz`;
@@ -52,30 +52,50 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. تسجيل حركة الحضور والانصراف مع تأمين سلامة الجداول والبيانات
+// 2. تسجيل حركة الحضور بنظام Self-Healing المحصن ضد أخطاء قاعدة البيانات
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // تأمين معرّف الموظف والفرع بأرقام صحيحة دائماً
-    let userId = parseInt(String(body.userId), 10);
-    if (isNaN(userId) || userId <= 0) {
-      userId = 1;
-    }
-
+    const userId = (body.userId || '1').toString().trim();
+    const userName = (body.userName || 'موظف').toString().trim();
+    const userPhone = (body.userPhone || '').toString().trim();
     const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
+    const branchName = (body.branchName || '').toString().trim();
     const type = body.type === 'CHECK_OUT' ? 'CHECK_OUT' : 'CHECK_IN';
     const latitude = body.latitude ? parseFloat(String(body.latitude)) : null;
     const longitude = body.longitude ? parseFloat(String(body.longitude)) : null;
     const distanceMeters = Math.round(parseFloat(String(body.distanceMeters || '0')) || 0);
     const isVerifiedGeofence = body.isVerifiedGeofence !== undefined ? Boolean(body.isVerifiedGeofence) : true;
 
-    // استعلام إدخال محصن
+    // استعلام إدخال محصن بالكامل
     const raw = await db.execute(sql`
       INSERT INTO attendance_logs (
-        user_id, branch_id, type, latitude, longitude, distance_meters, is_verified_geofence, verification_method, timestamp
+        user_id,
+        user_name,
+        user_phone,
+        branch_id,
+        branch_name,
+        type,
+        latitude,
+        longitude,
+        distance_meters,
+        is_verified_geofence,
+        verification_method,
+        timestamp
       ) VALUES (
-        ${userId}, ${branchId}, ${type}, ${latitude}, ${longitude}, ${distanceMeters}, ${isVerifiedGeofence}, 'GPS_GEOFENCE', NOW()
+        ${userId},
+        ${userName},
+        ${userPhone},
+        ${branchId},
+        ${branchName},
+        ${type},
+        ${latitude},
+        ${longitude},
+        ${distanceMeters},
+        ${isVerifiedGeofence},
+        'GPS_GEOFENCE',
+        NOW()
       )
       RETURNING id, type, timestamp;
     `);
@@ -88,14 +108,17 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Attendance Save Error:', error);
 
-    // خطة إنقاذ تلقائية (Self-Healing) في حال لم يتم تشغيل سكريبت إنشاء الجدول
+    // خطة إنقاذ تلقائية لإنشاء الجدول فوراً في حال عدم وجوده
     if (error?.message?.includes('does not exist') || error?.code === '42P01') {
       try {
         await db.execute(sql`
           CREATE TABLE IF NOT EXISTS attendance_logs (
             id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            user_name TEXT,
+            user_phone TEXT,
             branch_id INTEGER,
+            branch_name TEXT,
             type VARCHAR(20) NOT NULL DEFAULT 'CHECK_IN',
             timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             latitude DOUBLE PRECISION,
@@ -106,7 +129,7 @@ export async function POST(request: NextRequest) {
           );
         `);
         return NextResponse.json(
-          { message: 'تم تهيئة جدول البصمة، يرجى إعادة الضغط لتسجيل الحضور الآن' },
+          { message: 'تمت تهيئة قاعدة البيانات بنجاح، اضغط مرة أخرى لتسجيل البصمة الآن' },
           { status: 200 }
         );
       } catch (tableErr: any) {
