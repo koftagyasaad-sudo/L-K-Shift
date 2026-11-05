@@ -8,7 +8,7 @@ interface PageProps {
   }>;
 }
 
-// دالة هافيرسين الميدانية لحساب المسافة بدقة المتر بين إحداثيات الموظف وإحداثيات الفرع
+// دالة هافيرسين الميدانية لحساب المسافة بدقة الأمتار
 function calculateDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // نصف قطر الأرض بالمتر
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -38,11 +38,14 @@ export default function SmartAttendancePage({ params }: PageProps) {
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [gpsLockProgress, setGpsLockProgress] = useState<string>('');
+
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  // 1. استرجاع بيانات الجلسة والفروع المسجلة في قاعدة البيانات
+  // 1. تحميل الفرع المسند للموظف
   const initAttendance = async () => {
     try {
       setIsLoading(true);
@@ -55,20 +58,17 @@ export default function SmartAttendancePage({ params }: PageProps) {
       setUserName(sName);
       setUserRole(sRole);
 
-      // جلب الفروع المسجلة مباشرة من قاعدة البيانات
       const bRes = await fetch('/api/branches', { cache: 'no-store' });
       if (!bRes.ok) throw new Error('فشل جلب بيانات الفروع');
       const bData = await bRes.json();
       const list = Array.isArray(bData) ? bData : [];
       setBranchesList(list);
 
-      // تحديد الفرع المسند للموظف بدقة
       let activeBranch = null;
       if (sBranchId) {
         activeBranch = list.find((b: any) => String(b.id) === String(sBranchId));
       }
 
-      // إذا لم يكن مسنداً (كمدير النظام) نحدد أول فرع نشط (مثل الإدارة)
       if (!activeBranch && list.length > 0) {
         activeBranch = list[0];
       }
@@ -89,7 +89,6 @@ export default function SmartAttendancePage({ params }: PageProps) {
     initAttendance();
   }, []);
 
-  // تغيير الفرع المختار
   const handleBranchChange = (newBranchId: string) => {
     setSelectedBranchId(newBranchId);
     const found = branchesList.find((b) => String(b.id) === String(newBranchId));
@@ -97,90 +96,135 @@ export default function SmartAttendancePage({ params }: PageProps) {
       setCurrentBranch(found);
       setCurrentCoords(null);
       setCurrentDistance(null);
+      setGpsAccuracy(null);
       setStatusMessage(null);
     }
   };
 
-  // 2. التحقق من الـ GPS وتسجيل البصمة
+  // 2. خوارزمية الالتقاط الدقيق للأقمار الصناعية (Satellite GPS Lock Engine)
   const handleRecordAttendance = (type: 'CHECK_IN' | 'CHECK_OUT') => {
     setStatusMessage(null);
 
     if (!navigator.geolocation) {
-      setStatusMessage({ text: 'متصفحك أو جهازك لا يدعم خاصية تحديد الموقع GPS', isError: true });
+      setStatusMessage({ text: 'متصفحك لا يدعم خاصية تحديد الموقع GPS', isError: true });
       return;
     }
 
     if (!currentBranch || !currentBranch.latitude || !currentBranch.longitude) {
-      setStatusMessage({ text: 'إحداثيات الفرع غير مكتملة في النظام، يرجى مراجعة إدارة المنظومة', isError: true });
+      setStatusMessage({ text: 'إحداثيات الفرع غير مسجلة في المنظومة، يرجى مراجعة الإدارة', isError: true });
       return;
     }
 
     setIsProcessing(true);
+    setGpsLockProgress(isRtl ? 'جاري الاتصال بالأقمار الصناعية وتصفية الإشارة...' : 'Acquiring high-accuracy GPS lock...');
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const userLat = pos.coords.latitude;
-        const userLng = pos.coords.longitude;
-        setCurrentCoords({ lat: userLat, lng: userLng });
+    let bestPosition: GeolocationPosition | null = null;
+    let attemptsCount = 0;
 
-        const branchLat = parseFloat(currentBranch.latitude);
-        const branchLng = parseFloat(currentBranch.longitude);
-        const maxRadius = parseInt(currentBranch.radiusMeters || currentBranch.geofenceRadius || '100', 10);
-
-        // حساب المسافة الدقيقة بين الموظف وإحداثيات الفرع بالمتر
-        const distance = calculateDistanceInMeters(userLat, userLng, branchLat, branchLng);
-        setCurrentDistance(distance);
-
-        // التحقق من النطاق الجغرافي
-        if (distance > maxRadius) {
-          setIsProcessing(false);
-          setStatusMessage({
-            text: `عفواً، لا يمكنك تسجيل البصمة! أنت خارج نطاق فرع (${currentBranch.nameAr || currentBranch.name}). المسافة الحالية: ${distance} متر (الحد الأقصى المسموح للبصمة: ${maxRadius} متر).`,
-            isError: true,
-          });
-          return;
+    // استخدام watchPosition لأخذ عينات متتالية واختيار أدق نقطة خلال 3 ثوانٍ
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        attemptsCount++;
+        if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
+          bestPosition = pos;
         }
 
-        // إرسال البصمة المعتمدة
-        try {
-          const payload = {
-            userId: userId ? parseInt(userId, 10) : 1,
-            branchId: currentBranch.id,
-            type,
-            latitude: userLat,
-            longitude: userLng,
-            distanceMeters: distance,
-            isVerifiedGeofence: true,
-          };
-
-          const saveRes = await fetch('/api/attendance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-
-          if (!saveRes.ok) throw new Error('فشل تسجيل البصمة في السيرفر');
-
-          setStatusMessage({
-            text: `تم تسجيل ${type === 'CHECK_IN' ? 'الحضور' : 'الانصراف'} بنجاح! موقعك مطابق للفرع بنسبة 100% (المسافة: ${distance} متر عن نقطة الفرع).`,
-            isError: false,
-          });
-        } catch (err: any) {
-          setStatusMessage({ text: err.message || 'حدث خطأ أثناء اعتماد البصمة', isError: true });
-        } finally {
-          setIsProcessing(false);
+        // إذا وصلت دقة إشارة الـ GPS إلى أقل من 25 متراً أو بعد 3 قراءات نعتمد الموقع فوراً
+        if (pos.coords.accuracy <= 25 || attemptsCount >= 3) {
+          navigator.geolocation.clearWatch(watchId);
+          processVerifiedAttendance(bestPosition || pos, type);
         }
       },
       (error) => {
+        navigator.geolocation.clearWatch(watchId);
         setIsProcessing(false);
-        let errorMsg = 'تعذر الوصول للموقع الجغرافي. تأكد من تفعيل الـ GPS والسماح للمتصفح بالوصول للموقع.';
+        setGpsLockProgress('');
+        let errorMsg = 'تعذر الوصول للموقع. تأكد من تفعيل الـ GPS بالهاتف والسماح للمتصفح بالوصول للموقع بدقة عالية.';
         if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'تم رفض الإذن بالوصول للموقع. يرجى تفعيل إذن الموقع من إعدادات المتصفح.';
+          errorMsg = 'تم رفض الإذن بالوصول للـ GPS. يرجى تفعيل إذن الموقع من إعدادات المتصفح.';
         }
         setStatusMessage({ text: errorMsg, isError: true });
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
     );
+
+    // مهلة أمان قصوى 6 ثوانٍ لضمان عدم تعليق الزر
+    setTimeout(() => {
+      navigator.geolocation.clearWatch(watchId);
+      if (isProcessing && bestPosition) {
+        processVerifiedAttendance(bestPosition, type);
+      } else if (isProcessing && !bestPosition) {
+        setIsProcessing(false);
+        setGpsLockProgress('');
+        setStatusMessage({
+          text: 'إشارة الـ GPS ضعيفة جداً حالياً. يرجى الخروج لمدخل الفرع أو الاقتراب من نافذة لتقوية الإشارة.',
+          isError: true,
+        });
+      }
+    }, 6000);
+  };
+
+  // 3. معالجة المسافة ومقارنة النطاق
+  const processVerifiedAttendance = async (pos: GeolocationPosition, type: 'CHECK_IN' | 'CHECK_OUT') => {
+    setIsProcessing(false);
+    setGpsLockProgress('');
+
+    const userLat = pos.coords.latitude;
+    const userLng = pos.coords.longitude;
+    const accuracy = Math.round(pos.coords.accuracy);
+
+    setCurrentCoords({ lat: userLat, lng: userLng });
+    setGpsAccuracy(accuracy);
+
+    const branchLat = parseFloat(currentBranch.latitude);
+    const branchLng = parseFloat(currentBranch.longitude);
+    const maxRadius = parseInt(currentBranch.radiusMeters || currentBranch.geofenceRadius || '100', 10);
+
+    // حساب المسافة الحقيقية
+    const rawDistance = calculateDistanceInMeters(userLat, userLng, branchLat, branchLng);
+    setCurrentDistance(rawDistance);
+
+    // احتساب هامش دقة الجهاز (Buffer Margin): لإنصاف الموظف في حال ضعف برج الاتصال
+    const effectiveDistance = Math.max(0, rawDistance - Math.min(accuracy / 2, 25));
+
+    if (effectiveDistance > maxRadius) {
+      setStatusMessage({
+        text: `عفواً، لا يمكنك تسجيل البصمة! أنت خارج نطاق فرع (${currentBranch.nameAr || currentBranch.name}). المسافة المحسوبة: ${rawDistance} متر (النطاق المسموح: ${maxRadius} متر). تأكد من وجودك داخل الفرع.`,
+        isError: true,
+      });
+      return;
+    }
+
+    try {
+      const payload = {
+        userId: userId ? parseInt(userId, 10) : 1,
+        branchId: currentBranch.id,
+        type,
+        latitude: userLat,
+        longitude: userLng,
+        distanceMeters: rawDistance,
+        isVerifiedGeofence: true,
+      };
+
+      const saveRes = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!saveRes.ok) throw new Error('فشل تسجيل البصمة في السيرفر');
+
+      setStatusMessage({
+        text: `تم تسجيل ${type === 'CHECK_IN' ? 'الحضور' : 'الانصراف'} بنجاح تام! موقعك مطابق للفرع بنسبة 100% (المسافة: ${rawDistance} متر | دقة الإشارة: ±${accuracy}م).`,
+        isError: false,
+      });
+    } catch (err: any) {
+      setStatusMessage({ text: err.message || 'حدث خطأ أثناء اعتماد البصمة', isError: true });
+    }
   };
 
   const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
@@ -194,7 +238,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
               {isRtl ? 'تسجيل البصمة الذكية بالـ GPS' : 'Smart Geofence Attendance'}
             </h1>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {isRtl ? `مرحباً بك: ${userName}` : `Welcome: ${userName}`}
+              {isRtl ? `المستخدم المسجل: ${userName}` : `User: ${userName}`}
             </p>
           </div>
           <button
@@ -206,7 +250,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
           </button>
         </div>
 
-        {/* كارت الفرع المربوط وإحداثياته بالنظام */}
+        {/* كارت الفرع المعتمد ومقارنة الإحداثيات */}
         <div className="mt-6 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -243,44 +287,75 @@ export default function SmartAttendancePage({ params }: PageProps) {
 
             <div className="rounded-xl border border-white/10 bg-white/50 dark:bg-black/30 p-3 font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1">
               <div>
-                <strong>{isRtl ? 'إحداثيات الفرع بالنظام:' : 'Branch GPS:'}</strong>
+                <strong>{isRtl ? 'إحداثيات الفرع المسجلة:' : 'Branch GPS:'}</strong>
               </div>
               <div className="text-[11px] text-slate-600 dark:text-slate-400">
                 Lat: {currentBranch?.latitude || '—'} | Lng: {currentBranch?.longitude || '—'}
               </div>
               <div className="text-[11px]">
-                {isRtl ? 'نطاق السماح:' : 'Allowed Radius:'}{' '}
+                {isRtl ? 'نطاق السماح للبصمة:' : 'Allowed Radius:'}{' '}
                 <strong className="text-orange-600 font-bold">{currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100} متر</strong>
               </div>
             </div>
           </div>
 
-          {/* المسافة المقروءة ومقارنة الموقع الحالي */}
+          {/* لوحة المقارنة الحية للأقمار الصناعية */}
           {currentCoords && (
-            <div className="mt-4 pt-3 border-t border-orange-500/10 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="text-slate-500">
-                {isRtl ? 'موقعك المقروء حالياً:' : 'Your Location:'} Lat: {currentCoords.lat.toFixed(6)}, Lng: {currentCoords.lng.toFixed(6)}
-              </span>
-              {currentDistance !== null && (
-                <span className="font-bold">
-                  {isRtl ? 'المسافة عن نقطة الفرع:' : 'Distance:'}{' '}
-                  <span
-                    className={
-                      currentDistance <= (currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100)
-                        ? 'text-emerald-500 text-sm'
-                        : 'text-rose-500 text-sm'
-                    }
-                  >
-                    {currentDistance} متر{' '}
-                    {currentDistance <= (currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100)
-                      ? '✓ (داخل النطاق)'
-                      : '✗ (خارج النطاق)'}
-                  </span>
+            <div className="mt-4 pt-3 border-t border-orange-500/10 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-slate-600 dark:text-slate-300">
+                  {isRtl ? 'موقعك الفعلي (GPS):' : 'Your GPS:'} <strong>{currentCoords.lat.toFixed(6)}, {currentCoords.lng.toFixed(6)}</strong>
+                  {gpsAccuracy !== null && (
+                    <span className="mr-2 inline-flex rounded bg-slate-200 dark:bg-white/10 px-2 py-0.5 text-[10px] text-slate-700 dark:text-slate-300">
+                      دقة الإشارة: ±{gpsAccuracy}م
+                    </span>
+                  )}
                 </span>
+
+                {currentDistance !== null && (
+                  <span className="font-bold">
+                    {isRtl ? 'المسافة عن الفرع:' : 'Distance:'}{' '}
+                    <span
+                      className={
+                        currentDistance <= (currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100)
+                          ? 'text-emerald-500 text-sm font-black'
+                          : 'text-rose-500 text-sm font-black'
+                      }
+                    >
+                      {currentDistance} متر{' '}
+                      {currentDistance <= (currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100)
+                        ? '✓ (داخل النطاق)'
+                        : '✗ (خارج النطاق)'}
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              {/* زر المقارنة البصرية المباشرة على خرائط جوجل */}
+              {currentBranch?.latitude && (
+                <div className="pt-1">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&origin=${currentCoords.lat},${currentCoords.lng}&destination=${currentBranch.latitude},${currentBranch.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:underline"
+                  >
+                    <span>🗺️ {isRtl ? 'عرض خط المسافة بينك وبين الفرع على Google Maps' : 'View route on Google Maps'}</span>
+                    <span>&larr;</span>
+                  </a>
+                </div>
               )}
             </div>
           )}
         </div>
+
+        {/* مؤشر تقدم قفل الأقمار الصناعية */}
+        {gpsLockProgress && (
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 p-3 text-xs font-bold text-orange-600 dark:text-orange-400">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
+            <span>{gpsLockProgress}</span>
+          </div>
+        )}
 
         {/* رسائل التنبيه والنجاح */}
         {statusMessage && (
@@ -305,7 +380,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
           >
             <span className="text-3xl">📍</span>
             <span className="mt-2 text-lg font-black">{isRtl ? 'تسجيل حضور' : 'Check-In'}</span>
-            <span className="text-[11px] opacity-80">{isRtl ? 'التحقق من التواجد بموقع الفرع' : 'Verify branch location'}</span>
+            <span className="text-[11px] opacity-80">{isRtl ? 'تأكيد التواجد داخل الفرع' : 'Verify branch location'}</span>
           </button>
 
           <button
