@@ -13,17 +13,19 @@ export async function GET(request: NextRequest) {
       const singleRaw = await db.execute(sql`
         SELECT 
           u.id,
-          u.full_name_ar as name,
-          u.full_name_ar as "fullName",
+          COALESCE(u.full_name_ar, u.name, 'موظف') as name,
+          COALESCE(u.full_name_ar, u.name, 'موظف') as "fullName",
           u.phone,
-          u.job_role as role,
-          u.primary_branch_id as "branchId",
-          u.monthly_salary as "basicSalary",
-          u.annual_leave_days as "annualLeaveDays",
+          COALESCE(u.job_role, u.role, 'موظف') as role,
+          COALESCE(u.primary_branch_id, u.branch_id) as "branchId",
+          COALESCE(u.monthly_salary, 0) as "basicSalary",
+          COALESCE(u.annual_leave_days, 21) as "annualLeaveDays",
+          u.password,
+          u.password_hash,
           u.is_active as "isActive",
           b.name_ar as "branchName"
         FROM users u
-        LEFT JOIN branches b ON u.primary_branch_id = b.id
+        LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
         WHERE u.id = ${parsedId}
         LIMIT 1;
       `);
@@ -38,18 +40,20 @@ export async function GET(request: NextRequest) {
     const allRaw = await db.execute(sql`
       SELECT 
         u.id,
-        u.full_name_ar as name,
-        u.full_name_ar as "fullName",
+        COALESCE(u.full_name_ar, u.name, 'موظف') as name,
+        COALESCE(u.full_name_ar, u.name, 'موظف') as "fullName",
         u.phone,
-        u.job_role as role,
-        u.primary_branch_id as "branchId",
-        u.monthly_salary as "basicSalary",
-        u.annual_leave_days as "annualLeaveDays",
+        COALESCE(u.job_role, u.role, 'موظف') as role,
+        COALESCE(u.primary_branch_id, u.branch_id) as "branchId",
+        COALESCE(u.monthly_salary, 0) as "basicSalary",
+        COALESCE(u.annual_leave_days, 21) as "annualLeaveDays",
+        u.password,
+        u.password_hash,
         u.is_active as "isActive",
         b.name_ar as "branchName",
         u.created_at as "createdAt"
       FROM users u
-      LEFT JOIN branches b ON u.primary_branch_id = b.id
+      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
       ORDER BY u.id ASC;
     `);
 
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. إضافة موظف جديد بالحقول المزدوجة المتوافقة 100% مع قاعدة البيانات
+// 2. إضافة موظف جديد مع فحص مسبق لمنع تكرار رقم الهاتف
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -85,7 +89,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // إدراج بالحقول المزدوجة لتفادي أي خطأ
+    // فحص مسبق في قاعدة البيانات لمنع أخطاء الـ Unique Constraint
+    const existingCheck = await db.execute(sql`
+      SELECT id, full_name_ar as name FROM users WHERE phone = ${phone} LIMIT 1;
+    `);
+    const existingRows = Array.isArray(existingCheck) ? existingCheck : (existingCheck as any)?.rows || [];
+    if (existingRows.length > 0) {
+      return NextResponse.json(
+        {
+          message: `رقم الهاتف (${phone}) مسجل بالفعل باسم الموظف "${existingRows[0].name}". يرجى استخدام رقم آخر أو تعديل الحساب القائم.`,
+        },
+        { status: 409 }
+      );
+    }
+
     const insertResult = await db.execute(sql`
       INSERT INTO users (
         full_name_ar,
@@ -132,6 +149,15 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('Error creating employee:', error);
+
+    // التعامل مع تعارض المفاتيح في حال تم إرسال طلبين في نفس اللحظة
+    if (error?.message?.includes('users_phone_unique') || error?.code === '23505') {
+      return NextResponse.json(
+        { message: 'رقم الهاتف مسجل بالفعل في المنظومة، يرجى كتابة رقم آخر.' },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json(
       { message: error?.message || 'فشل حفظ بيانات الموظف', error: error?.message },
       { status: 500 }
@@ -139,7 +165,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 3. تحديث بيانات موظف
+// 3. تحديث بيانات الموظف مع منع تضارب رقم الهاتف مع موظف آخر
 export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -158,8 +184,22 @@ export async function PUT(request: NextRequest) {
     const basicSalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
     const annualLeaveDays = parseInt(body.annualLeaveDays || '21', 10) || 21;
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
+    const password = body.password ? String(body.password).trim() : null;
 
-    await db.execute(sql`
+    if (phone) {
+      const conflictCheck = await db.execute(sql`
+        SELECT id, full_name_ar as name FROM users WHERE phone = ${phone} AND id != ${employeeId} LIMIT 1;
+      `);
+      const conflictRows = Array.isArray(conflictCheck) ? conflictCheck : (conflictCheck as any)?.rows || [];
+      if (conflictRows.length > 0) {
+        return NextResponse.json(
+          { message: `لا يمكن استخدام رقم الهاتف (${phone}) لأنه مسجل لموظف آخر.` },
+          { status: 409 }
+        );
+      }
+    }
+
+    let query = sql`
       UPDATE users
       SET 
         full_name_ar = ${name},
@@ -174,8 +214,15 @@ export async function PUT(request: NextRequest) {
         annual_leave_days = ${annualLeaveDays},
         is_active = ${isActive},
         updated_at = NOW()
-      WHERE id = ${employeeId};
-    `);
+    `;
+
+    if (password) {
+      query = sql`${query}, password = ${password}, password_hash = ${password}`;
+    }
+
+    query = sql`${query} WHERE id = ${employeeId};`;
+
+    await db.execute(query);
 
     return NextResponse.json({ message: 'تم تحديث بيانات الموظف بنجاح' }, { status: 200 });
   } catch (error: any) {
