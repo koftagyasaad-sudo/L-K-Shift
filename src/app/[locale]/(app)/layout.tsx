@@ -19,10 +19,12 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const isRtl = locale === 'ar';
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>('Omar Abd Elhalim');
   const [userRole, setUserRole] = useState<string>('مدير النظام');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
+  // استرجاع وتطبيق المصادقة والثيم
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
@@ -43,6 +45,11 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     }
   }, [locale, router]);
 
+  // إغلاق قائمة الموبايل تلقائياً عند الانتقال لأي صفحة
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
@@ -57,7 +64,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const isDark = theme === 'dark';
   const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
 
-  // تحديد القوائم المسموحة بدقة وفقاً لصلاحيات المستخدم
+  // قوائم النظام المفصولة حسب الصلاحيات
   const navItems = isAdmin
     ? [
         {
@@ -116,7 +123,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         },
       ]
     : [
-        // القائمة الخاصة بالموظف العادي وباقي الكوادر
         {
           name: isRtl ? 'تسجيل الحضور' : 'Check-In/Out',
           href: `/${locale}/attendance`,
@@ -148,15 +154,34 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
 
   return (
     <div
-      className={`flex min-h-screen transition-colors duration-300 ${
+      className={`min-h-screen transition-colors duration-300 ${
         isDark ? 'bg-[#080911] text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      {/* 1. طبقة تعتيم الموبايل عند فتح القائمة */}
+      {isMobileMenuOpen && (
+        <div
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden"
+        />
+      )}
+
+      {/* 2. القائمة الجانبية المتجاوبة (Sidebar & Mobile Drawer) */}
       <aside
-        className={`fixed inset-y-0 z-40 flex flex-col shadow-2xl transition-all duration-300 ${
+        className={`fixed inset-y-0 z-50 flex flex-col shadow-2xl transition-all duration-300 ${
           isRtl ? 'right-0' : 'left-0'
-        } ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${
+        } ${
+          // سلوك الشاشات الكبيرة:
+          isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'
+        } ${
+          // سلوك الموبايل: تنزلق بالكامل خارج الشاشة وتفتح بنعومة كـ Drawer
+          isMobileMenuOpen
+            ? 'translate-x-0 w-72'
+            : isRtl
+            ? 'translate-x-full lg:translate-x-0 w-72 lg:w-auto'
+            : '-translate-x-full lg:translate-x-0 w-72 lg:w-auto'
+        } ${
           isDark
             ? 'border-white/5 bg-gradient-to-b from-[#101322] via-[#0d0f1b] to-[#080911]'
             : 'border-slate-200 bg-white text-slate-800'
@@ -167,11 +192,11 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             isDark ? 'border-white/5' : 'border-slate-200'
           }`}
         >
-          {!isSidebarCollapsed && (
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white font-black text-lg shadow-lg shadow-orange-500/20">
-                LK
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white font-black text-lg shadow-lg shadow-orange-500/20">
+              LK
+            </div>
+            {(!isSidebarCollapsed || isMobileMenuOpen) && (
               <div>
                 <h1 className={`text-base font-extrabold tracking-wide ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   L-K Shift
@@ -180,13 +205,16 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                   {isAdmin ? (isRtl ? 'إدارة المنظومة' : 'Core Admin') : (isRtl ? 'بوابة الموظف' : 'Staff Portal')}
                 </p>
               </div>
-            </div>
-          )}
-          {isSidebarCollapsed && (
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white font-black text-lg shadow-lg">
-              LK
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* زر إغلاق للموبايل */}
+          <button
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="lg:hidden flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white"
+          >
+            ✕
+          </button>
         </div>
 
         <nav className="flex-1 space-y-1.5 px-3 py-6 overflow-y-auto">
@@ -196,23 +224,25 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={`group flex items-center gap-3.5 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all duration-200 ${
                   isActive
                     ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-lg shadow-orange-500/25'
                     : isDark
                     ? 'text-slate-400 hover:bg-white/[0.04] hover:text-white'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}
+                } ${isSidebarCollapsed && !isMobileMenuOpen ? 'lg:justify-center lg:px-0' : ''}`}
                 title={isSidebarCollapsed ? item.name : undefined}
               >
                 <span>{item.icon}</span>
-                {!isSidebarCollapsed && <span>{item.name}</span>}
+                {(!isSidebarCollapsed || isMobileMenuOpen) && <span>{item.name}</span>}
               </Link>
             );
           })}
         </nav>
 
-        <div className={`border-t p-3 ${isDark ? 'border-white/5' : 'border-slate-200'}`}>
+        {/* زر طي القائمة للشاشات الكبيرة فقط */}
+        <div className={`hidden lg:block border-t p-3 ${isDark ? 'border-white/5' : 'border-slate-200'}`}>
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-medium transition ${
@@ -226,33 +256,56 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         </div>
       </aside>
 
+      {/* 3. مساحة المحتوى الرئيسية المتجاوبة (Full-Width on Mobile) */}
       <div
-        className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${
+        className={`flex min-h-screen flex-1 flex-col transition-all duration-300 w-full ${
+          // على الموبايل الهامش 0 تماماً لمنع الانحشار، وعلى الكمبيوتر يزاح حسب حالة القائمة
           isSidebarCollapsed
-            ? isRtl ? 'mr-20' : 'ml-20'
-            : isRtl ? 'mr-64' : 'ml-64'
+            ? isRtl ? 'lg:mr-20' : 'lg:ml-20'
+            : isRtl ? 'lg:mr-64' : 'lg:ml-64'
         }`}
       >
+        {/* الشريط العلوي المتجاوب */}
         <header
-          className={`sticky top-0 z-30 flex h-20 items-center justify-between border-b px-6 backdrop-blur-xl transition-colors duration-300 ${
+          className={`sticky top-0 z-30 flex h-20 items-center justify-between border-b px-4 sm:px-6 backdrop-blur-xl transition-colors duration-300 ${
             isDark
               ? 'border-white/5 bg-[#080911]/80 text-white'
               : 'border-slate-200 bg-white/80 text-slate-900 shadow-sm'
           }`}
         >
-          <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-orange-500 font-bold text-white shadow-md">
-              {userName.charAt(0)}
-            </div>
-            <div className="hidden sm:block text-right" dir={isRtl ? 'rtl' : 'ltr'}>
-              <h2 className={`text-sm font-bold leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {userName}
-              </h2>
-              <span className="text-[11px] font-medium text-emerald-500">{userRole}</span>
+          {/* الجانب الأيمن: زر القائمة للموبايل + بيانات المستخدم */}
+          <div className="flex items-center gap-3">
+            {/* زر الهامبورجر للموبايل فقط */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border transition lg:hidden ${
+                isDark
+                  ? 'border-white/10 bg-white/[0.03] text-white hover:bg-white/10'
+                  : 'border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-200'
+              }`}
+              aria-label="Toggle Navigation"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-orange-500 font-bold text-white shadow-md text-sm sm:text-base">
+                {userName.charAt(0)}
+              </div>
+              <div className="text-right" dir={isRtl ? 'rtl' : 'ltr'}>
+                <h2 className={`text-xs sm:text-sm font-bold leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {userName}
+                </h2>
+                <span className="text-[10px] sm:text-[11px] font-medium text-emerald-500">{userRole}</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* الجانب الأيسر: زر الثيم + تسجيل الخروج */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={toggleTheme}
               className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
@@ -260,6 +313,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                   ? 'border-white/10 bg-white/[0.03] text-amber-400 hover:bg-white/[0.08]'
                   : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
+              title={isDark ? 'التبديل إلى الوضع الفاتح' : 'التبديل إلى الوضع الداكن'}
             >
               {isDark ? '☀️' : '🌙'}
             </button>
@@ -276,7 +330,8 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           </div>
         </header>
 
-        <main className="flex-1 p-6 sm:p-8 overflow-x-hidden">
+        {/* مساحة الرندر الأساسية المريحة لكافة الأجهزة */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
           {children}
         </main>
       </div>
