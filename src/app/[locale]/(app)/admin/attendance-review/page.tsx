@@ -1,239 +1,307 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import {
-  Clock,
-  Search,
-  Calendar,
-  CheckCircle2,
-  ShieldCheck,
-  MapPin,
-  UserCheck,
-  Loader2,
-  Filter,
-} from "lucide-react";
-import { getAttendanceLogsAction } from "@/actions/attendanceActions";
-import type { AttendanceRecord } from "@/types";
+import React, { useState, useEffect, use } from 'react';
 
-export default function AttendanceReviewPage() {
-  const params = useParams();
-  const locale = (params?.locale as string) || "ar";
-  const isAr = locale === "ar";
+interface AttendanceLog {
+  id: number;
+  userId: number;
+  userName?: string;
+  userPhone?: string;
+  totalLeaves?: number;
+  usedLeaves?: number;
+  permissionHours?: number;
+  branchName?: string;
+  type: 'CHECK_IN' | 'CHECK_OUT';
+  timestamp: string;
+  distanceMeters?: number;
+  isVerifiedGeofence?: boolean;
+}
 
-  const [logs, setLogs] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterDate, setFilterDate] = useState("");
+interface PageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
 
+export default function AttendanceReviewPage({ params }: PageProps) {
+  const resolvedParams = use(params);
+  const locale = resolvedParams?.locale || 'ar';
+  const isRtl = locale === 'ar';
+
+  const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // جلب الموظفين لملء قائمة الفلترة
+  useEffect(() => {
+    fetch('/api/employees', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setEmployees(Array.isArray(data) ? data : []))
+      .catch((err) => console.error('Failed to load employees:', err));
+  }, []);
+
+  // جلب السجلات المفلترة
   const fetchLogs = async () => {
-    setLoading(true);
     try {
-      const res = await getAttendanceLogsAction();
-      if (res.success && res.logs) {
-        setLogs(res.logs);
+      setIsLoading(true);
+      const paramsObj = new URLSearchParams();
+      if (selectedUser) paramsObj.set('userId', selectedUser);
+      if (fromDate) paramsObj.set('from', fromDate);
+      if (toDate) paramsObj.set('to', toDate);
+
+      const res = await fetch(`/api/attendance?${paramsObj.toString()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(Array.isArray(data) ? data : []);
       }
-    } catch (error) {
-      console.error("Error fetching logs:", error);
+    } catch (err) {
+      console.error('Failed to fetch attendance:', err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+  }, [selectedUser, fromDate, toDate]);
 
+  // تصفية السجلات نصياً
   const filteredLogs = logs.filter((log) => {
-    const matchesSearch =
-      !searchTerm ||
-      (log.employee_name && log.employee_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (log.employee_code && log.employee_code.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (log.branch_name && log.branch_name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesDate =
-      !filterDate ||
-      (log.created_at && log.created_at.startsWith(filterDate));
-
-    return matchesSearch && matchesDate;
+    const term = searchQuery.toLowerCase();
+    return (
+      (log.userName || '').toLowerCase().includes(term) ||
+      (log.userPhone || '').toLowerCase().includes(term) ||
+      (log.branchName || '').toLowerCase().includes(term)
+    );
   });
 
-  const totalLogs = filteredLogs.length;
-  const inLogsCount = filteredLogs.filter((l) => l.action_type === "IN").length;
-  const faceVerifiedCount = filteredLogs.filter((l) => l.face_verified).length;
+  // حساب الملخص المالي والإداري للموظف المحدد
+  const selectedEmpObj = employees.find((e) => String(e.id) === String(selectedUser));
+  const totalAnnualLeaves = selectedEmpObj?.annualLeaveDays || 21;
+  const usedLeaves = selectedEmpObj?.usedLeaveDays || 0;
+  const remainingLeaves = Math.max(0, totalAnnualLeaves - usedLeaves);
+
+  // دالة تصدير شيت Excel عربي نقي متوافق 100% مع Microsoft Excel
+  const exportToExcel = () => {
+    if (filteredLogs.length === 0) {
+      alert(isRtl ? 'لا توجد بيانات مطابقة لتصديرها' : 'No data to export');
+      return;
+    }
+
+    const headers = [
+      'م',
+      'اسم الموظف',
+      'رقم التليفون',
+      'الفرع المسند',
+      'نوع البصمة',
+      'التاريخ والوقت',
+      'المسافة عن الفرع (متر)',
+      'التحقق الجغرافي GPS',
+    ];
+
+    const rows = filteredLogs.map((log, index) => [
+      index + 1,
+      `"${log.userName || 'موظف'}"`,
+      `"${log.userPhone || ''}"`,
+      `"${log.branchName || '—'}"`,
+      `"${log.type === 'CHECK_IN' ? 'حضور' : 'انصراف'}"`,
+      `"${new Date(log.timestamp).toLocaleString('ar-EG')}"`,
+      log.distanceMeters ?? '—',
+      log.isVerifiedGeofence ? 'مطابق للنطاق' : 'خارج النطاق',
+    ]);
+
+    // إضافة BOM (\uFEFF) ليقرأ Excel الحروف العربية دون أي تشوه
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `تقرير_حضور_LK_Shift_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Banner */}
-      <div className="rounded-3xl border border-orange-200/80 dark:border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-pink-500/5 to-white dark:to-zinc-900 backdrop-blur-xl p-6 shadow-xl shadow-orange-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Clock className="w-6 h-6 text-orange-500" />
-            <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-              {isAr ? "سجل بصمات الحضور والإنصراف" : "Attendance & Fingerprint Review"}
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-            {isAr
-              ? "متابعة فورية للحركات المسجلة عبر البصمة والتحقق بالوجه"
-              : "Real-time monitoring of attendance logs & Face ID verification"}
+    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* رأس الصفحة مع زر التصدير */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
+            {isRtl ? 'سجل بصمات الحضور والإنصراف' : 'Attendance Audit & Logs'}
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {isRtl ? 'متابعة فورية للحركات المسجلة عبر البصمة والتحقق الجغرافي بالـ GPS' : 'Live check-in audit & GPS proofs'}
           </p>
         </div>
 
-        <button
-          onClick={fetchLogs}
-          disabled={loading}
-          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white text-xs font-semibold shadow-md shadow-orange-500/20 transition disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
-          <span>{isAr ? "تحديث البيانات" : "Refresh Data"}</span>
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-orange-600 dark:text-orange-400">
-            <UserCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "إجمالي التسجيلات" : "Total Logs"}</p>
-            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{totalLogs}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "حركات الدخول" : "Check-in Count"}</p>
-            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{inLogsCount}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{isAr ? "التحقق بالوجه (Face ID)" : "Face Verified"}</p>
-            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{faceVerifiedCount}</p>
-          </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={exportToExcel}
+            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:bg-emerald-700 cursor-pointer"
+          >
+            {isRtl ? '📊 سحب شيت Excel' : 'Export Excel'}
+          </button>
+          <button
+            type="button"
+            onClick={fetchLogs}
+            className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 cursor-pointer"
+          >
+            {isRtl ? 'تحديث البيانات' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="rounded-2xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg p-4 shadow-sm flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 start-3 text-zinc-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={isAr ? "ابحث باسم الموظف، الكود، أو الفرع..." : "Search employee name, code, or branch..."}
-            className="w-full ps-9 pe-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
+      {/* بطاقات الإحصائيات وأرصدة الإجازات المتبقية للموظف */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'إجمالي الحركات' : 'Total Logs'}</span>
+          <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{filteredLogs.length}</div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-orange-500 flex-shrink-0" />
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'حركات الحضور' : 'Check-Ins'}</span>
+          <div className="mt-2 text-2xl font-black text-emerald-600 dark:text-emerald-400">
+            {filteredLogs.filter((l) => l.type === 'CHECK_IN').length}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'رصيد الإجازات المتبقي' : 'Remaining Leaves'}</span>
+          <div className="mt-2 text-2xl font-black text-orange-600 dark:text-orange-400">
+            {selectedUser ? `${remainingLeaves} يوم` : 'اختر موظف'}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'الأذونات الشهرية' : 'Monthly Permissions'}</span>
+          <div className="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
+            {selectedEmpObj ? `${selectedEmpObj.monthly_permissions_hours || 0} ساعة` : '0 ساعة'}
+          </div>
+        </div>
+      </div>
+
+      {/* قسم الفلاتر المتقدمة */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            {isRtl ? 'تصفية حسب الموظف' : 'Filter Employee'}
+          </label>
+          <select
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="">{isRtl ? '-- جميع الموظفين --' : '-- All Staff --'}</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={String(emp.id)}>
+                {emp.name || emp.fullName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            {isRtl ? 'من تاريخ' : 'From Date'}
+          </label>
           <input
             type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-orange-400"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           />
-          {filterDate && (
-            <button
-              onClick={() => setFilterDate("")}
-              className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 px-2"
-            >
-              ✕
-            </button>
-          )}
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            {isRtl ? 'إلى تاريخ' : 'To Date'}
+          </label>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            {isRtl ? 'بحث سريع' : 'Quick Search'}
+          </label>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={isRtl ? 'ابحث باسم الموظف أو الفرع...' : 'Search...'}
+            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-3xl border border-orange-200/60 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-xl overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
-            <span className="text-xs">{isAr ? "جاري تحميل سجل البصمات..." : "Loading fingerprint logs..."}</span>
+      {/* جدول السجلات التفصيلي */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+        {isLoading ? (
+          <div className="flex min-h-[300px] items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
           </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="p-12 text-center text-zinc-400 flex flex-col items-center justify-center gap-2">
-            <Filter className="w-8 h-8 text-zinc-300 dark:text-zinc-700" />
-            <p className="text-sm font-medium">{isAr ? "لا توجد سجلات متطابقة مع البحث" : "No matching attendance logs found"}</p>
+          <div className="p-12 text-center text-slate-500 dark:text-slate-400">
+            <p className="text-base font-medium">{isRtl ? 'لا توجد سجلات متطابقة مع البحث' : 'No logs found'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-start border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-orange-50/50 dark:bg-zinc-800/40 text-xs text-zinc-600 dark:text-zinc-400">
-                  <th className="p-4 text-start font-semibold">{isAr ? "الموظف" : "Employee"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "الفرع" : "Branch"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "نوع الحركة" : "Type"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "التحقق بـ Face ID" : "Face ID"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "الموقع الجغرافي" : "GPS Location"}</th>
-                  <th className="p-4 text-start font-semibold">{isAr ? "التاريخ والوقت" : "Date & Time"}</th>
+            <table className="min-w-full divide-y divide-slate-100 text-right text-sm dark:divide-white/5" dir={isRtl ? 'rtl' : 'ltr'}>
+              <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'الموظف' : 'Employee'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'الفرع' : 'Branch'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'نوع البصمة' : 'Type'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'التوقيت' : 'Timestamp'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'المسافة عن الفرع' : 'Distance'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'التحقق' : 'Status'}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-orange-50/30 dark:hover:bg-zinc-800/30 transition">
-                    <td className="p-4">
-                      <div>
-                        <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                          {log.employee_name || (isAr ? "غير معرّف" : "Unknown")}
-                        </p>
-                        {log.employee_code && (
-                          <span className="text-[10px] text-zinc-400 block">{log.employee_code}</span>
-                        )}
-                      </div>
+                  <tr key={log.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
+                    <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                      <div>{log.userName || 'موظف'}</div>
+                      <div className="text-xs font-mono font-normal text-slate-500">{log.userPhone || ''}</div>
                     </td>
-                    <td className="p-4 text-zinc-600 dark:text-zinc-300">
-                      {log.branch_name || (isAr ? "غير محدد" : "Unspecified")}
-                    </td>
-                    <td className="p-4">
+                    <td className="px-6 py-4 text-slate-700 dark:text-slate-300">{log.branchName || '—'}</td>
+                    <td className="px-6 py-4">
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                          log.action_type === "IN"
-                            ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                            : "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                        className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                          log.type === 'CHECK_IN'
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'
                         }`}
                       >
-                        {log.action_type === "IN" ? (isAr ? "دخول" : "Check-in") : (isAr ? "خروج" : "Check-out")}
+                        {log.type === 'CHECK_IN' ? (isRtl ? 'حضور' : 'Check-In') : (isRtl ? 'انصراف' : 'Check-Out')}
                       </span>
                     </td>
-                    <td className="p-4">
-                      {log.face_verified ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
-                          <ShieldCheck className="w-4 h-4" />
-                          <span>{isAr ? "مطابق" : "Verified"}</span>
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400">{isAr ? "عادي" : "Standard"}</span>
-                      )}
+                    <td className="px-6 py-4 text-xs font-mono text-slate-700 dark:text-slate-300">
+                      {new Date(log.timestamp).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}
                     </td>
-                    <td className="p-4">
-                      {log.latitude && log.longitude ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium">
-                          <MapPin className="w-3.5 h-3.5" />
-                          <span>
-                            {log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400">{isAr ? "غير متاح" : "N/A"}</span>
-                      )}
+                    <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300">
+                      {log.distanceMeters !== undefined ? `${log.distanceMeters} م` : '—'}
                     </td>
-                    <td className="p-4 text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">
-                      {new Date(log.created_at).toLocaleString(isAr ? "ar-EG" : "en-US", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                          log.isVerifiedGeofence
+                            ? 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400'
+                            : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                        }`}
+                      >
+                        {log.isVerifiedGeofence ? (isRtl ? 'GPS مطابق' : 'Verified') : (isRtl ? 'يدوي' : 'Manual')}
+                      </span>
                     </td>
                   </tr>
                 ))}
