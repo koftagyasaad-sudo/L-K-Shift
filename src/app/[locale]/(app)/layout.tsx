@@ -23,7 +23,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const [userName, setUserName] = useState<string>('');
   const [userRole, setUserRole] = useState<string>('');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isReady, setIsReady] = useState<boolean>(false);
 
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
@@ -32,14 +32,14 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
       return;
     }
 
-    const savedName = localStorage.getItem('userName') || 'مستخدم المنظومة';
+    const savedName = localStorage.getItem('userName') || 'موظف';
     const savedRole = localStorage.getItem('userRole') || 'موظف';
     setUserName(savedName);
     setUserRole(savedRole);
 
     const isAdmin = savedRole === 'مدير النظام' || savedRole === 'SUPER_ADMIN' || savedRole === 'admin';
 
-    // حارس المسارات الصارم (Route Guard): طرد أي موظف عادي يحاول فتح صفحات الإدارة
+    // حارس المسارات الحاسم (Route Guard): طرد أي موظف عادي يحاول فتح أي مسار إداري
     const isRestrictedAdminRoute =
       pathname.includes('/admin/dashboard') ||
       pathname.includes('/admin/employees') ||
@@ -59,7 +59,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
       document.documentElement.classList.remove('dark');
     }
 
-    setIsCheckingAuth(false);
+    setIsReady(true);
   }, [locale, pathname, router]);
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const isDark = theme === 'dark';
   const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
 
-  // القوائم المصرح بها وفقاً لرتبة المستخدم
+  // قوائم النظام المفصولة بدقة وحسم حسب الصلاحيات
   const navItems = isAdmin
     ? [
         {
@@ -139,7 +139,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         },
       ]
     : [
-        // صلاحيات الموظف العادي الصارمة (3 عناصر فقط)
+        // القوائم المصرح بها للموظف العادي حصراً
         {
           name: isRtl ? 'تسجيل الحضور' : 'Check-In/Out',
           href: `/${locale}/attendance`,
@@ -169,7 +169,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         },
       ];
 
-  if (isCheckingAuth) {
+  if (!isReady) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center bg-slate-950">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
@@ -179,30 +179,32 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-300 ${
+      className={`min-h-screen overflow-x-hidden transition-colors duration-300 ${
         isDark ? 'bg-[#080911] text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      {/* طبقة التعتيم للموبايل */}
       {isMobileMenuOpen && (
         <div
           onClick={() => setIsMobileMenuOpen(false)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
         />
       )}
 
+      {/* القائمة الجانبية: مخفية تماماً على الموبايل لتفادي كسر الشاشة */}
       <aside
         className={`fixed inset-y-0 z-50 flex flex-col shadow-2xl transition-all duration-300 ${
           isRtl ? 'right-0' : 'left-0'
-        } ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'} ${
+        } ${
           isMobileMenuOpen
-            ? 'translate-x-0 w-72'
-            : isRtl
-            ? 'translate-x-full lg:translate-x-0 w-72 lg:w-auto'
-            : '-translate-x-full lg:translate-x-0 w-72 lg:w-auto'
+            ? 'flex w-72 translate-x-0'
+            : 'hidden lg:flex'
+        } ${
+          isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'
         } ${
           isDark
-            ? 'border-white/5 bg-gradient-to-b from-[#101322] via-[#0d0f1b] to-[#080911]'
+            ? 'border-white/5 bg-[#101322]'
             : 'border-slate-200 bg-white text-slate-800'
         } ${isRtl ? 'border-l' : 'border-r'}`}
       >
@@ -273,6 +275,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         </div>
       </aside>
 
+      {/* مساحة المحتوى: كاملة العرض 100% على الموبايل بدون انحشار */}
       <div
         className={`flex min-h-screen flex-1 flex-col transition-all duration-300 w-full ${
           isSidebarCollapsed
@@ -296,7 +299,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                   ? 'border-white/10 bg-white/[0.03] text-white hover:bg-white/10'
                   : 'border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-200'
               }`}
-              aria-label="Toggle Navigation"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -333,7 +335,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                 localStorage.clear();
                 router.replace(`/${locale}/login`);
               }}
-              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
             >
               {isRtl ? 'خروج' : 'Logout'}
             </button>
