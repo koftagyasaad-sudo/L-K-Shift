@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'يرجى إدخال رقم الهاتف وكلمة المرور' }, { status: 400 });
     }
 
-    // 1. حساب مدير النظام المعتمد
+    // 1. حساب مدير النظام الرئيسي
     if ((phone === '010' || phone === '01068390982') && password === '123456') {
       return NextResponse.json(
         {
@@ -24,13 +24,15 @@ export async function POST(request: NextRequest) {
             role: 'مدير النظام',
             branchId: null,
             branchName: 'المركز الرئيسي',
+            isOnboarded: true,
+            permissions: ['*'], // صلاحية كاملة غير مشروطة
           },
         },
         { status: 200 }
       );
     }
 
-    // 2. التحقق من الموظف الفعلي في جدول users
+    // 2. التحقق من جدول users ومطابقة الصلاحيات من جدول custom_roles
     const raw = await db.execute(sql`
       SELECT 
         u.id,
@@ -41,12 +43,15 @@ export async function POST(request: NextRequest) {
         u.password,
         u.password_hash,
         u.is_active as "isActive",
+        u.is_onboarded as "isOnboarded",
         b.name_ar as "branchName",
         b.latitude::text as "branchLat",
         b.longitude::text as "branchLng",
-        b.geofence_radius as "branchRadius"
+        b.geofence_radius as "branchRadius",
+        cr.permissions as "rolePermissions"
       FROM users u
       LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
+      LEFT JOIN custom_roles cr ON (u.job_role = cr.name_ar OR u.job_role = cr.name OR u.role = cr.name)
       WHERE u.phone = ${phone}
       LIMIT 1;
     `);
@@ -72,6 +77,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'كلمة المرور غير صحيحة' }, { status: 401 });
     }
 
+    // استخراج الصلاحيات الفعلية للدور
+    let userPermissions: string[] = ['attendance.check_in', 'branch.view_own'];
+    if (user.role === 'مدير النظام' || user.role === 'SUPER_ADMIN') {
+      userPermissions = ['*'];
+    } else if (Array.isArray(user.rolePermissions)) {
+      userPermissions = user.rolePermissions;
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -81,10 +94,12 @@ export async function POST(request: NextRequest) {
           phone: user.phone,
           role: user.role,
           branchId: user.branchId,
-          branchName: user.branchName || 'غير مسند لفرع',
+          branchName: user.branchName || (user.isOnboarded ? 'فرع رئيسي' : 'بانتظار إسناد الفرع'),
           branchLat: user.branchLat,
           branchLng: user.branchLng,
           branchRadius: user.branchRadius || 100,
+          isOnboarded: user.isOnboarded ?? Boolean(user.branchId),
+          permissions: userPermissions,
         },
       },
       { status: 200 }
