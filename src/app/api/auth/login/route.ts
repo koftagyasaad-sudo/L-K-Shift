@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'يرجى إدخال رقم الهاتف وكلمة المرور' }, { status: 400 });
     }
 
-    // 1. حساب مدير النظام الرئيسي الافتراضي للطوارئ
+    // 1. حساب مدير النظام المعتمد
     if ((phone === '010' || phone === '01068390982') && password === '123456') {
       return NextResponse.json(
         {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. التحقق من الموظف من جدول users في قاعدة بيانات Neon
+    // 2. التحقق من الموظف الفعلي في جدول users
     const raw = await db.execute(sql`
       SELECT 
         u.id,
@@ -59,12 +59,10 @@ export async function POST(request: NextRequest) {
 
     const user = rows[0];
 
-    // التحقق من تفعيل الحساب
     if (user.isActive === false) {
-      return NextResponse.json({ message: 'تم تعطيل هذا الحساب، يرجى مراجعة إدارة المنظومة' }, { status: 403 });
+      return NextResponse.json({ message: 'الحساب معطل، يرجى مراجعة إدارة المنظومة' }, { status: 403 });
     }
 
-    // مطابقة كلمة المرور
     const isValidPassword =
       password === user.password ||
       password === user.password_hash ||
