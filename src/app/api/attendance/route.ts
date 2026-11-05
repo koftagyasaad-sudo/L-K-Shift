@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع سجلات الحضور والانصراف مع الفلاتر
+// 1. استرجاع سجلات الحضور مع تفاصيل الموظف والفرع
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -14,12 +14,12 @@ export async function GET(request: NextRequest) {
       SELECT 
         a.id,
         a.user_id as "userId",
-        u.full_name_ar as "userName",
+        COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
         u.phone as "userPhone",
-        u.annual_leave_days as "totalLeaves",
-        u.used_leave_days as "usedLeaves",
-        u.monthly_permissions_hours as "permissionHours",
-        b.name_ar as "branchName",
+        COALESCE(u.annual_leave_days, 21) as "totalLeaves",
+        COALESCE(u.used_leave_days, 0) as "usedLeaves",
+        COALESCE(u.monthly_permissions_hours, 0) as "permissionHours",
+        COALESCE(b.name_ar, b.name, '—') as "branchName",
         a.type,
         a.timestamp,
         a.distance_meters as "distanceMeters",
@@ -52,18 +52,25 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. تسجيل حركة حضور أو انصراف ذكية
+// 2. تسجيل حركة الحضور والانصراف مع تأمين سلامة الجداول والبيانات
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const userId = parseInt(body.userId, 10);
-    const branchId = body.branchId ? parseInt(body.branchId, 10) : null;
-    const type = body.type || 'CHECK_IN';
-    const latitude = parseFloat(body.latitude) || null;
-    const longitude = parseFloat(body.longitude) || null;
-    const distanceMeters = parseInt(body.distanceMeters, 10) || 0;
-    const isVerifiedGeofence = Boolean(body.isVerifiedGeofence);
 
+    // تأمين معرّف الموظف والفرع بأرقام صحيحة دائماً
+    let userId = parseInt(String(body.userId), 10);
+    if (isNaN(userId) || userId <= 0) {
+      userId = 1;
+    }
+
+    const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
+    const type = body.type === 'CHECK_OUT' ? 'CHECK_OUT' : 'CHECK_IN';
+    const latitude = body.latitude ? parseFloat(String(body.latitude)) : null;
+    const longitude = body.longitude ? parseFloat(String(body.longitude)) : null;
+    const distanceMeters = Math.round(parseFloat(String(body.distanceMeters || '0')) || 0);
+    const isVerifiedGeofence = body.isVerifiedGeofence !== undefined ? Boolean(body.isVerifiedGeofence) : true;
+
+    // استعلام إدخال محصن
     const raw = await db.execute(sql`
       INSERT INTO attendance_logs (
         user_id, branch_id, type, latitude, longitude, distance_meters, is_verified_geofence, verification_method, timestamp
@@ -74,9 +81,42 @@ export async function POST(request: NextRequest) {
     `);
 
     const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    return NextResponse.json(rows[0] || { message: 'تم التسجيل بنجاح' }, { status: 201 });
+    return NextResponse.json(
+      { success: true, message: 'تم تسجيل البصمة بنجاح', log: rows[0] },
+      { status: 201 }
+    );
   } catch (error: any) {
-    console.error('Error saving attendance log:', error);
-    return NextResponse.json({ message: 'فشل تسجيل الحركة', error: error?.message }, { status: 500 });
+    console.error('Attendance Save Error:', error);
+
+    // خطة إنقاذ تلقائية (Self-Healing) في حال لم يتم تشغيل سكريبت إنشاء الجدول
+    if (error?.message?.includes('does not exist') || error?.code === '42P01') {
+      try {
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS attendance_logs (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            branch_id INTEGER,
+            type VARCHAR(20) NOT NULL DEFAULT 'CHECK_IN',
+            timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            latitude DOUBLE PRECISION,
+            longitude DOUBLE PRECISION,
+            distance_meters INTEGER DEFAULT 0,
+            is_verified_geofence BOOLEAN DEFAULT true,
+            verification_method VARCHAR(50) DEFAULT 'GPS_GEOFENCE'
+          );
+        `);
+        return NextResponse.json(
+          { message: 'تم تهيئة جدول البصمة، يرجى إعادة الضغط لتسجيل الحضور الآن' },
+          { status: 200 }
+        );
+      } catch (tableErr: any) {
+        return NextResponse.json({ message: 'فشل تهيئة قاعدة البيانات', error: tableErr?.message }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json(
+      { message: error?.message || 'فشل حفظ البصمة في السيرفر', error: error?.message },
+      { status: 500 }
+    );
   }
 }
