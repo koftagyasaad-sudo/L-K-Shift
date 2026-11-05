@@ -20,21 +20,36 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-  const [userName, setUserName] = useState<string>('Omar Abd Elhalim');
-  const [userRole, setUserRole] = useState<string>('مدير النظام');
+  const [userName, setUserName] = useState<string>('');
+  const [userRole, setUserRole] = useState<string>('');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
-  // استرجاع وتطبيق المصادقة والثيم
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
       router.replace(`/${locale}/login`);
+      return;
     }
 
-    const savedName = localStorage.getItem('userName');
-    const savedRole = localStorage.getItem('userRole');
-    if (savedName) setUserName(savedName);
-    if (savedRole) setUserRole(savedRole);
+    const savedName = localStorage.getItem('userName') || 'مستخدم المنظومة';
+    const savedRole = localStorage.getItem('userRole') || 'موظف';
+    setUserName(savedName);
+    setUserRole(savedRole);
+
+    const isAdmin = savedRole === 'مدير النظام' || savedRole === 'SUPER_ADMIN' || savedRole === 'admin';
+
+    // حارس المسارات الصارم (Route Guard): طرد أي موظف عادي يحاول فتح صفحات الإدارة
+    const isRestrictedAdminRoute =
+      pathname.includes('/admin/dashboard') ||
+      pathname.includes('/admin/employees') ||
+      pathname.includes('/admin/branches') ||
+      pathname.includes('/admin/roles');
+
+    if (!isAdmin && isRestrictedAdminRoute) {
+      router.replace(`/${locale}/attendance`);
+      return;
+    }
 
     const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
     setTheme(savedTheme);
@@ -43,9 +58,10 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [locale, router]);
 
-  // إغلاق قائمة الموبايل تلقائياً عند الانتقال لأي صفحة
+    setIsCheckingAuth(false);
+  }, [locale, pathname, router]);
+
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
@@ -64,7 +80,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const isDark = theme === 'dark';
   const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
 
-  // قوائم النظام المفصولة حسب الصلاحيات
+  // القوائم المصرح بها وفقاً لرتبة المستخدم
   const navItems = isAdmin
     ? [
         {
@@ -123,6 +139,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         },
       ]
     : [
+        // صلاحيات الموظف العادي الصارمة (3 عناصر فقط)
         {
           name: isRtl ? 'تسجيل الحضور' : 'Check-In/Out',
           href: `/${locale}/attendance`,
@@ -152,6 +169,14 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         },
       ];
 
+  if (isCheckingAuth) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-slate-950">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`min-h-screen transition-colors duration-300 ${
@@ -159,7 +184,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
       }`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* 1. طبقة تعتيم الموبايل عند فتح القائمة */}
       {isMobileMenuOpen && (
         <div
           onClick={() => setIsMobileMenuOpen(false)}
@@ -167,15 +191,10 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         />
       )}
 
-      {/* 2. القائمة الجانبية المتجاوبة (Sidebar & Mobile Drawer) */}
       <aside
         className={`fixed inset-y-0 z-50 flex flex-col shadow-2xl transition-all duration-300 ${
           isRtl ? 'right-0' : 'left-0'
-        } ${
-          // سلوك الشاشات الكبيرة:
-          isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'
-        } ${
-          // سلوك الموبايل: تنزلق بالكامل خارج الشاشة وتفتح بنعومة كـ Drawer
+        } ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'} ${
           isMobileMenuOpen
             ? 'translate-x-0 w-72'
             : isRtl
@@ -208,7 +227,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             )}
           </div>
 
-          {/* زر إغلاق للموبايل */}
           <button
             onClick={() => setIsMobileMenuOpen(false)}
             className="lg:hidden flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-white"
@@ -241,7 +259,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           })}
         </nav>
 
-        {/* زر طي القائمة للشاشات الكبيرة فقط */}
         <div className={`hidden lg:block border-t p-3 ${isDark ? 'border-white/5' : 'border-slate-200'}`}>
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -256,16 +273,13 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         </div>
       </aside>
 
-      {/* 3. مساحة المحتوى الرئيسية المتجاوبة (Full-Width on Mobile) */}
       <div
         className={`flex min-h-screen flex-1 flex-col transition-all duration-300 w-full ${
-          // على الموبايل الهامش 0 تماماً لمنع الانحشار، وعلى الكمبيوتر يزاح حسب حالة القائمة
           isSidebarCollapsed
             ? isRtl ? 'lg:mr-20' : 'lg:ml-20'
             : isRtl ? 'lg:mr-64' : 'lg:ml-64'
         }`}
       >
-        {/* الشريط العلوي المتجاوب */}
         <header
           className={`sticky top-0 z-30 flex h-20 items-center justify-between border-b px-4 sm:px-6 backdrop-blur-xl transition-colors duration-300 ${
             isDark
@@ -273,9 +287,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
               : 'border-slate-200 bg-white/80 text-slate-900 shadow-sm'
           }`}
         >
-          {/* الجانب الأيمن: زر القائمة للموبايل + بيانات المستخدم */}
           <div className="flex items-center gap-3">
-            {/* زر الهامبورجر للموبايل فقط */}
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -304,7 +316,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             </div>
           </div>
 
-          {/* الجانب الأيسر: زر الثيم + تسجيل الخروج */}
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={toggleTheme}
@@ -313,14 +324,13 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                   ? 'border-white/10 bg-white/[0.03] text-amber-400 hover:bg-white/[0.08]'
                   : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
-              title={isDark ? 'التبديل إلى الوضع الفاتح' : 'التبديل إلى الوضع الداكن'}
             >
               {isDark ? '☀️' : '🌙'}
             </button>
 
             <button
               onClick={() => {
-                localStorage.removeItem('isAuthenticated');
+                localStorage.clear();
                 router.replace(`/${locale}/login`);
               }}
               className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-500 hover:bg-rose-500/20 transition"
@@ -330,7 +340,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           </div>
         </header>
 
-        {/* مساحة الرندر الأساسية المريحة لكافة الأجهزة */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
           {children}
         </main>
