@@ -10,6 +10,7 @@ interface EmployeeItem {
   role?: string;
   branchName?: string;
   isActive?: boolean;
+  isOnboarded?: boolean;
 }
 
 interface PageProps {
@@ -71,31 +72,46 @@ export default function AdminEmployeesPage({ params }: PageProps) {
     }
   };
 
+  // الموظفون الجدد الذين سجلوا بأنفسهم وبانتظار التعيين
+  const pendingOnboardingCount = employeesList.filter((e) => e.branchName === '—' || !e.branchName || e.role === 'موظف جديد').length;
+
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر الإضافة */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            {isRtl ? 'إدارة الموظفين' : 'Employees Management'}
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
+            {isRtl ? 'إدارة الموظفين والكوادر' : 'Employees Management'}
           </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {isRtl
-              ? 'قائمة حسابات الموظفين، الفروع المسندة، والتحكم بالصلاحيات'
-              : 'Staff directory, branch allocations, and access permissions'}
+              ? 'متابعة حسابات الموظفين، الفروع المسندة، وإكمال بيانات الحسابات المسجلة ذاتياً'
+              : 'Staff directory & onboarding management'}
           </p>
         </div>
 
         <Link
           href={`/${locale}/admin/employees/new`}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none"
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none"
         >
-          {isRtl ? '+ إضافة موظف جديد' : '+ Add New Employee'}
+          {isRtl ? '+ إضافة موظف مباشرة' : '+ Add New Employee'}
         </Link>
       </div>
 
-      {/* جدول الموظفين مع زري التعديل والحذف */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
+      {/* شريط تنبيه الموظفين الجدد المسجلين ذاتياً */}
+      {pendingOnboardingCount > 0 && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🔔</span>
+            <span>
+              {isRtl
+                ? `يوجد (${pendingOnboardingCount}) موظف مسجلين ذاتياً بانتظار إسناد الفرع وتحديد الصلاحيات.`
+                : `There are (${pendingOnboardingCount}) self-registered staff awaiting branch & role assignment.`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80">
         {isLoading ? (
           <div className="flex min-h-[300px] items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
@@ -105,12 +121,6 @@ export default function AdminEmployeesPage({ params }: PageProps) {
             <p className="text-base font-medium">
               {isRtl ? 'لا يوجد موظفون مسجلون حالياً' : 'No employees registered yet'}
             </p>
-            <Link
-              href={`/${locale}/admin/employees/new`}
-              className="mt-4 inline-block text-sm font-bold text-orange-600 hover:underline dark:text-orange-400"
-            >
-              {isRtl ? 'ابدأ بإضافة أول موظف الآن' : 'Create first employee'} &larr;
-            </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -120,59 +130,62 @@ export default function AdminEmployeesPage({ params }: PageProps) {
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'اسم الموظف' : 'Employee Name'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'رقم الهاتف' : 'Phone'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'الدور الوظيفي' : 'Role'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'الفرع' : 'Branch'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'الحالة' : 'Status'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'الفرع المسند' : 'Branch'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'حالة التعيين' : 'Status'}</th>
                   <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {employeesList.map((emp) => (
-                  <tr key={emp.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
-                    <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                      {emp.name || 'موظف'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300" dir="ltr">
-                      {emp.phone || '—'}
-                    </td>
-                    <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
-                      <span className="inline-flex rounded-lg bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
-                        {emp.role || 'موظف'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                      {emp.branchName || '—'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                          emp.isActive ?? true
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'
-                        }`}
-                      >
-                        {emp.isActive ?? true ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Inactive')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="flex items-center justify-center gap-3">
-                        <Link
-                          href={`/${locale}/admin/employees/${emp.id}/edit`}
-                          className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400"
-                        >
-                          {isRtl ? 'تعديل' : 'Edit'}
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteEmployee(emp.id, emp.name)}
-                          disabled={deletingId === emp.id}
-                          className="text-xs font-bold text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400"
-                        >
-                          {deletingId === emp.id ? (isRtl ? 'جاري الحذف...' : 'Deleting...') : (isRtl ? 'حذف' : 'Delete')}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {employeesList.map((emp) => {
+                  const isPending = emp.branchName === '—' || !emp.branchName || emp.role === 'موظف جديد';
+                  return (
+                    <tr key={emp.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
+                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                        {emp.name || 'موظف'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300" dir="ltr">
+                        {emp.phone || '—'}
+                      </td>
+                      <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
+                        <span className="inline-flex rounded-lg bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                          {emp.role || 'موظف'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                        {emp.branchName || '—'}
+                      </td>
+                      <td className="px-6 py-4">
+                        {isPending ? (
+                          <span className="inline-flex rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                            {isRtl ? '⏳ بانتظار إسناد الفرع' : 'Pending'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            {isRtl ? 'نشط ومعين' : 'Active'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-3">
+                          <Link
+                            href={`/${locale}/admin/employees/${emp.id}/edit`}
+                            className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400"
+                          >
+                            {isPending ? (isRtl ? 'إسناد البيانات والفرع' : 'Assign') : (isRtl ? 'تعديل' : 'Edit')}
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteEmployee(emp.id, emp.name)}
+                            disabled={deletingId === emp.id}
+                            className="text-xs font-bold text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400 cursor-pointer"
+                          >
+                            {deletingId === emp.id ? (isRtl ? 'جاري الحذف...' : 'Deleting...') : (isRtl ? 'حذف' : 'Delete')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
