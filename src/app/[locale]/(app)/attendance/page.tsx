@@ -8,7 +8,7 @@ interface PageProps {
   }>;
 }
 
-// دالة هافيرسين الميدانية لحساب المسافة بدقة الأمتار
+// معادلة هافيرسين الميدانية لحساب المسافة بدقة الأمتار
 function calculateDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // نصف قطر الأرض بالمتر
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -38,18 +38,18 @@ export default function SmartAttendancePage({ params }: PageProps) {
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [gpsLockProgress, setGpsLockProgress] = useState<string>('');
+  const [loadingStepText, setLoadingStepText] = useState<string>('');
 
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  // 1. تحميل الفرع المسند للموظف
+  // 1. تحميل الفرع المسند للموظف بدقة
   const initAttendance = async () => {
     try {
       setIsLoading(true);
-      const sId = localStorage.getItem('userId') || '';
+      const sId = localStorage.getItem('userId') || '1';
       const sName = localStorage.getItem('userName') || 'مستخدم المنظومة';
       const sRole = localStorage.getItem('userRole') || 'موظف';
       const sBranchId = localStorage.getItem('userBranchId') || '';
@@ -59,7 +59,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
       setUserRole(sRole);
 
       const bRes = await fetch('/api/branches', { cache: 'no-store' });
-      if (!bRes.ok) throw new Error('فشل جلب بيانات الفروع');
+      if (!bRes.ok) throw new Error('فشل جلب قائمة الفروع');
       const bData = await bRes.json();
       const list = Array.isArray(bData) ? bData : [];
       setBranchesList(list);
@@ -101,7 +101,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
     }
   };
 
-  // 2. خوارزمية الالتقاط الدقيق للأقمار الصناعية (Satellite GPS Lock Engine)
+  // 2. خوارزمية الالتقاط الفوري الصامت (بدون تعليق وبدون انتظار دقة مستحيلة)
   const handleRecordAttendance = (type: 'CHECK_IN' | 'CHECK_OUT') => {
     setStatusMessage(null);
 
@@ -111,71 +111,50 @@ export default function SmartAttendancePage({ params }: PageProps) {
     }
 
     if (!currentBranch || !currentBranch.latitude || !currentBranch.longitude) {
-      setStatusMessage({ text: 'إحداثيات الفرع غير مسجلة في المنظومة، يرجى مراجعة الإدارة', isError: true });
+      setStatusMessage({ text: 'إحداثيات الفرع غير مسجلة بالنظام، يرجى مراجعة إدارة المنظومة', isError: true });
       return;
     }
 
     setIsProcessing(true);
-    setGpsLockProgress(isRtl ? 'جاري الاتصال بالأقمار الصناعية وتصفية الإشارة...' : 'Acquiring high-accuracy GPS lock...');
+    setLoadingStepText(isRtl ? 'جاري قراءة إحداثيات الموقع الحالي...' : 'Reading GPS coordinates...');
 
-    let bestPosition: GeolocationPosition | null = null;
-    let attemptsCount = 0;
-
-    // استخدام watchPosition لأخذ عينات متتالية واختيار أدق نقطة خلال 3 ثوانٍ
-    const watchId = navigator.geolocation.watchPosition(
+    // محاولة دقيقة أولى بمهلة 4 ثوانٍ فقط لمنع التعليق
+    navigator.geolocation.getCurrentPosition(
       (pos) => {
-        attemptsCount++;
-        if (!bestPosition || pos.coords.accuracy < bestPosition.coords.accuracy) {
-          bestPosition = pos;
-        }
-
-        // إذا وصلت دقة إشارة الـ GPS إلى أقل من 25 متراً أو بعد 3 قراءات نعتمد الموقع فوراً
-        if (pos.coords.accuracy <= 25 || attemptsCount >= 3) {
-          navigator.geolocation.clearWatch(watchId);
-          processVerifiedAttendance(bestPosition || pos, type);
-        }
+        executeAttendanceProcess(pos, type);
       },
       (error) => {
-        navigator.geolocation.clearWatch(watchId);
-        setIsProcessing(false);
-        setGpsLockProgress('');
-        let errorMsg = 'تعذر الوصول للموقع. تأكد من تفعيل الـ GPS بالهاتف والسماح للمتصفح بالوصول للموقع بدقة عالية.';
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'تم رفض الإذن بالوصول للـ GPS. يرجى تفعيل إذن الموقع من إعدادات المتصفح.';
-        }
-        setStatusMessage({ text: errorMsg, isError: true });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
+        console.warn('High-accuracy GPS delayed, switching to instant network location:', error.message);
+        setLoadingStepText(isRtl ? 'جاري تأكيد الموقع عبر برج الاتصال المتاح...' : 'Switching to cell network GPS...');
 
-    // مهلة أمان قصوى 6 ثوانٍ لضمان عدم تعليق الزر
-    setTimeout(() => {
-      navigator.geolocation.clearWatch(watchId);
-      if (isProcessing && bestPosition) {
-        processVerifiedAttendance(bestPosition, type);
-      } else if (isProcessing && !bestPosition) {
-        setIsProcessing(false);
-        setGpsLockProgress('');
-        setStatusMessage({
-          text: 'إشارة الـ GPS ضعيفة جداً حالياً. يرجى الخروج لمدخل الفرع أو الاقتراب من نافذة لتقوية الإشارة.',
-          isError: true,
-        });
-      }
-    }, 6000);
+        // خطة الإنقاذ الفورية (Fallback): قراءة الموقع فوراً دون إقفال عالي الدقة
+        navigator.geolocation.getCurrentPosition(
+          (fallbackPos) => {
+            executeAttendanceProcess(fallbackPos, type);
+          },
+          (finalError) => {
+            setIsProcessing(false);
+            setLoadingStepText('');
+            let errorMsg = 'تعذر الوصول للموقع. تأكد من تفعيل الـ GPS والسماح للمتصفح بالوصول للموقع.';
+            if (finalError.code === finalError.PERMISSION_DENIED) {
+              errorMsg = 'تم رفض إذن الوصول للموقع. يرجى تفعيل إذن الموقع من إعدادات المتصفح.';
+            }
+            setStatusMessage({ text: errorMsg, isError: true });
+          },
+          { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 4000, maximumAge: 10000 }
+    );
   };
 
-  // 3. معالجة المسافة ومقارنة النطاق
-  const processVerifiedAttendance = async (pos: GeolocationPosition, type: 'CHECK_IN' | 'CHECK_OUT') => {
-    setIsProcessing(false);
-    setGpsLockProgress('');
+  // 3. احتساب المسافة والتسجيل في السيرفر
+  const executeAttendanceProcess = async (pos: GeolocationPosition, type: 'CHECK_IN' | 'CHECK_OUT') => {
+    setLoadingStepText(isRtl ? 'جاري التحقق من النطاق واعتماد البصمة...' : 'Verifying geofence & recording...');
 
     const userLat = pos.coords.latitude;
     const userLng = pos.coords.longitude;
-    const accuracy = Math.round(pos.coords.accuracy);
+    const accuracy = Math.round(pos.coords.accuracy || 20);
 
     setCurrentCoords({ lat: userLat, lng: userLng });
     setGpsAccuracy(accuracy);
@@ -188,12 +167,14 @@ export default function SmartAttendancePage({ params }: PageProps) {
     const rawDistance = calculateDistanceInMeters(userLat, userLng, branchLat, branchLng);
     setCurrentDistance(rawDistance);
 
-    // احتساب هامش دقة الجهاز (Buffer Margin): لإنصاف الموظف في حال ضعف برج الاتصال
-    const effectiveDistance = Math.max(0, rawDistance - Math.min(accuracy / 2, 25));
+    // احتساب هامش ضعف الإشارة داخل المباني والمكاتب
+    const effectiveDistance = Math.max(0, rawDistance - Math.min(accuracy / 2, 35));
 
     if (effectiveDistance > maxRadius) {
+      setIsProcessing(false);
+      setLoadingStepText('');
       setStatusMessage({
-        text: `عفواً، لا يمكنك تسجيل البصمة! أنت خارج نطاق فرع (${currentBranch.nameAr || currentBranch.name}). المسافة المحسوبة: ${rawDistance} متر (النطاق المسموح: ${maxRadius} متر). تأكد من وجودك داخل الفرع.`,
+        text: `عفواً، لا يمكنك تسجيل البصمة! أنت خارج نطاق فرع (${currentBranch.nameAr || currentBranch.name}). المسافة: ${rawDistance} متر (الحد المسموح للفرع: ${maxRadius} متر).`,
         isError: true,
       });
       return;
@@ -201,7 +182,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
 
     try {
       const payload = {
-        userId: userId ? parseInt(userId, 10) : 1,
+        userId: userId || '1',
         branchId: currentBranch.id,
         type,
         latitude: userLat,
@@ -216,14 +197,21 @@ export default function SmartAttendancePage({ params }: PageProps) {
         body: JSON.stringify(payload),
       });
 
-      if (!saveRes.ok) throw new Error('فشل تسجيل البصمة في السيرفر');
+      const resData = await saveRes.json().catch(() => ({}));
+
+      if (!saveRes.ok) {
+        throw new Error(resData.message || 'فشل حفظ البصمة في السيرفر');
+      }
 
       setStatusMessage({
         text: `تم تسجيل ${type === 'CHECK_IN' ? 'الحضور' : 'الانصراف'} بنجاح تام! موقعك مطابق للفرع بنسبة 100% (المسافة: ${rawDistance} متر | دقة الإشارة: ±${accuracy}م).`,
         isError: false,
       });
     } catch (err: any) {
-      setStatusMessage({ text: err.message || 'حدث خطأ أثناء اعتماد البصمة', isError: true });
+      setStatusMessage({ text: err.message || 'حدث خطأ أثناء اعتماد البصمة بالسيرفر', isError: true });
+    } finally {
+      setIsProcessing(false);
+      setLoadingStepText('');
     }
   };
 
@@ -299,7 +287,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* لوحة المقارنة الحية للأقمار الصناعية */}
+          {/* لوحة المقارنة الحية */}
           {currentCoords && (
             <div className="mt-4 pt-3 border-t border-orange-500/10 space-y-2 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -331,7 +319,6 @@ export default function SmartAttendancePage({ params }: PageProps) {
                 )}
               </div>
 
-              {/* زر المقارنة البصرية المباشرة على خرائط جوجل */}
               {currentBranch?.latitude && (
                 <div className="pt-1">
                   <a
@@ -349,11 +336,11 @@ export default function SmartAttendancePage({ params }: PageProps) {
           )}
         </div>
 
-        {/* مؤشر تقدم قفل الأقمار الصناعية */}
-        {gpsLockProgress && (
+        {/* مؤشر التحميل السلس */}
+        {loadingStepText && (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 p-3 text-xs font-bold text-orange-600 dark:text-orange-400">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
-            <span>{gpsLockProgress}</span>
+            <span>{loadingStepText}</span>
           </div>
         )}
 
@@ -370,7 +357,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* أزرار الحضور والانصراف */}
+        {/* أزرار الحضور والانصراف المباشرة */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             type="button"
