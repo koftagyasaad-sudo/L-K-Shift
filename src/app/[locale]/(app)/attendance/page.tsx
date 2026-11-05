@@ -8,7 +8,7 @@ interface PageProps {
   }>;
 }
 
-// معادلة هافيرسين الميدانية لحساب المسافة بدقة الأمتار
+// دالة هافيرسين الميدانية لحساب المسافة بدقة الأمتار
 function calculateDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // نصف قطر الأرض بالمتر
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -29,6 +29,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
   const isRtl = locale === 'ar';
 
   const [userName, setUserName] = useState<string>('');
+  const [userPhone, setUserPhone] = useState<string>('');
   const [userRole, setUserRole] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
 
@@ -45,17 +46,19 @@ export default function SmartAttendancePage({ params }: PageProps) {
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  // 1. تحميل الفرع المسند للموظف بدقة
+  // 1. استرجاع بيانات الموظف والفرع المسند
   const initAttendance = async () => {
     try {
       setIsLoading(true);
       const sId = localStorage.getItem('userId') || '1';
       const sName = localStorage.getItem('userName') || 'مستخدم المنظومة';
+      const sPhone = localStorage.getItem('userPhone') || '';
       const sRole = localStorage.getItem('userRole') || 'موظف';
       const sBranchId = localStorage.getItem('userBranchId') || '';
 
       setUserId(sId);
       setUserName(sName);
+      setUserPhone(sPhone);
       setUserRole(sRole);
 
       const bRes = await fetch('/api/branches', { cache: 'no-store' });
@@ -101,7 +104,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
     }
   };
 
-  // 2. خوارزمية الالتقاط الفوري الصامت (بدون تعليق وبدون انتظار دقة مستحيلة)
+  // 2. فحص الموقع الجغرافي السريع
   const handleRecordAttendance = (type: 'CHECK_IN' | 'CHECK_OUT') => {
     setStatusMessage(null);
 
@@ -118,16 +121,14 @@ export default function SmartAttendancePage({ params }: PageProps) {
     setIsProcessing(true);
     setLoadingStepText(isRtl ? 'جاري قراءة إحداثيات الموقع الحالي...' : 'Reading GPS coordinates...');
 
-    // محاولة دقيقة أولى بمهلة 4 ثوانٍ فقط لمنع التعليق
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         executeAttendanceProcess(pos, type);
       },
       (error) => {
-        console.warn('High-accuracy GPS delayed, switching to instant network location:', error.message);
-        setLoadingStepText(isRtl ? 'جاري تأكيد الموقع عبر برج الاتصال المتاح...' : 'Switching to cell network GPS...');
+        console.warn('High-accuracy GPS delayed, fallback to network:', error.message);
+        setLoadingStepText(isRtl ? 'جاري تأكيد الموقع عبر الشبكة...' : 'Falling back to network GPS...');
 
-        // خطة الإنقاذ الفورية (Fallback): قراءة الموقع فوراً دون إقفال عالي الدقة
         navigator.geolocation.getCurrentPosition(
           (fallbackPos) => {
             executeAttendanceProcess(fallbackPos, type);
@@ -148,9 +149,9 @@ export default function SmartAttendancePage({ params }: PageProps) {
     );
   };
 
-  // 3. احتساب المسافة والتسجيل في السيرفر
+  // 3. مطابقة النطاق والاعتماد الفوري
   const executeAttendanceProcess = async (pos: GeolocationPosition, type: 'CHECK_IN' | 'CHECK_OUT') => {
-    setLoadingStepText(isRtl ? 'جاري التحقق من النطاق واعتماد البصمة...' : 'Verifying geofence & recording...');
+    setLoadingStepText(isRtl ? 'جاري التحقق من النطاق واعتماد البصمة بالسيرفر...' : 'Recording attendance on server...');
 
     const userLat = pos.coords.latitude;
     const userLng = pos.coords.longitude;
@@ -163,11 +164,10 @@ export default function SmartAttendancePage({ params }: PageProps) {
     const branchLng = parseFloat(currentBranch.longitude);
     const maxRadius = parseInt(currentBranch.radiusMeters || currentBranch.geofenceRadius || '100', 10);
 
-    // حساب المسافة الحقيقية
     const rawDistance = calculateDistanceInMeters(userLat, userLng, branchLat, branchLng);
     setCurrentDistance(rawDistance);
 
-    // احتساب هامش ضعف الإشارة داخل المباني والمكاتب
+    // احتساب هامش ضعف الإشارة داخل المباني
     const effectiveDistance = Math.max(0, rawDistance - Math.min(accuracy / 2, 35));
 
     if (effectiveDistance > maxRadius) {
@@ -183,7 +183,10 @@ export default function SmartAttendancePage({ params }: PageProps) {
     try {
       const payload = {
         userId: userId || '1',
+        userName: userName || 'موظف',
+        userPhone: userPhone || '',
         branchId: currentBranch.id,
+        branchName: currentBranch.nameAr || currentBranch.name || '',
         type,
         latitude: userLat,
         longitude: userLng,
@@ -336,7 +339,6 @@ export default function SmartAttendancePage({ params }: PageProps) {
           )}
         </div>
 
-        {/* مؤشر التحميل السلس */}
         {loadingStepText && (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/10 p-3 text-xs font-bold text-orange-600 dark:text-orange-400">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
@@ -344,7 +346,6 @@ export default function SmartAttendancePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* رسائل التنبيه والنجاح */}
         {statusMessage && (
           <div
             className={`mt-6 rounded-xl p-4 text-xs font-bold leading-relaxed ${
@@ -357,7 +358,6 @@ export default function SmartAttendancePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* أزرار الحضور والانصراف المباشرة */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             type="button"
