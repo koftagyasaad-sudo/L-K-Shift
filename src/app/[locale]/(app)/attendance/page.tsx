@@ -8,7 +8,7 @@ interface PageProps {
   }>;
 }
 
-// معادلة هافيرسين الميدانية لحساب المسافة بدقة المتر
+// دالة هافيرسين الميدانية لحساب المسافة بدقة المتر بين إحداثيات الموظف وإحداثيات الفرع
 function calculateDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // نصف قطر الأرض بالمتر
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -28,9 +28,13 @@ export default function SmartAttendancePage({ params }: PageProps) {
   const locale = resolvedParams?.locale || 'ar';
   const isRtl = locale === 'ar';
 
-  const [userId, setUserId] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
-  const [branchData, setBranchData] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
+
+  const [branchesList, setBranchesList] = useState<any[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [currentBranch, setCurrentBranch] = useState<any>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -38,67 +42,76 @@ export default function SmartAttendancePage({ params }: PageProps) {
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  // 1. تحميل الفرع المسند للموظف بدقة 100% من معرّفه
-  const loadBranchInfo = async () => {
+  // 1. استرجاع بيانات الجلسة والفروع المسجلة في قاعدة البيانات
+  const initAttendance = async () => {
     try {
       setIsLoading(true);
-      const storedId = localStorage.getItem('userId') || '';
-      const storedName = localStorage.getItem('userName') || 'موظف';
-      const storedBranchId = localStorage.getItem('userBranchId') || '';
+      const sId = localStorage.getItem('userId') || '';
+      const sName = localStorage.getItem('userName') || 'مستخدم المنظومة';
+      const sRole = localStorage.getItem('userRole') || 'موظف';
+      const sBranchId = localStorage.getItem('userBranchId') || '';
 
-      setUserId(storedId);
-      setUserName(storedName);
+      setUserId(sId);
+      setUserName(sName);
+      setUserRole(sRole);
 
-      // الاستعلام بالمعرف الخاص بالموظف للتأكد من أحدث فرع مسند
-      if (storedId) {
-        const empRes = await fetch(`/api/employees?id=${storedId}`, { cache: 'no-store' });
-        if (empRes.ok) {
-          const emp = await empRes.json();
-          const targetBranchId = emp.branchId || storedBranchId;
-          if (targetBranchId) {
-            const bRes = await fetch(`/api/branches?id=${targetBranchId}`, { cache: 'no-store' });
-            if (bRes.ok) {
-              const b = await bRes.json();
-              setBranchData(b);
-              return;
-            }
-          }
-        }
+      // جلب الفروع المسجلة مباشرة من قاعدة البيانات
+      const bRes = await fetch('/api/branches', { cache: 'no-store' });
+      if (!bRes.ok) throw new Error('فشل جلب بيانات الفروع');
+      const bData = await bRes.json();
+      const list = Array.isArray(bData) ? bData : [];
+      setBranchesList(list);
+
+      // تحديد الفرع المسند للموظف بدقة
+      let activeBranch = null;
+      if (sBranchId) {
+        activeBranch = list.find((b: any) => String(b.id) === String(sBranchId));
       }
 
-      // محاولة احتياطية بمعرف الفرع المخزن
-      if (storedBranchId) {
-        const bRes = await fetch(`/api/branches?id=${storedBranchId}`, { cache: 'no-store' });
-        if (bRes.ok) {
-          const b = await bRes.json();
-          setBranchData(b);
-        }
+      // إذا لم يكن مسنداً (كمدير النظام) نحدد أول فرع نشط (مثل الإدارة)
+      if (!activeBranch && list.length > 0) {
+        activeBranch = list[0];
+      }
+
+      if (activeBranch) {
+        setSelectedBranchId(String(activeBranch.id));
+        setCurrentBranch(activeBranch);
       }
     } catch (err: any) {
-      console.error('Failed to load branch:', err);
+      console.error('Error init attendance:', err);
+      setStatusMessage({ text: 'حدث خطأ أثناء تحميل بيانات الفروع', isError: true });
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadBranchInfo();
+    initAttendance();
   }, []);
 
-  // 2. تحديث وفحص إشارة GPS وقراءة الموقع
+  // تغيير الفرع المختار
+  const handleBranchChange = (newBranchId: string) => {
+    setSelectedBranchId(newBranchId);
+    const found = branchesList.find((b) => String(b.id) === String(newBranchId));
+    if (found) {
+      setCurrentBranch(found);
+      setCurrentCoords(null);
+      setCurrentDistance(null);
+      setStatusMessage(null);
+    }
+  };
+
+  // 2. التحقق من الـ GPS وتسجيل البصمة
   const handleRecordAttendance = (type: 'CHECK_IN' | 'CHECK_OUT') => {
     setStatusMessage(null);
 
     if (!navigator.geolocation) {
-      setStatusMessage({ text: 'متصفحك لا يدعم خاصية تحديد الموقع الجغرافي GPS', isError: true });
+      setStatusMessage({ text: 'متصفحك أو جهازك لا يدعم خاصية تحديد الموقع GPS', isError: true });
       return;
     }
 
-    if (!branchData || !branchData.latitude || !branchData.longitude) {
-      setStatusMessage({
-        text: 'لم يتم ربطك بفرع مسجل أو إحداثيات الفرع غير مكتملة، يرجى مراجعة إدارة المنظومة',
-        isError: true,
-      });
+    if (!currentBranch || !currentBranch.latitude || !currentBranch.longitude) {
+      setStatusMessage({ text: 'إحداثيات الفرع غير مكتملة في النظام، يرجى مراجعة إدارة المنظومة', isError: true });
       return;
     }
 
@@ -110,11 +123,11 @@ export default function SmartAttendancePage({ params }: PageProps) {
         const userLng = pos.coords.longitude;
         setCurrentCoords({ lat: userLat, lng: userLng });
 
-        const branchLat = parseFloat(branchData.latitude);
-        const branchLng = parseFloat(branchData.longitude);
-        const maxRadius = parseInt(branchData.radiusMeters || branchData.geofenceRadius || '100', 10);
+        const branchLat = parseFloat(currentBranch.latitude);
+        const branchLng = parseFloat(currentBranch.longitude);
+        const maxRadius = parseInt(currentBranch.radiusMeters || currentBranch.geofenceRadius || '100', 10);
 
-        // حساب المسافة الدقيقة بين الموظف وإحداثيات الفرع
+        // حساب المسافة الدقيقة بين الموظف وإحداثيات الفرع بالمتر
         const distance = calculateDistanceInMeters(userLat, userLng, branchLat, branchLng);
         setCurrentDistance(distance);
 
@@ -122,7 +135,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
         if (distance > maxRadius) {
           setIsProcessing(false);
           setStatusMessage({
-            text: `عفواً، لا يمكنك تسجيل البصمة! أنت خارج نطاق فرع (${branchData.nameAr || branchData.name}). المسافة المقروءة: ${distance} متر (الحد الأقصى المسموح للبصمة: ${maxRadius} متر).`,
+            text: `عفواً، لا يمكنك تسجيل البصمة! أنت خارج نطاق فرع (${currentBranch.nameAr || currentBranch.name}). المسافة الحالية: ${distance} متر (الحد الأقصى المسموح للبصمة: ${maxRadius} متر).`,
             isError: true,
           });
           return;
@@ -131,8 +144,8 @@ export default function SmartAttendancePage({ params }: PageProps) {
         // إرسال البصمة المعتمدة
         try {
           const payload = {
-            userId: userId || 1,
-            branchId: branchData.id,
+            userId: userId ? parseInt(userId, 10) : 1,
+            branchId: currentBranch.id,
             type,
             latitude: userLat,
             longitude: userLng,
@@ -162,13 +175,15 @@ export default function SmartAttendancePage({ params }: PageProps) {
         setIsProcessing(false);
         let errorMsg = 'تعذر الوصول للموقع الجغرافي. تأكد من تفعيل الـ GPS والسماح للمتصفح بالوصول للموقع.';
         if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'تم رفض الإذن بالوصول للموقع. يرجى تفعيل الموقع من إعدادات المتصفح.';
+          errorMsg = 'تم رفض الإذن بالوصول للموقع. يرجى تفعيل إذن الموقع من إعدادات المتصفح.';
         }
         setStatusMessage({ text: errorMsg, isError: true });
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
+
+  const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -184,43 +199,63 @@ export default function SmartAttendancePage({ params }: PageProps) {
           </div>
           <button
             type="button"
-            onClick={loadBranchInfo}
-            className="rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+            onClick={initAttendance}
+            className="rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 cursor-pointer"
           >
             {isRtl ? 'تحديث الفرع' : 'Reload Branch'}
           </button>
         </div>
 
-        {/* كارت الفرع المربوط بالموظف وإحداثياته */}
+        {/* كارت الفرع المربوط وإحداثياته بالنظام */}
         <div className="mt-6 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400">
-                {isRtl ? 'الفرع المسند إليك رسمياً:' : 'Your Assigned Branch:'}
+                {isAdmin
+                  ? (isRtl ? 'اختر الفرع لتسجيل الحضور / الاختبار:' : 'Select Branch to Test:')
+                  : (isRtl ? 'الفرع المسند إليك رسمياً:' : 'Your Assigned Branch:')}
               </span>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                {branchData ? branchData.nameAr || branchData.name : isRtl ? 'جاري قراءة الفرع...' : 'Loading branch...'}
-              </h3>
+
+              {isAdmin ? (
+                <div className="mt-1.5">
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => handleBranchChange(e.target.value)}
+                    className="rounded-xl border border-orange-500/30 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-bold text-slate-900 dark:text-white focus:outline-none"
+                  >
+                    {branchesList.map((b) => (
+                      <option key={b.id} value={String(b.id)}>
+                        {b.nameAr || b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <h3 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                  {currentBranch ? (currentBranch.nameAr || currentBranch.name) : (isRtl ? 'جاري التحميل...' : 'Loading...')}
+                </h3>
+              )}
+
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {branchData?.address || (isRtl ? 'العنوان مسجل بالنظام' : 'Registered Address')}
+                {currentBranch?.address || (isRtl ? 'العنوان مسجل بالنظام' : 'Registered Address')}
               </p>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/40 dark:bg-black/20 p-3 font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1">
+            <div className="rounded-xl border border-white/10 bg-white/50 dark:bg-black/30 p-3 font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1">
               <div>
                 <strong>{isRtl ? 'إحداثيات الفرع بالنظام:' : 'Branch GPS:'}</strong>
               </div>
-              <div className="text-[11px] text-slate-500">
-                Lat: {branchData?.latitude || '—'} | Lng: {branchData?.longitude || '—'}
+              <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                Lat: {currentBranch?.latitude || '—'} | Lng: {currentBranch?.longitude || '—'}
               </div>
               <div className="text-[11px]">
                 {isRtl ? 'نطاق السماح:' : 'Allowed Radius:'}{' '}
-                <strong className="text-orange-600 font-bold">{branchData?.radiusMeters || 100} متر</strong>
+                <strong className="text-orange-600 font-bold">{currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100} متر</strong>
               </div>
             </div>
           </div>
 
-          {/* المسافة الحالية والموقع المقروء */}
+          {/* المسافة المقروءة ومقارنة الموقع الحالي */}
           {currentCoords && (
             <div className="mt-4 pt-3 border-t border-orange-500/10 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-slate-500">
@@ -231,13 +266,15 @@ export default function SmartAttendancePage({ params }: PageProps) {
                   {isRtl ? 'المسافة عن نقطة الفرع:' : 'Distance:'}{' '}
                   <span
                     className={
-                      currentDistance <= (branchData?.radiusMeters || 100)
+                      currentDistance <= (currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100)
                         ? 'text-emerald-500 text-sm'
                         : 'text-rose-500 text-sm'
                     }
                   >
                     {currentDistance} متر{' '}
-                    {currentDistance <= (branchData?.radiusMeters || 100) ? '✓ (داخل النطاق)' : '✗ (خارج النطاق)'}
+                    {currentDistance <= (currentBranch?.radiusMeters || currentBranch?.geofenceRadius || 100)
+                      ? '✓ (داخل النطاق)'
+                      : '✗ (خارج النطاق)'}
                   </span>
                 </span>
               )}
@@ -262,7 +299,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button
             type="button"
-            disabled={isProcessing || isLoading || !branchData}
+            disabled={isProcessing || isLoading || !currentBranch}
             onClick={() => handleRecordAttendance('CHECK_IN')}
             className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-6 text-white shadow-lg transition hover:opacity-95 disabled:opacity-50 cursor-pointer"
           >
@@ -273,7 +310,7 @@ export default function SmartAttendancePage({ params }: PageProps) {
 
           <button
             type="button"
-            disabled={isProcessing || isLoading || !branchData}
+            disabled={isProcessing || isLoading || !currentBranch}
             onClick={() => handleRecordAttendance('CHECK_OUT')}
             className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-orange-600 p-6 text-white shadow-lg transition hover:opacity-95 disabled:opacity-50 cursor-pointer"
           >
