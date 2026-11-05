@@ -18,7 +18,6 @@ export default function EditBranchPage({ params }: PageProps) {
   const branchId = resolvedParams?.id;
   const isRtl = locale === 'ar';
 
-  // حالات النموذج
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
@@ -26,16 +25,49 @@ export default function EditBranchPage({ params }: PageProps) {
   const [longitude, setLongitude] = useState('');
   const [radiusMeters, setRadiusMeters] = useState('100');
   const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [managerName, setManagerName] = useState('');
   const [isActive, setIsActive] = useState(true);
 
-  // حالات التحميل والتنبيهات
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCapturingGps, setIsCapturingGps] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [mapsExtractedMessage, setMapsExtractedMessage] = useState<string | null>(null);
 
-  // استخراج الإحداثيات الذكي من رابط أو نص Google Maps
+  // ميزة المعايرة الميدانية الفورية: التقاط موقعك الفعلي كإحداثيات للفرع
+  const captureCurrentGpsLocation = () => {
+    if (!navigator.geolocation) {
+      alert(isRtl ? 'المتصفح لا يدعم تحديد الموقع GPS' : 'GPS not supported');
+      return;
+    }
+
+    setIsCapturingGps(true);
+    setMapsExtractedMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsCapturingGps(false);
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        setLatitude(lat);
+        setLongitude(lng);
+        setMapsExtractedMessage(
+          isRtl
+            ? `✓ تم التقاط إحداثيات موقعك الفعلي بنجاح: (${lat}, ${lng}) بدقة ±${Math.round(pos.coords.accuracy)}م`
+            : `✓ Captured Current GPS: (${lat}, ${lng})`
+        );
+      },
+      (err) => {
+        setIsCapturingGps(false);
+        alert(isRtl ? 'تعذر التقاط الموقع، تأكد من تفعيل الـ GPS والسماح للمتصفح' : 'Failed to capture GPS');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  // استخراج الإحداثيات الذكي من الرابط
   const handleMapsUrlInput = (url: string) => {
     setGoogleMapsUrl(url);
     setMapsExtractedMessage(null);
@@ -48,7 +80,7 @@ export default function EditBranchPage({ params }: PageProps) {
       setLongitude(atMatch[2]);
       setMapsExtractedMessage(
         isRtl
-          ? `✓ تم استخراج الإحداثيات تلقائياً: (${atMatch[1]}, ${atMatch[2]})`
+          ? `✓ تم استخراج الإحداثيات من الرابط: (${atMatch[1]}, ${atMatch[2]})`
           : `✓ Extracted Coordinates: (${atMatch[1]}, ${atMatch[2]})`
       );
       return;
@@ -60,7 +92,7 @@ export default function EditBranchPage({ params }: PageProps) {
       setLongitude(qMatch[2]);
       setMapsExtractedMessage(
         isRtl
-          ? `✓ تم استخراج الإحداثيات تلقائياً: (${qMatch[1]}, ${qMatch[2]})`
+          ? `✓ تم استخراج الإحداثيات من الرابط: (${qMatch[1]}, ${qMatch[2]})`
           : `✓ Extracted Coordinates: (${qMatch[1]}, ${qMatch[2]})`
       );
       return;
@@ -72,13 +104,12 @@ export default function EditBranchPage({ params }: PageProps) {
       setLongitude(rawCoordsMatch[2]);
       setMapsExtractedMessage(
         isRtl
-          ? `✓ تم ضبط الإحداثيات بنجاح: (${rawCoordsMatch[1]}, ${rawCoordsMatch[2]})`
+          ? `✓ تم تعيين الإحداثيات بنجاح: (${rawCoordsMatch[1]}, ${rawCoordsMatch[2]})`
           : `✓ Adjusted Coordinates: (${rawCoordsMatch[1]}, ${rawCoordsMatch[2]})`
       );
     }
   };
 
-  // جلب بيانات الفرع الحالية
   useEffect(() => {
     if (!branchId) return;
 
@@ -89,17 +120,17 @@ export default function EditBranchPage({ params }: PageProps) {
 
         const res = await fetch(`/api/branches?id=${branchId}`, {
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
           cache: 'no-store',
         });
 
-        if (!res.ok) {
-          throw new Error('فشل جلب بيانات الفرع');
-        }
+        if (!res.ok) throw new Error('فشل جلب بيانات الفرع');
 
         const data = await res.json();
         setNameAr(data.nameAr || data.name || '');
         setNameEn(data.nameEn || '');
+        setPhone(data.phone || '');
+        setManagerName(data.managerName || '');
+        setGoogleMapsUrl(data.googleMapsUrl || '');
         setAddress(data.address || '');
         setLatitude(data.latitude ? String(data.latitude) : '');
         setLongitude(data.longitude ? String(data.longitude) : '');
@@ -115,7 +146,6 @@ export default function EditBranchPage({ params }: PageProps) {
     fetchBranchData();
   }, [branchId]);
 
-  // حفظ التعديلات
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameAr.trim()) return;
@@ -129,6 +159,9 @@ export default function EditBranchPage({ params }: PageProps) {
       name: nameAr.trim(),
       nameAr: nameAr.trim(),
       nameEn: nameEn.trim() || nameAr.trim(),
+      phone: phone.trim(),
+      managerName: managerName.trim(),
+      googleMapsUrl: googleMapsUrl.trim(),
       address: address.trim(),
       latitude: latitude.trim(),
       longitude: longitude.trim(),
@@ -149,7 +182,7 @@ export default function EditBranchPage({ params }: PageProps) {
         throw new Error(errData.message || 'فشل تحديث بيانات الفرع');
       }
 
-      setSuccessMessage(isRtl ? 'تم تحديث بيانات الفرع بنجاح' : 'Branch updated successfully');
+      setSuccessMessage(isRtl ? 'تم تحديث بيانات الفرع والإحداثيات بنجاح' : 'Branch updated successfully');
 
       setTimeout(() => {
         router.push(`/${locale}/admin/branches`);
@@ -165,173 +198,201 @@ export default function EditBranchPage({ params }: PageProps) {
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {isRtl ? 'جاري تحميل بيانات الفرع...' : 'Loading branch data...'}
-          </span>
-        </div>
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر العودة */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            {isRtl ? 'تعديل بيانات الفرع' : 'Edit Branch'}
+            {isRtl ? 'تعديل بيانات وإحداثيات الفرع' : 'Edit Branch Coordinates'}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {isRtl
-              ? 'تحديث النطاق الجغرافي والإحداثيات وحالة تشغيل الفرع'
-              : 'Update geographic geofence, coordinates, and operating status'}
+              ? 'معايرة النطاق الجغرافي ونصف قطر البصمة بدقة الأمتار'
+              : 'Calibrate GPS geofence and radius in meters'}
           </p>
         </div>
         <Link
           href={`/${locale}/admin/branches`}
-          className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {isRtl ? 'العودة لقائمة الفروع' : 'Back to Branches'}
         </Link>
       </div>
 
-      {/* رسائل التنبيه والنجاح */}
       {errorMessage && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-sm font-medium text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400">
-          <div className="flex items-center gap-2">
-            <span className="font-bold">{isRtl ? 'تنبيه:' : 'Notice:'}</span>
-            <span>{errorMessage}</span>
-          </div>
+          {errorMessage}
         </div>
       )}
 
       {successMessage && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
-          <div className="flex items-center gap-2">
-            <span className="font-bold">✓</span>
-            <span>{successMessage}</span>
-          </div>
+          {successMessage}
         </div>
       )}
 
-      {/* بطاقة النموذج المتوافقة مع الثيمين */}
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/10 dark:bg-[#121526] dark:shadow-xl sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* اسم الفرع بالعربي */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'اسم الفرع' : 'Branch Name'} <span className="text-rose-500">*</span>
+                {isRtl ? 'اسم الفرع بالعربي' : 'Branch Name (Arabic)'} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={nameAr}
                 onChange={(e) => setNameAr(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder={isRtl ? 'كفتجي دسوق' : 'Branch Name'}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
 
-            {/* اسم الفرع بالإنجليزي */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'الاسم بالإنجليزية (English Name)' : 'English Name'}
+                {isRtl ? 'اسم الفرع بالإنجليزي' : 'English Name'}
               </label>
               <input
                 type="text"
                 value={nameEn}
                 onChange={(e) => setNameEn(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder="Koftagy Desouk"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
 
-            {/* خانة رابط خرائط جوجل الذكية */}
-            <div className="sm:col-span-2">
+            <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'رابط Google Maps أو الإحداثيات' : 'Google Maps URL / Coordinates'}
+                {isRtl ? 'هاتف الفرع' : 'Phone'}
               </label>
               <input
                 type="text"
-                value={googleMapsUrl}
-                onChange={(e) => handleMapsUrlInput(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder="https://www.google.com/maps/@31.1218,30.6480,17z أو الصق خط الطول والعرض مباشرة"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                placeholder="05XXXXXXXX"
               />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                {isRtl ? 'اسم المدير / المشرف' : 'Manager'}
+              </label>
+              <input
+                type="text"
+                value={managerName}
+                onChange={(e) => setManagerName(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* ميزة المعايرة الميدانية وحقل الخرائط */}
+            <div className="sm:col-span-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {isRtl ? '📍 المعايرة الميدانية المباشرة (حل مشكلة المسافة للأبد)' : 'Ground-Truth Calibration'}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {isRtl
+                      ? 'إذا كنت متواجداً داخل الفرع حالياً، اضغط هنا لالتقاط إحداثيات هاتفك الحقيقية وتثبيتها للفرع بنسبة 100%:'
+                      : 'Capture your current GPS directly while standing in the branch:'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={captureCurrentGpsLocation}
+                  disabled={isCapturingGps}
+                  className="shrink-0 inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {isCapturingGps
+                    ? (isRtl ? 'جاري الالتقاط بالـ GPS...' : 'Capturing...')
+                    : (isRtl ? '🎯 تثبيت موقعي الحالي كإحداثيات للفرع' : 'Set Current Location as Branch GPS')}
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  {isRtl ? 'أو الصق رابط الفرع من Google Maps' : 'Or Paste Google Maps URL'}
+                </label>
+                <input
+                  type="text"
+                  value={googleMapsUrl}
+                  onChange={(e) => handleMapsUrlInput(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  placeholder="https://maps.google.com/..."
+                />
+              </div>
+
               {mapsExtractedMessage && (
-                <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                   {mapsExtractedMessage}
                 </p>
               )}
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                {isRtl
-                  ? 'الصق رابط الفرع من خرائط Google لاستخراج خط الطول والعرض وتحديث النطاق تلقائياً.'
-                  : 'Paste Google Maps URL to automatically extract coordinates.'}
-              </p>
             </div>
 
-            {/* خط العرض (Latitude) */}
+            {/* خط العرض وخط الطول */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'خط العرض (Latitude)' : 'Latitude'}
+                {isRtl ? 'خط العرض (Latitude)' : 'Latitude'} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 value={latitude}
                 onChange={(e) => setLatitude(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 placeholder="31.121838"
               />
             </div>
 
-            {/* خط الطول (Longitude) */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'خط الطول (Longitude)' : 'Longitude'}
+                {isRtl ? 'خط الطول (Longitude)' : 'Longitude'} <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
+                required
                 value={longitude}
                 onChange={(e) => setLongitude(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 placeholder="30.648094"
               />
             </div>
 
-            {/* نصف قطر النطاق الجغرافي */}
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'نصف قطر نطاق البصمة (بالمتر)' : 'Geofence Radius (meters)'}
               </label>
               <input
                 type="number"
-                min="5"
+                min="10"
                 max="5000"
                 value={radiusMeters}
                 onChange={(e) => setRadiusMeters(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 placeholder="100"
               />
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {isRtl ? 'يُفضل ضبطه بين 50 إلى 150 متراً لمراعاة المباني المغلقة وضعف الإشارة داخل المكاتب.' : 'Recommended between 50 to 150 meters for indoor accuracy.'}
+              </p>
             </div>
 
-            {/* العنوان التفصيلي */}
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                {isRtl ? 'العنوان التفصيلي' : 'Address'}
+                {isRtl ? 'العنوان النصي' : 'Address'}
               </label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-500"
-                placeholder={isRtl ? 'المدينة، الشارع، علامة مميزة' : 'City, Street...'}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
 
-            {/* تفعيل الفرع */}
             <div className="sm:col-span-2 pt-2">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -341,15 +402,12 @@ export default function EditBranchPage({ params }: PageProps) {
                   className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500 dark:border-slate-700 dark:bg-slate-900"
                 />
                 <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  {isRtl
-                    ? 'تفعيل الفرع ضمن خطة التشغيل والشفتات النشطة'
-                    : 'Activate branch for operations and shifts'}
+                  {isRtl ? 'تفعيل الفرع ضمن خطة الحضور والبصمة' : 'Activate Branch'}
                 </span>
               </label>
             </div>
           </div>
 
-          {/* أزرار الإجراءات */}
           <div className="flex items-center justify-end gap-3 border-t border-slate-100 pt-6 dark:border-white/5">
             <Link
               href={`/${locale}/admin/branches`}
@@ -360,7 +418,7 @@ export default function EditBranchPage({ params }: PageProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50"
             >
               {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ التعديلات' : 'Save Changes')}
             </button>
