@@ -23,7 +23,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const [userRole, setUserRole] = useState<string>('مدير النظام');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // مزامنة حالة المصادقة والثيم مع عنصر HTML الجذري
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
@@ -35,7 +34,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     if (savedName) setUserName(savedName);
     if (savedRole) setUserRole(savedRole);
 
-    // تفعيل كلاس dark على جذر الصفحة (HTML) فور التحميل
     const savedTheme = (localStorage.getItem('theme') as 'dark' | 'light') || 'dark';
     setTheme(savedTheme);
     if (savedTheme === 'dark') {
@@ -45,12 +43,10 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     }
   }, [locale, router]);
 
-  // دالة تبديل المظهر وتحديث محرك الـ CSS الجذري
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
     localStorage.setItem('theme', nextTheme);
-
     if (nextTheme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -59,63 +55,96 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   };
 
   const isDark = theme === 'dark';
+  const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
 
-  const navItems = [
-    {
-      name: isRtl ? 'لوحة التحكم' : 'Dashboard',
-      href: `/${locale}/admin/dashboard`,
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-        </svg>
-      ),
-    },
-    {
-      name: isRtl ? 'الحضور والانصراف' : 'Attendance',
-      href: `/${locale}/attendance`,
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-    },
-    {
-      name: isRtl ? 'الموظفين' : 'Employees',
-      href: `/${locale}/admin/employees`,
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      ),
-    },
-    {
-      name: isRtl ? 'الفروع' : 'Branches',
-      href: `/${locale}/admin/branches`,
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      ),
-    },
-    {
-      name: isRtl ? 'الأدوار' : 'Roles',
-      href: `/${locale}/admin/roles`,
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-      ),
-    },
-    {
-      name: isRtl ? 'مراجعة الحضور' : 'Attendance Review',
-      href: `/${locale}/admin/attendance-review`,
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-        </svg>
-      ),
-    },
-  ];
+  // تحديد القوائم المسموحة بدقة وفقاً لصلاحيات المستخدم
+  const navItems = isAdmin
+    ? [
+        {
+          name: isRtl ? 'لوحة التحكم' : 'Dashboard',
+          href: `/${locale}/admin/dashboard`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'الحضور والانصراف' : 'Attendance',
+          href: `/${locale}/attendance`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'الموظفين' : 'Employees',
+          href: `/${locale}/admin/employees`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'الفروع' : 'Branches',
+          href: `/${locale}/admin/branches`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'الأدوار' : 'Roles',
+          href: `/${locale}/admin/roles`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'مراجعة الحضور' : 'Attendance Review',
+          href: `/${locale}/admin/attendance-review`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          ),
+        },
+      ]
+    : [
+        // القائمة الخاصة بالموظف العادي وباقي الكوادر
+        {
+          name: isRtl ? 'تسجيل الحضور' : 'Check-In/Out',
+          href: `/${locale}/attendance`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'فرعي وفريق العمل' : 'My Branch Staff',
+          href: `/${locale}/employee/my-branch`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          ),
+        },
+        {
+          name: isRtl ? 'سجل حضوري وإجازاتي' : 'My Attendance & Leaves',
+          href: `/${locale}/admin/attendance-review`,
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          ),
+        },
+      ];
 
   return (
     <div
@@ -124,7 +153,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
       }`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* القائمة الجانبية (Sidebar) */}
       <aside
         className={`fixed inset-y-0 z-40 flex flex-col shadow-2xl transition-all duration-300 ${
           isRtl ? 'right-0' : 'left-0'
@@ -149,7 +177,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                   L-K Shift
                 </h1>
                 <p className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {isRtl ? 'نظام الحضور والورديات' : 'Attendance & Shifts'}
+                  {isAdmin ? (isRtl ? 'إدارة المنظومة' : 'Core Admin') : (isRtl ? 'بوابة الموظف' : 'Staff Portal')}
                 </p>
               </div>
             </div>
@@ -163,10 +191,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
 
         <nav className="flex-1 space-y-1.5 px-3 py-6 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive =
-              pathname === item.href ||
-              (item.href.includes('/dashboard') && pathname === `/${locale}/admin`);
-
+            const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
@@ -180,17 +205,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                 } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}
                 title={isSidebarCollapsed ? item.name : undefined}
               >
-                <span
-                  className={`transition-transform duration-200 group-hover:scale-110 ${
-                    isActive
-                      ? 'text-white'
-                      : isDark
-                      ? 'text-slate-400 group-hover:text-white'
-                      : 'text-slate-500 group-hover:text-slate-900'
-                  }`}
-                >
-                  {item.icon}
-                </span>
+                <span>{item.icon}</span>
                 {!isSidebarCollapsed && <span>{item.name}</span>}
               </Link>
             );
@@ -211,7 +226,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         </div>
       </aside>
 
-      {/* منطقة المحتوى ورأس الصفحة العلوي */}
       <div
         className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${
           isSidebarCollapsed
@@ -219,7 +233,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             : isRtl ? 'mr-64' : 'ml-64'
         }`}
       >
-        {/* الشريط العلوي (Header) */}
         <header
           className={`sticky top-0 z-30 flex h-20 items-center justify-between border-b px-6 backdrop-blur-xl transition-colors duration-300 ${
             isDark
@@ -240,7 +253,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* زر تبديل الثيم المطور */}
             <button
               onClick={toggleTheme}
               className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
@@ -248,33 +260,10 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
                   ? 'border-white/10 bg-white/[0.03] text-amber-400 hover:bg-white/[0.08]'
                   : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
-              title={isDark ? (isRtl ? 'التبديل إلى الوضع الفاتح' : 'Switch to Light Mode') : (isRtl ? 'التبديل إلى الوضع الداكن' : 'Switch to Dark Mode')}
-              aria-label="Toggle Theme"
             >
-              {isDark ? (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              )}
+              {isDark ? '☀️' : '🌙'}
             </button>
 
-            {/* زر تبديل اللغة */}
-            <Link
-              href={isRtl ? `/en${pathname.replace('/ar', '')}` : `/ar${pathname.replace('/en', '')}`}
-              className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
-                isDark
-                  ? 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.08]'
-                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {isRtl ? 'EN' : 'عربي'}
-            </Link>
-
-            {/* زر تسجيل الخروج */}
             <button
               onClick={() => {
                 localStorage.removeItem('isAuthenticated');
@@ -287,7 +276,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
           </div>
         </header>
 
-        {/* مساحة الرندر الرئيسية */}
         <main className="flex-1 p-6 sm:p-8 overflow-x-hidden">
           {children}
         </main>
