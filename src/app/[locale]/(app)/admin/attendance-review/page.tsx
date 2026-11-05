@@ -35,21 +35,41 @@ export default function AttendanceReviewPage({ params }: PageProps) {
   const [toDate, setToDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [userRole, setUserRole] = useState<string>('موظف');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
 
-  // جلب الموظفين لملء قائمة الفلترة
   useEffect(() => {
-    fetch('/api/employees', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => setEmployees(Array.isArray(data) ? data : []))
-      .catch((err) => console.error('Failed to load employees:', err));
+    const role = localStorage.getItem('userRole') || 'موظف';
+    const uid = localStorage.getItem('userId') || '';
+    setUserRole(role);
+    setCurrentUserId(uid);
+
+    const isAdmin = role === 'مدير النظام' || role === 'SUPER_ADMIN' || role === 'admin';
+
+    // إذا كان الموظف عادياً، يتم حصر السجلات على معرّفه فقط
+    if (!isAdmin && uid) {
+      setSelectedUser(uid);
+    }
+
+    // جلب قائمة الموظفين للأدمن فقط
+    if (isAdmin) {
+      fetch('/api/employees', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((data) => setEmployees(Array.isArray(data) ? data : []))
+        .catch((err) => console.error('Failed to load employees:', err));
+    }
   }, []);
 
-  // جلب السجلات المفلترة
+  const isAdmin = userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN' || userRole === 'admin';
+
   const fetchLogs = async () => {
     try {
       setIsLoading(true);
       const paramsObj = new URLSearchParams();
-      if (selectedUser) paramsObj.set('userId', selectedUser);
+
+      // فرض معرّف الموظف في حال لم يكن مديراً
+      const targetUserId = isAdmin ? selectedUser : currentUserId;
+      if (targetUserId) paramsObj.set('userId', targetUserId);
       if (fromDate) paramsObj.set('from', fromDate);
       if (toDate) paramsObj.set('to', toDate);
 
@@ -66,10 +86,11 @@ export default function AttendanceReviewPage({ params }: PageProps) {
   };
 
   useEffect(() => {
-    fetchLogs();
-  }, [selectedUser, fromDate, toDate]);
+    if (currentUserId || isAdmin) {
+      fetchLogs();
+    }
+  }, [selectedUser, fromDate, toDate, currentUserId]);
 
-  // تصفية السجلات نصياً
   const filteredLogs = logs.filter((log) => {
     const term = searchQuery.toLowerCase();
     return (
@@ -79,14 +100,13 @@ export default function AttendanceReviewPage({ params }: PageProps) {
     );
   });
 
-  // حساب الملخص المالي والإداري للموظف المحدد
   const selectedEmpObj = employees.find((e) => String(e.id) === String(selectedUser));
   const totalAnnualLeaves = selectedEmpObj?.annualLeaveDays || 21;
   const usedLeaves = selectedEmpObj?.usedLeaveDays || 0;
   const remainingLeaves = Math.max(0, totalAnnualLeaves - usedLeaves);
 
-  // دالة تصدير شيت Excel عربي نقي متوافق 100% مع Microsoft Excel
   const exportToExcel = () => {
+    if (!isAdmin) return;
     if (filteredLogs.length === 0) {
       alert(isRtl ? 'لا توجد بيانات مطابقة لتصديرها' : 'No data to export');
       return;
@@ -114,7 +134,6 @@ export default function AttendanceReviewPage({ params }: PageProps) {
       log.isVerifiedGeofence ? 'مطابق للنطاق' : 'خارج النطاق',
     ]);
 
-    // إضافة BOM (\uFEFF) ليقرأ Excel الحروف العربية دون أي تشوه
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -128,25 +147,28 @@ export default function AttendanceReviewPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر التصدير */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
-            {isRtl ? 'سجل بصمات الحضور والإنصراف' : 'Attendance Audit & Logs'}
+            {isAdmin ? (isRtl ? 'سجل بصمات الحضور والإنصراف' : 'Attendance Audit & Logs') : (isRtl ? 'سجل حضوري وإجازاتي' : 'My Attendance & Leaves')}
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {isRtl ? 'متابعة فورية للحركات المسجلة عبر البصمة والتحقق الجغرافي بالـ GPS' : 'Live check-in audit & GPS proofs'}
+            {isAdmin
+              ? (isRtl ? 'متابعة فورية للحركات المسجلة عبر البصمة والتحقق الجغرافي بالـ GPS' : 'Live check-in audit & GPS proofs')
+              : (isRtl ? 'ملخص حركات حضورك وانصرافك ورصيد إجازاتك المتبقية' : 'Personal attendance history & leave balance')}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={exportToExcel}
-            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:bg-emerald-700 cursor-pointer"
-          >
-            {isRtl ? '📊 سحب شيت Excel' : 'Export Excel'}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={exportToExcel}
+              className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:bg-emerald-700 cursor-pointer"
+            >
+              {isRtl ? '📊 سحب شيت Excel' : 'Export Excel'}
+            </button>
+          )}
           <button
             type="button"
             onClick={fetchLogs}
@@ -157,7 +179,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* بطاقات الإحصائيات وأرصدة الإجازات المتبقية للموظف */}
+      {/* كروت الإحصائيات والأرصدة */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'إجمالي الحركات' : 'Total Logs'}</span>
@@ -174,7 +196,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'رصيد الإجازات المتبقي' : 'Remaining Leaves'}</span>
           <div className="mt-2 text-2xl font-black text-orange-600 dark:text-orange-400">
-            {selectedUser ? `${remainingLeaves} يوم` : 'اختر موظف'}
+            {isAdmin ? (selectedUser ? `${remainingLeaves} يوم` : 'اختر موظف') : `${remainingLeaves} يوم`}
           </div>
         </div>
 
@@ -186,25 +208,27 @@ export default function AttendanceReviewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* قسم الفلاتر المتقدمة */}
+      {/* قسم الفلاتر (تظهر قائمة الموظفين للأدمن فقط) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
-        <div>
-          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-            {isRtl ? 'تصفية حسب الموظف' : 'Filter Employee'}
-          </label>
-          <select
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-          >
-            <option value="">{isRtl ? '-- جميع الموظفين --' : '-- All Staff --'}</option>
-            {employees.map((emp) => (
-              <option key={emp.id} value={String(emp.id)}>
-                {emp.name || emp.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isAdmin && (
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              {isRtl ? 'تصفية حسب الموظف' : 'Filter Employee'}
+            </label>
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            >
+              <option value="">{isRtl ? '-- جميع الموظفين --' : '-- All Staff --'}</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={String(emp.id)}>
+                  {emp.name || emp.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
@@ -244,7 +268,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* جدول السجلات التفصيلي */}
+      {/* جدول السجلات */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
         {isLoading ? (
           <div className="flex min-h-[300px] items-center justify-center">
@@ -252,7 +276,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
-            <p className="text-base font-medium">{isRtl ? 'لا توجد سجلات متطابقة مع البحث' : 'No logs found'}</p>
+            <p className="text-base font-medium">{isRtl ? 'لا توجد سجلات متطابقة مع البحث' : 'No logs found'}[cite: 5]</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
