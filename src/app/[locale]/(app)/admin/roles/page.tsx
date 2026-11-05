@@ -16,17 +16,46 @@ interface PageProps {
   }>;
 }
 
-const AVAILABLE_PERMISSIONS = [
-  { id: 'attendance.view', labelAr: 'عرض الحضور والانصراف' },
-  { id: 'attendance.check_in', labelAr: 'تسجيل البصمة الذكية' },
-  { id: 'attendance.review', labelAr: 'مراجعة واعتماد الحضور' },
-  { id: 'attendance.override', labelAr: 'تعديل بصمات الحضور' },
-  { id: 'attendance.export', labelAr: 'تصدير تقارير الحضور' },
-  { id: 'employees.view', labelAr: 'عرض بيانات الموظفين' },
-  { id: 'employees.manage', labelAr: 'إدارة وحسابات الموظفين' },
-  { id: 'branches.view', labelAr: 'عرض الفروع والنطاق' },
-  { id: 'branches.manage', labelAr: 'إدارة وتعديل الفروع' },
-  { id: 'roles.manage', labelAr: 'إدارة الأدوار والصلاحيات' },
+// مصفوفة الصلاحيات الشاملة المقسمة حسب أقسام العمل
+const PERMISSION_GROUPS = [
+  {
+    category: 'لوحة التحكم والتقارير',
+    perms: [
+      { id: 'dashboard.view', label: 'الاطلاع على لوحة التحكم المركزية' },
+      { id: 'dashboard.stats', label: 'الاطلاع على الإحصائيات الشاملة' },
+    ],
+  },
+  {
+    category: 'الحضور والبصمة الذكية',
+    perms: [
+      { id: 'attendance.check_in', label: 'تسجيل البصمة بالـ GPS (حضور وانصراف)' },
+      { id: 'attendance.review', label: 'الاطلاع على كشف وسجلات الحضور' },
+      { id: 'attendance.export', label: 'سحب وتصدير شيت Excel للحضور' },
+    ],
+  },
+  {
+    category: 'الفروع والتشغيل',
+    perms: [
+      { id: 'branches.view', label: 'عرض الفروع ونطاق الـ Geofence' },
+      { id: 'branches.manage', label: 'إضافة وتعديل وحذف الفروع وإحداثياتها' },
+      { id: 'branch.view_own', label: 'الاطلاع على فرعي وفريق العمل فقط' },
+    ],
+  },
+  {
+    category: 'الموظفين والحسابات',
+    perms: [
+      { id: 'employees.view', label: 'الاطلاع على قائمة الموظفين' },
+      { id: 'employees.manage', label: 'إضافة وتعديل بيانات الموظفين والرواتب' },
+      { id: 'employees.delete', label: 'حذف حسابات الموظفين' },
+    ],
+  },
+  {
+    category: 'الأدوار وإدارة النظام',
+    perms: [
+      { id: 'roles.manage', label: 'التحكم بالأدوار والصلاحيات المخصصة' },
+      { id: 'requests.review', label: 'اعتماد طلبات الإجازات والأذونات' },
+    ],
+  },
 ];
 
 export default function AdminRolesPage({ params }: PageProps) {
@@ -38,7 +67,6 @@ export default function AdminRolesPage({ params }: PageProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [deletingId, setDeletingId] = useState<number | string | null>(null);
 
-  // حالة النافذة المنبثقة للإضافة والتعديل (تمنع خطأ 404 نهائياً)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleItem | null>(null);
   const [roleNameAr, setRoleNameAr] = useState('');
@@ -69,7 +97,7 @@ export default function AdminRolesPage({ params }: PageProps) {
     setEditingRole(null);
     setRoleNameAr('');
     setRoleCode('');
-    setSelectedPermissions(['attendance.view', 'attendance.check_in']);
+    setSelectedPermissions(['attendance.check_in', 'branch.view_own']);
     setIsModalOpen(true);
   };
 
@@ -91,6 +119,16 @@ export default function AdminRolesPage({ params }: PageProps) {
     setSelectedPermissions((prev) =>
       prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
     );
+  };
+
+  const handleSelectAllGroup = (groupPerms: { id: string }[]) => {
+    const groupIds = groupPerms.map((p) => p.id);
+    const allSelected = groupIds.every((id) => selectedPermissions.includes(id));
+    if (allSelected) {
+      setSelectedPermissions((prev) => prev.filter((id) => !groupIds.includes(id)));
+    } else {
+      setSelectedPermissions((prev) => Array.from(new Set([...prev, ...groupIds])));
+    }
   };
 
   const handleSaveRole = async (e: React.FormEvent) => {
@@ -147,28 +185,28 @@ export default function AdminRolesPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            {isRtl ? 'الأدوار والصلاحيات' : 'Roles & Permissions'}
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
+            {isRtl ? 'إدارة الأدوار والصلاحيات المخصصة' : 'Roles & Permissions Matrix'}
           </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {isRtl
-              ? 'إدارة الرتب الوظيفية وصلاحيات الوصول لكافة أقسام النظام'
-              : 'Configure system roles, access levels, and security permissions'}
+              ? 'التحكم بما يمكن لكل رتبة رؤيته وتعديله داخل أقسام المنظومة'
+              : 'Granular access control & module authorization'}
           </p>
         </div>
 
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none cursor-pointer"
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none cursor-pointer"
         >
           {isRtl ? '+ إضافة دور مخصص' : '+ Add Custom Role'}
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80">
         {isLoading ? (
           <div className="flex min-h-[300px] items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
@@ -185,7 +223,7 @@ export default function AdminRolesPage({ params }: PageProps) {
               <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
                 <tr>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'اسم الدور' : 'Role Name'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'المعرف البرمجي' : 'Code'}</th>
+                  <th className="px-6 py-4 font-semibold">{isRtl ? 'المعرف' : 'Code'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'الصلاحيات الممنوحة' : 'Permissions'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'النوع' : 'Type'}</th>
                   <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
@@ -200,6 +238,8 @@ export default function AdminRolesPage({ params }: PageProps) {
                     perms = Object.keys(role.permissions);
                   }
 
+                  const isSuper = perms.includes('*') || role.name === 'SUPER_ADMIN';
+
                   return (
                     <tr key={role.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
                       <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
@@ -209,25 +249,31 @@ export default function AdminRolesPage({ params }: PageProps) {
                         {role.name}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-1.5 max-w-md">
-                          {perms.length === 0 ? (
-                            <span className="text-xs text-slate-400">—</span>
-                          ) : (
-                            perms.slice(0, 4).map((p: string, idx: number) => (
-                              <span
-                                key={idx}
-                                className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-white/5 dark:text-slate-300"
-                              >
-                                {p}
+                        {isSuper ? (
+                          <span className="inline-flex items-center rounded-md bg-purple-500/10 px-2.5 py-1 text-xs font-bold text-purple-600 dark:text-purple-400">
+                            ★ صلاحية كاملة على كل شيء (*)
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 max-w-md">
+                            {perms.length === 0 ? (
+                              <span className="text-xs text-slate-400">—</span>
+                            ) : (
+                              perms.slice(0, 4).map((p: string, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-white/5 dark:text-slate-300"
+                                >
+                                  {p}
+                                </span>
+                              ))
+                            )}
+                            {perms.length > 4 && (
+                              <span className="inline-flex items-center rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-600 dark:text-orange-400">
+                                +{perms.length - 4}
                               </span>
-                            ))
-                          )}
-                          {perms.length > 4 && (
-                            <span className="inline-flex items-center rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-600 dark:text-orange-400">
-                              +{perms.length - 4}
-                            </span>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -250,7 +296,7 @@ export default function AdminRolesPage({ params }: PageProps) {
                               onClick={() => openEditModal(role)}
                               className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400 cursor-pointer"
                             >
-                              {isRtl ? 'تعديل' : 'Edit'}
+                              {isRtl ? 'تعديل الصلاحيات' : 'Edit'}
                             </button>
                             <button
                               type="button"
@@ -272,15 +318,15 @@ export default function AdminRolesPage({ params }: PageProps) {
         )}
       </div>
 
-      {/* نافذة الإضافة والتعديل المنبثقة التفاعلية */}
+      {/* نافذة التحكم المفصل بالصلاحيات (Modal) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition dark:border-white/10 dark:bg-[#121526]">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-white/5">
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl transition dark:border-white/10 dark:bg-[#121526]">
+            <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-white/5">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 {editingRole
-                  ? isRtl ? 'تعديل الدور المخصص' : 'Edit Custom Role'
-                  : isRtl ? 'إضافة دور مخصص جديد' : 'Add New Custom Role'}
+                  ? (isRtl ? `تعديل صلاحيات دور: ${editingRole.nameAr || editingRole.name}` : 'Edit Role Permissions')
+                  : (isRtl ? 'إضافة دور مخصص وتحديد الصلاحيات' : 'Add Custom Role')}
               </h3>
               <button
                 type="button"
@@ -291,50 +337,79 @@ export default function AdminRolesPage({ params }: PageProps) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveRole} className="mt-4 space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'اسم الدور بالعربي' : 'Role Name (Arabic)'} <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={roleNameAr}
-                  onChange={(e) => setRoleNameAr(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  placeholder={isRtl ? 'مثال: مشرف فرع' : 'Supervisor'}
-                />
+            <form onSubmit={handleSaveRole} className="flex-1 overflow-y-auto p-5 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    {isRtl ? 'اسم الدور بالعربي' : 'Role Name (Arabic)'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={roleNameAr}
+                    onChange={(e) => setRoleNameAr(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    placeholder={isRtl ? 'مثال: مشرف صالة' : 'Floor Supervisor'}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    {isRtl ? 'المعرف البرمجي (Code)' : 'Role Code'}
+                  </label>
+                  <input
+                    type="text"
+                    value={roleCode}
+                    onChange={(e) => setRoleCode(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    placeholder="FLOOR_SUPERVISOR"
+                  />
+                </div>
               </div>
 
+              {/* مصفوفة الصلاحيات المقسمة */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'المعرف البرمجي (Code)' : 'Role Code'}
+                <label className="mb-3 block text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {isRtl ? 'حدد الصلاحيات الممنوحة لهذا الدور بدقة:' : 'Grant Permissions:'}
                 </label>
-                <input
-                  type="text"
-                  value={roleCode}
-                  onChange={(e) => setRoleCode(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  placeholder="SUPERVISOR"
-                />
-              </div>
 
-              <div>
-                <label className="mb-2 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  {isRtl ? 'تحديد الصلاحيات الممنوحة' : 'Permissions'}
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-slate-200 dark:border-white/5 rounded-xl">
-                  {AVAILABLE_PERMISSIONS.map((perm) => (
-                    <label key={perm.id} className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedPermissions.includes(perm.id)}
-                        onChange={() => togglePermission(perm.id)}
-                        className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                      />
-                      <span>{perm.labelAr}</span>
-                    </label>
-                  ))}
+                <div className="space-y-4">
+                  {PERMISSION_GROUPS.map((group, gIdx) => {
+                    const isAllGroupSelected = group.perms.every((p) => selectedPermissions.includes(p.id));
+                    return (
+                      <div key={gIdx} className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between border-b border-slate-200/60 pb-2 mb-3 dark:border-white/5">
+                          <span className="text-xs font-bold text-orange-600 dark:text-orange-400">
+                            {group.category}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectAllGroup(group.perms)}
+                            className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                          >
+                            {isAllGroupSelected ? (isRtl ? 'إلغاء تحديد الكل' : 'Deselect') : (isRtl ? 'تحديد كل القسم' : 'Select All')}
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {group.perms.map((perm) => (
+                            <label
+                              key={perm.id}
+                              className="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer p-1.5 rounded-lg hover:bg-slate-200/50 dark:hover:bg-white/5"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedPermissions.includes(perm.id)}
+                                onChange={() => togglePermission(perm.id)}
+                                className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                              />
+                              <span>{perm.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -342,16 +417,16 @@ export default function AdminRolesPage({ params }: PageProps) {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5 cursor-pointer"
                 >
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50"
+                  className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ الدور' : 'Save Role')}
+                  {isSubmitting ? (isRtl ? 'جاري الحفظ...' : 'Saving...') : (isRtl ? 'حفظ الصلاحيات' : 'Save Role')}
                 </button>
               </div>
             </form>
