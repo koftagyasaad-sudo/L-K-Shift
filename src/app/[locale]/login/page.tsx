@@ -1,67 +1,82 @@
-"use client";
+'use client';
 
-import { useState, use } from "react";
-import { useRouter } from "next/navigation";
-import { ShieldCheck, ArrowRight, Loader2 } from "lucide-react";
+import { useState, use } from 'react';
+import { useRouter } from 'next/navigation';
+import { ShieldCheck, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = use(params);
-  const isRtl = locale === "ar";
+  const isRtl = locale === 'ar';
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setError('');
     setLoading(true);
 
-    setTimeout(() => {
-      // بيانات الدخول الأصلية المعتمدة
-      if ((username === "010" || username === "01068390982") && password === "123456") {
-        localStorage.setItem("isAuthenticated", "true");
-        localStorage.setItem("userName", "Omar Abd Elhalim");
-        localStorage.setItem("userRole", "مدير النظام");
-        localStorage.setItem(
-          "user",
-          JSON.stringify({ name: "Omar Abd Elhalim", role: "مدير النظام" })
-        );
-        // التوجيه الحاسم إلى لوحة التحكم بدلاً من صفحة العروض
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: username.trim(), password: password.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials'));
+      }
+
+      const user = data.user;
+
+      // حفظ بيانات الجلسة الحقيقية في المتصفح
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('userId', String(user.id));
+      localStorage.setItem('userName', user.name);
+      localStorage.setItem('userPhone', user.phone);
+      localStorage.setItem('userRole', user.role);
+      localStorage.setItem('userBranchId', user.branchId ? String(user.branchId) : '');
+      localStorage.setItem('userBranchName', user.branchName || '');
+
+      // التوجيه الذكي الحاسم وفقاً للرتبة
+      const isAdmin = user.role === 'مدير النظام' || user.role === 'SUPER_ADMIN' || user.role === 'admin';
+      if (isAdmin) {
         router.push(`/${locale}/admin/dashboard`);
       } else {
-        setError(isRtl ? "بيانات الدخول غير صحيحة" : "Invalid credentials");
-        setLoading(false);
+        router.push(`/${locale}/attendance`);
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message || (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
+      setLoading(false);
+    }
   };
 
   return (
     <div
       className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
-      dir={isRtl ? "rtl" : "ltr"}
+      dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* خلفية زجاجية متحركة */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] animate-pulse"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-[100px] animate-pulse delay-1000"></div>
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        {/* اللوجو */}
         <div className="mb-6 flex flex-col items-center">
           <img src="/Logo.png" alt="L-K Shift Logo" className="h-20 w-auto mb-4 drop-shadow-xl" />
           <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
           <p className="text-gray-400 text-sm mt-2">
-            {isRtl ? "نظام إدارة الحضور والورديات" : "Attendance & Shift Management"}
+            {isRtl ? 'نظام إدارة الحضور والورديات' : 'Attendance & Shift Management'}
           </p>
         </div>
 
-        {/* كارد تسجيل الدخول الزجاجي */}
         <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-8 rounded-[2rem] shadow-2xl">
           <div className="flex items-center gap-3 mb-8">
             <ShieldCheck className="w-6 h-6 text-orange-500" />
-            <h2 className="text-xl font-bold text-white">{isRtl ? "تسجيل الدخول" : "Login"}</h2>
+            <h2 className="text-xl font-bold text-white">{isRtl ? 'تسجيل الدخول' : 'Login'}</h2>
           </div>
 
           {error && (
@@ -73,14 +88,14 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-2">
-                {isRtl ? "رقم الدخول" : "Username"}
+                {isRtl ? 'رقم التليفون (اسم المستخدم)' : 'Phone Number'}
               </label>
               <input
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={isRtl ? "أدخل رقم الدخول" : "Enter username"}
+                placeholder={isRtl ? 'أدخل رقم الهاتف المسجل' : 'Enter phone number'}
                 className="w-full px-5 py-3.5 bg-black/40 border border-white/10 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left"
                 dir="ltr"
               />
@@ -88,7 +103,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
 
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-2">
-                {isRtl ? "كلمة المرور" : "Password"}
+                {isRtl ? 'كلمة المرور' : 'Password'}
               </label>
               <input
                 type="password"
@@ -110,16 +125,15 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  {isRtl ? "دخول" : "Login"}
-                  <ArrowRight className={`w-4 h-4 ${isRtl ? "rotate-180" : ""}`} />
+                  {isRtl ? 'دخول' : 'Login'}
+                  <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
                 </>
               )}
             </button>
           </form>
 
-          {/* حقوق النظام */}
           <p className="text-center text-xs text-gray-500 mt-6">
-            © {new Date().getFullYear()} L-K Shift. {isRtl ? "جميع الحقوق محفوظة" : "All rights reserved"}
+            © {new Date().getFullYear()} L-K Shift. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}
           </p>
         </div>
       </div>
