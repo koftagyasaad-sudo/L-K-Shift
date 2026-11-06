@@ -43,8 +43,9 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
   const [applications, setApplications] = useState<ApplicationItem[]>([]);
   const [manpowerRequests, setManpowerRequests] = useState<ManpowerItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  // نافذة طلب عمالة لمدير الفرع
+  // نافذة طلب عمالة
   const [showManpowerModal, setShowManpowerModal] = useState(false);
   const [reqJobTitle, setReqJobTitle] = useState('شيف بروست');
   const [reqQty, setReqQty] = useState('2');
@@ -73,12 +74,21 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
     loadData();
   }, []);
 
+  // دالة نسخ رابط استمارة التقديم العامة
+  const handleCopyCareerLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const careerUrl = `${origin}/${locale}/careers`;
+    navigator.clipboard.writeText(careerUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
   const handleCreateManpowerRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     const bId = localStorage.getItem('userBranchId') || '1';
-    const bName = localStorage.getItem('userBranchName') || 'فرعي';
+    const bName = localStorage.getItem('userBranchName') || 'الفرع';
     const uName = localStorage.getItem('userName') || 'مدير الفرع';
 
     try {
@@ -112,6 +122,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* رأس الصفحة مع زر طلب العمالة */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
@@ -119,7 +130,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {isRtl
-              ? 'متابعة المتقدمين للوظائف وطلبات العمالة الواردة من الفروع'
+              ? 'متابعة المتقدمين للوظائف، فحص السير الذاتية، ومتابعة عجز وتشغيل الفروع'
               : 'Candidate applications & branch manpower requisitions'}
           </p>
         </div>
@@ -133,12 +144,52 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
         </button>
       </div>
 
+      {/* كارت نسخ ومشاركة رابط استمارة التقديم العامة للمتقدمين */}
+      <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-rose-500/5 to-transparent p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <span className="inline-flex rounded-md bg-orange-500/20 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
+              {isRtl ? 'رابط استمارة التقديم المباشرة للجمهور' : 'Public Careers Link'}
+            </span>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mt-1">
+              {isRtl ? 'استمارة التوظيف الإلكترونية ورفع الـ CV' : 'Online Job Application Form'}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {isRtl
+                ? 'انسخ هذا الرابط وأرسله للمتقدمين عبر واتساب أو انشره على فيسبوك لتصلك بياناتهم وسيرهم الذاتية في هذا الجدول مباشرة'
+                : 'Share this link with applicants to receive their profiles and CVs here automatically'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyCareerLink}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-md transition cursor-pointer ${
+                copiedLink ? 'bg-emerald-600' : 'bg-orange-600 hover:bg-orange-700'
+              }`}
+            >
+              <span>{copiedLink ? '✓ تم النسخ للحافظة!' : '📋 نسخ رابط التقديم'}</span>
+            </button>
+
+            <a
+              href={`/${locale}/careers`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl border border-slate-300 bg-white dark:bg-white/5 dark:border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+            >
+              👁️ {isRtl ? 'معاينة الاستمارة' : 'Preview Form'}
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* تبويبات التبديل */}
       <div className="flex rounded-2xl bg-slate-200/60 dark:bg-white/5 p-1 w-fit">
         <button
           type="button"
           onClick={() => setActiveTab('APPLICATIONS')}
-          className={`px-5 py-2 text-xs font-bold rounded-xl transition ${
+          className={`px-5 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
             activeTab === 'APPLICATIONS'
               ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -149,7 +200,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
         <button
           type="button"
           onClick={() => setActiveTab('MANPOWER')}
-          className={`px-5 py-2 text-xs font-bold rounded-xl transition ${
+          className={`px-5 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
             activeTab === 'MANPOWER'
               ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -168,7 +219,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
             </div>
           ) : applications.length === 0 ? (
             <div className="p-12 text-center text-slate-500 dark:text-slate-400 text-xs">
-              {isRtl ? 'لا توجد طلبات تقديم حتى الآن' : 'No applications found'}
+              {isRtl ? 'لا توجد طلبات تقديم واردة حتى الآن' : 'No applications found'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -366,14 +417,14 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
                 <button
                   type="button"
                   onClick={() => setShowManpowerModal(false)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300"
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2 text-xs font-bold text-white shadow-md hover:opacity-95 transition disabled:opacity-50"
+                  className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2 text-xs font-bold text-white shadow-md hover:opacity-95 transition disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}
                 </button>
