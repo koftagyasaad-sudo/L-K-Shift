@@ -1,31 +1,57 @@
-import { NextIntlClientProvider } from "next-intl";
-import { getMessages } from "next-intl/server";
-import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
-import { auth } from "@/auth";
-import { AppProviders } from "@/components/providers/app-providers";
-import { isValidLocale } from "@/i18n/routing";
+import type { Metadata } from 'next';
+import { Cairo } from 'next/font/google';
+import '../globals.css';
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages } from 'next-intl/server';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt';
 
-interface RootLayoutProps {
-  children: ReactNode;
+const cairo = Cairo({
+  subsets: ['arabic', 'latin'],
+  variable: '--font-cairo',
+});
+
+export const metadata: Metadata = {
+  title: 'L-K Shift - نظام إدارة الورديات والحضور',
+  description: 'منظومة متكاملة لإدارة الحضور الذكي والورديات بالـ GPS',
+  manifest: '/manifest.json',
+  themeColor: '#ea580c',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'L-K Shift',
+  },
+  icons: {
+    icon: '/Logo.png',
+    apple: '/Logo.png',
+  },
+};
+
+export default async function RootLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
   params: Promise<{ locale: string }>;
-}
-
-export default async function LocaleLayout({ children, params }: RootLayoutProps) {
+}) {
   const { locale } = await params;
-
-  if (!isValidLocale(locale)) {
-    notFound();
-  }
-
-  const messages = await getMessages({ locale });
-  const session = await auth();
+  const messages = await getMessages();
 
   return (
-    <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"}>
-      <body>
-        <NextIntlClientProvider messages={messages} locale={locale}>
-          <AppProviders session={session}>{children}</AppProviders>
+    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#ea580c" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="L-K Shift" />
+        <link rel="apple-touch-icon" href="/Logo.png" />
+      </head>
+      <body className={`${cairo.variable} font-sans antialiased bg-[#080911] text-slate-100`}>
+        <NextIntlClientProvider messages={messages}>
+          {children}
+          {/* رسالة طلب التثبيت التلقائية للموبايل */}
+          <PwaInstallPrompt />
         </NextIntlClientProvider>
       </body>
     </html>
