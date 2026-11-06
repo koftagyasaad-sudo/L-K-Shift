@@ -2,65 +2,58 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع طلبات الإجازات والأذونات
+// 1. استرجاع طلبات الإجازات والأذونات والسلف
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const branchId = searchParams.get('branchId');
-    const status = searchParams.get('status');
 
     let query = sql`
       SELECT 
-        id,
-        user_id as "userId",
-        user_name as "userName",
-        user_phone as "userPhone",
-        branch_id as "branchId",
-        branch_name as "branchName",
-        request_type as "requestType",
-        start_date::text as "startDate",
-        end_date::text as "endDate",
-        duration_days as "durationDays",
-        duration_hours as "durationHours",
-        substitute_name as "substituteName",
-        reason,
-        branch_status as "branchStatus",
-        branch_notes as "branchNotes",
-        branch_reviewed_by as "branchReviewedBy",
-        branch_reviewed_at as "branchReviewedAt",
-        hr_status as "hrStatus",
-        hr_notes as "hrNotes",
-        hr_reviewed_by as "hrReviewedBy",
-        hr_reviewed_at as "hrReviewedAt",
-        final_status as "finalStatus",
-        created_at as "createdAt"
-      FROM leave_requests
+        l.id,
+        CAST(l.user_id AS TEXT) as "userId",
+        COALESCE(l.user_name, u.full_name_ar, u.name, 'موظف') as "userName",
+        COALESCE(l.user_phone, u.phone, '') as "userPhone",
+        COALESCE(l.branch_name, b.name_ar, b.name, 'الفرع') as "branchName",
+        COALESCE(l.request_type, 'ANNUAL') as "requestType",
+        COALESCE(l.start_date::text, CURRENT_DATE::text) as "startDate",
+        COALESCE(l.end_date::text, CURRENT_DATE::text) as "endDate",
+        COALESCE(l.duration_days, 1) as "durationDays",
+        COALESCE(l.duration_hours, 0) as "durationHours",
+        COALESCE(l.advance_amount, 0) as "advanceAmount",
+        COALESCE(l.substitute_name, '—') as "substituteName",
+        COALESCE(l.reason, '') as reason,
+        COALESCE(l.final_status, 'PENDING_BRANCH') as "finalStatus",
+        COALESCE(l.branch_notes, '') as "branchNotes",
+        COALESCE(l.hr_notes, '') as "hrNotes",
+        COALESCE(l.created_at, NOW()) as "createdAt"
+      FROM leave_requests l
+      LEFT JOIN users u ON CAST(l.user_id AS TEXT) = CAST(u.id AS TEXT)
+      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
       WHERE 1=1
     `;
 
-    if (userId) {
-      query = sql`${query} AND user_id = ${userId}`;
-    }
-    if (branchId) {
-      query = sql`${query} AND branch_id = ${parseInt(branchId, 10)}`;
-    }
-    if (status) {
-      query = sql`${query} AND final_status = ${status}`;
+    if (userId && userId.trim() !== '' && userId !== 'ALL') {
+      query = sql`${query} AND CAST(l.user_id AS TEXT) = ${userId.trim()}`;
     }
 
-    query = sql`${query} ORDER BY created_at DESC LIMIT 200;`;
+    if (branchId && branchId.trim() !== '') {
+      query = sql`${query} AND COALESCE(u.primary_branch_id, u.branch_id) = ${parseInt(branchId, 10)}`;
+    }
+
+    query = sql`${query} ORDER BY COALESCE(l.created_at, NOW()) DESC;`;
 
     const raw = await db.execute(query);
     const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
     return NextResponse.json(rows, { status: 200 });
   } catch (error: any) {
-    console.error('Error fetching leave requests:', error);
+    console.error('Leave Requests GET Error:', error);
     return NextResponse.json({ message: 'فشل استرجاع الطلبات', error: error?.message }, { status: 500 });
   }
 }
 
-// 2. تقديم طلب إجازة أو إذن جديد من الموظف
+// 2. تقديم طلب إجازة / إذن / سلفة مالية
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -68,113 +61,93 @@ export async function POST(request: NextRequest) {
     const userId = (body.userId || '1').toString().trim();
     const userName = (body.userName || 'موظف').toString().trim();
     const userPhone = (body.userPhone || '').toString().trim();
-    const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
-    const branchName = (body.branchName || 'الفرع الرئيسي').toString().trim();
+    const branchName = (body.branchName || 'الفرع').toString().trim();
     const requestType = body.requestType || 'ANNUAL';
-    const startDate = body.startDate;
+    const startDate = body.startDate || new Date().toISOString().slice(0, 10);
     const endDate = body.endDate || startDate;
-    const durationDays = parseFloat(body.durationDays || '1') || 1;
-    const durationHours = parseFloat(body.durationHours || '0') || 0;
-    const substituteName = body.substituteName || '—';
+    const durationDays = parseInt(String(body.durationDays || '1'), 10);
+    const durationHours = parseFloat(String(body.durationHours || '0'));
+    const advanceAmount = parseFloat(String(body.advanceAmount || '0'));
+    const substituteName = (body.substituteName || '—').toString().trim();
     const reason = (body.reason || '').toString().trim();
 
-    if (!startDate || !reason) {
-      return NextResponse.json({ message: 'تاريخ الطلب وسبب الإجازة/الإذن حقول مطلوبة' }, { status: 400 });
+    if (!reason && requestType !== 'PERMISSION') {
+      return NextResponse.json({ message: 'سبب الطلب مطلوب' }, { status: 400 });
     }
 
-    const insertRaw = await db.execute(sql`
+    await db.execute(sql`
       INSERT INTO leave_requests (
-        user_id, user_name, user_phone, branch_id, branch_name,
-        request_type, start_date, end_date, duration_days, duration_hours,
-        substitute_name, reason, branch_status, hr_status, final_status, created_at
+        user_id,
+        user_name,
+        user_phone,
+        branch_name,
+        request_type,
+        start_date,
+        end_date,
+        duration_days,
+        duration_hours,
+        advance_amount,
+        substitute_name,
+        reason,
+        final_status,
+        created_at
       ) VALUES (
-        ${userId}, ${userName}, ${userPhone}, ${branchId}, ${branchName},
-        ${requestType}, ${startDate}::date, ${endDate}::date, ${durationDays}, ${durationHours},
-        ${substituteName}, ${reason}, 'PENDING', 'PENDING', 'PENDING_BRANCH', NOW()
-      )
-      RETURNING id, final_status as "finalStatus";
+        ${userId},
+        ${userName},
+        ${userPhone},
+        ${branchName},
+        ${requestType},
+        ${startDate}::date,
+        ${endDate}::date,
+        ${durationDays},
+        ${durationHours},
+        ${advanceAmount},
+        ${substituteName},
+        ${reason},
+        'PENDING_BRANCH',
+        NOW()
+      );
     `);
 
-    const rows = Array.isArray(insertRaw) ? insertRaw : (insertRaw as any)?.rows || [];
-    return NextResponse.json({ success: true, message: 'تم إرسال الطلب لمدير الفرع بنجاح', data: rows[0] }, { status: 201 });
+    return NextResponse.json({ success: true, message: 'تم إرسال طلبك بنجاح' }, { status: 201 });
   } catch (error: any) {
-    console.error('Error creating leave request:', error);
+    console.error('Leave Requests POST Error:', error);
     return NextResponse.json({ message: error?.message || 'فشل إرسال الطلب', error: error?.message }, { status: 500 });
   }
 }
 
-// 3. مسار اتخاذ القرار (موافقة/رفض مدير الفرع أو الـ HR)
+// 3. مسار اعتماد الطلبات (مدير الفرع ➜ الموارد البشرية)
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const requestId = parseInt(String(body.requestId), 10);
-    const actionBy = body.actionBy; // 'BRANCH_MANAGER' أو 'HR_ADMIN'
-    const decision = body.decision; // 'APPROVE' أو 'REJECT'
-    const notes = (body.notes || '').toString().trim();
-    const reviewerName = body.reviewerName || 'الإدارة';
+    const id = parseInt(String(body.id), 10);
+    const stage = body.stage; // 'BRANCH' أو 'HR'
+    const action = body.action; // 'APPROVE' أو 'REJECT'
+    const notes = body.notes || '';
 
-    if (!requestId || !actionBy || !decision) {
-      return NextResponse.json({ message: 'معرف الطلب ونوع الاعتماد والقرار حقول مطلوبة' }, { status: 400 });
+    if (!id || !stage || !action) {
+      return NextResponse.json({ message: 'بيانات الاعتماد غير مكتملة' }, { status: 400 });
     }
 
-    if (decision === 'REJECT' && !notes) {
-      return NextResponse.json({ message: 'يجب كتابة سبب الرفض لتوضيحه للموظف' }, { status: 400 });
-    }
-
-    if (actionBy === 'BRANCH_MANAGER') {
-      const newBranchStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-      const newFinalStatus = decision === 'APPROVE' ? 'PENDING_HR' : 'REJECTED_BRANCH';
-
+    if (stage === 'BRANCH') {
+      const nextStatus = action === 'APPROVE' ? 'PENDING_HR' : 'REJECTED_BRANCH';
       await db.execute(sql`
         UPDATE leave_requests
-        SET 
-          branch_status = ${newBranchStatus},
-          branch_notes = ${notes},
-          branch_reviewed_by = ${reviewerName},
-          branch_reviewed_at = NOW(),
-          final_status = ${newFinalStatus}
-        WHERE id = ${requestId};
+        SET final_status = ${nextStatus}, branch_notes = ${notes}
+        WHERE id = ${id};
       `);
-
-      return NextResponse.json({
-        success: true,
-        message: decision === 'APPROVE' ? 'تمت موافقة مدير الفرع، وتم تحويل الطلب للـ HR' : 'تم رفض الطلب من مدير الفرع',
-      });
-    }
-
-    if (actionBy === 'HR_ADMIN') {
-      const newHrStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-      const newFinalStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED_HR';
-
+    } else if (stage === 'HR') {
+      const nextStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED_HR';
       await db.execute(sql`
         UPDATE leave_requests
-        SET 
-          hr_status = ${newHrStatus},
-          hr_notes = ${notes},
-          hr_reviewed_by = ${reviewerName},
-          hr_reviewed_at = NOW(),
-          final_status = ${newFinalStatus}
-        WHERE id = ${requestId};
+        SET final_status = ${nextStatus}, hr_notes = ${notes}
+        WHERE id = ${id};
       `);
-
-      // إذا تمت الموافقة النهائية وكانت إجازة سنوية، يتم خصم الأيام من رصيد الموظف
-      if (decision === 'APPROVE') {
-        await db.execute(sql`
-          UPDATE users 
-          SET used_leave_days = COALESCE(used_leave_days, 0) + COALESCE((SELECT duration_days FROM leave_requests WHERE id = ${requestId}), 1)
-          WHERE id::text = (SELECT user_id FROM leave_requests WHERE id = ${requestId});
-        `);
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: decision === 'APPROVE' ? 'تم اعتماد الطلب نهائياً وخصم الرصيد بنجاح' : 'تم رفض الطلب نهائياً من الـ HR',
-      });
     }
 
-    return NextResponse.json({ message: 'نوع الاعتماد غير صالح' }, { status: 400 });
+    return NextResponse.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' }, { status: 200 });
   } catch (error: any) {
-    console.error('Error updating leave decision:', error);
-    return NextResponse.json({ message: error?.message || 'فشل اتخاذ الإجراء', error: error?.message }, { status: 500 });
+    console.error('Leave Requests PUT Error:', error);
+    return NextResponse.json({ message: 'فشل اعتماد الطلب', error: error?.message }, { status: 500 });
   }
 }
