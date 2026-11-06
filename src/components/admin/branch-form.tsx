@@ -1,4 +1,4 @@
-"use client";
+import { BranchEmployeeManager } from "./branch-employee-manager";
 
-export { BranchEmployeeManager as BranchForm } from "./branch-employee-manager";
+export { BranchEmployeeManager as BranchForm };
 export default BranchEmployeeManager;
