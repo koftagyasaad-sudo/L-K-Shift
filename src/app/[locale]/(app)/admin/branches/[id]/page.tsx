@@ -20,26 +20,67 @@ export default function EditBranchPage({ params }: PageProps) {
 
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
+  const [phone, setPhone] = useState('');
+  const [managerId, setManagerId] = useState('');
+  const [managerName, setManagerName] = useState('');
+  const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [radiusMeters, setRadiusMeters] = useState('100');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [managerName, setManagerName] = useState('');
 
-  // إعدادات الشيفتات والورديات
+  // الورديات الثلاث
   const [morningStart, setMorningStart] = useState('09:00');
   const [morningEnd, setMorningEnd] = useState('17:00');
   const [eveningStart, setEveningStart] = useState('17:00');
   const [eveningEnd, setEveningEnd] = useState('01:00');
+  const [betweenStart, setBetweenStart] = useState('13:00');
+  const [betweenEnd, setBetweenEnd] = useState('21:00');
   const [gracePeriod, setGracePeriod] = useState('15');
 
+  const [managersList, setManagersList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCapturingGps, setIsCapturingGps] = useState(false);
 
-  // ميزة التقاط الموقع الميداني الفوري
-  const captureCurrentGpsLocation = () => {
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/employees', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])),
+      fetch(`/api/branches?id=${branchId}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+    ]).then(([empData, branchData]) => {
+      if (Array.isArray(empData)) setManagersList(empData);
+      if (branchData) {
+        setNameAr(branchData.nameAr || branchData.name || '');
+        setNameEn(branchData.nameEn || '');
+        setPhone(branchData.phone || '');
+        setManagerId(branchData.managerId ? String(branchData.managerId) : '');
+        setManagerName(branchData.managerName || '');
+        setAddress(branchData.address || '');
+        setLatitude(branchData.latitude ? String(branchData.latitude) : '');
+        setLongitude(branchData.longitude ? String(branchData.longitude) : '');
+        setRadiusMeters(String(branchData.radiusMeters || 100));
+        setMorningStart(branchData.morningStart || '09:00');
+        setMorningEnd(branchData.morningEnd || '17:00');
+        setEveningStart(branchData.eveningStart || '17:00');
+        setEveningEnd(branchData.eveningEnd || '01:00');
+        setBetweenStart(branchData.betweenStart || '13:00');
+        setBetweenEnd(branchData.betweenEnd || '21:00');
+        setGracePeriod(String(branchData.gracePeriod || '15'));
+      }
+      setIsLoading(false);
+    });
+  }, [branchId]);
+
+  const handleManagerSelect = (mId: string) => {
+    setManagerId(mId);
+    const found = managersList.find((m) => String(m.id) === mId);
+    if (found) {
+      setManagerName(found.name || found.fullName);
+    } else {
+      setManagerName('');
+    }
+  };
+
+  const captureCurrentGps = () => {
     if (!navigator.geolocation) return;
     setIsCapturingGps(true);
     navigator.geolocation.getCurrentPosition(
@@ -57,31 +98,6 @@ export default function EditBranchPage({ params }: PageProps) {
     );
   };
 
-  useEffect(() => {
-    if (!branchId) return;
-
-    fetch(`/api/branches?id=${branchId}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setNameAr(data.nameAr || data.name || '');
-          setNameEn(data.nameEn || '');
-          setPhone(data.phone || '');
-          setManagerName(data.managerName || '');
-          setAddress(data.address || '');
-          setLatitude(data.latitude ? String(data.latitude) : '');
-          setLongitude(data.longitude ? String(data.longitude) : '');
-          setRadiusMeters(String(data.radiusMeters || data.geofenceRadius || '100'));
-          setMorningStart(data.morningStart || '09:00');
-          setMorningEnd(data.morningEnd || '17:00');
-          setEveningStart(data.eveningStart || '17:00');
-          setEveningEnd(data.eveningEnd || '01:00');
-          setGracePeriod(String(data.gracePeriod || '15'));
-        }
-      })
-      .finally(() => setIsLoading(false));
-  }, [branchId]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -92,6 +108,7 @@ export default function EditBranchPage({ params }: PageProps) {
       nameAr: nameAr.trim(),
       nameEn: nameEn.trim() || nameAr.trim(),
       phone: phone.trim(),
+      managerId: managerId ? parseInt(managerId, 10) : null,
       managerName: managerName.trim(),
       address: address.trim(),
       latitude: latitude.trim(),
@@ -101,6 +118,8 @@ export default function EditBranchPage({ params }: PageProps) {
       morningEnd,
       eveningStart,
       eveningEnd,
+      betweenStart,
+      betweenEnd,
       gracePeriod: parseInt(gracePeriod, 10) || 15,
       isActive: true,
     };
@@ -114,7 +133,7 @@ export default function EditBranchPage({ params }: PageProps) {
 
       if (!res.ok) throw new Error('فشل تحديث بيانات الفرع');
 
-      alert('تم تحديث بيانات الفرع ومواعيد الشيفتات بنجاح!');
+      alert('تم تحديث كافة بيانات الفرع والورديات بنجاح!');
       router.push(`/${locale}/admin/branches`);
       router.refresh();
     } catch (err: any) {
@@ -137,10 +156,10 @@ export default function EditBranchPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            تعديل بيانات الفرع والورديات (الشيفتات)
+            تعديل بيانات الفرع والورديات
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            ضبط الإحداثيات ونطاق البصمة ومواعيد الشيفت الصباحي والمسائي
+            تحديث شامل للإحداثيات، الورديات الثلاث، وتعيين مدير الفرع المسؤول
           </p>
         </div>
         <Link
@@ -155,7 +174,9 @@ export default function EditBranchPage({ params }: PageProps) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">اسم الفرع بالعربي *</label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                اسم الفرع بالعربي *
+              </label>
               <input
                 type="text"
                 required
@@ -166,65 +187,121 @@ export default function EditBranchPage({ params }: PageProps) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">اسم المدير / المشرف</label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                اسم الفرع بالإنجليزي
+              </label>
               <input
                 type="text"
-                value={managerName}
-                onChange={(e) => setManagerName(e.target.value)}
+                value={nameEn}
+                onChange={(e) => setNameEn(e.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
 
-            {/* إعدادات مواعيد الورديات الصباحية والمسائية */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                مدير الفرع المسؤول
+              </label>
+              <select
+                value={managerId}
+                onChange={(e) => handleManagerSelect(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              >
+                <option value="">-- اختر مدير الفرع --</option>
+                {managersList.map((m) => (
+                  <option key={m.id} value={String(m.id)}>
+                    {m.name || m.fullName} ({m.role || 'موظف'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                رقم هاتف الفرع
+              </label>
+              <input
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* الورديات الثلاث */}
             <div className="sm:col-span-2 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-4">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                ⏰ مواعيد ورديات وتشغيل الفرع (لمطابقة الحضور والانصراف والتأخير)
+                ⏰ مواعيد ورديات الفرع الثلاث (صباحية، بينية، مسائية)
               </h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
-                  <span className="text-xs font-bold text-orange-500">الوردية الصباحية (Morning Shift)</span>
+                  <span className="text-xs font-bold text-orange-500">1. الصباحية</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[11px] text-slate-500">بداية الشيفت</label>
+                      <label className="block text-[10px] text-slate-500">من</label>
                       <input
                         type="time"
                         value={morningStart}
                         onChange={(e) => setMorningStart(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-500">نهاية الشيفت</label>
+                      <label className="block text-[10px] text-slate-500">إلى</label>
                       <input
                         type="time"
                         value={morningEnd}
                         onChange={(e) => setMorningEnd(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
-                  <span className="text-xs font-bold text-purple-500">الوردية المسائية (Evening Shift)</span>
+                  <span className="text-xs font-bold text-blue-500">2. البينية (Between)</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[11px] text-slate-500">بداية الشيفت</label>
+                      <label className="block text-[10px] text-slate-500">من</label>
+                      <input
+                        type="time"
+                        value={betweenStart}
+                        onChange={(e) => setBetweenStart(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500">إلى</label>
+                      <input
+                        type="time"
+                        value={betweenEnd}
+                        onChange={(e) => setBetweenEnd(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
+                  <span className="text-xs font-bold text-purple-500">3. المسائية</span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10px] text-slate-500">من</label>
                       <input
                         type="time"
                         value={eveningStart}
                         onChange={(e) => setEveningStart(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-500">نهاية الشيفت</label>
+                      <label className="block text-[10px] text-slate-500">إلى</label>
                       <input
                         type="time"
                         value={eveningEnd}
                         onChange={(e) => setEveningEnd(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
                       />
                     </div>
                   </div>
@@ -232,22 +309,23 @@ export default function EditBranchPage({ params }: PageProps) {
               </div>
 
               <div className="flex items-center gap-2 pt-1 text-xs">
-                <label className="font-semibold text-slate-600 dark:text-slate-400">فترة السماح قبل احتساب تأخير:</label>
+                <label className="font-semibold text-slate-600 dark:text-slate-400">فترة السماح قبل التأخير:</label>
                 <input
                   type="number"
                   min="0"
                   max="60"
                   value={gracePeriod}
                   onChange={(e) => setGracePeriod(e.target.value)}
-                  className="w-20 rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900 text-center font-bold"
+                  className="w-16 rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900 text-center font-bold"
                 />
                 <span className="text-slate-500">دقيقة</span>
               </div>
             </div>
 
-            {/* معايرة الإحداثيات */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">خط العرض (Latitude) *</label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                خط العرض (Latitude) *
+              </label>
               <input
                 type="text"
                 required
@@ -258,7 +336,9 @@ export default function EditBranchPage({ params }: PageProps) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">خط الطول (Longitude) *</label>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                خط الطول (Longitude) *
+              </label>
               <input
                 type="text"
                 required
@@ -271,12 +351,24 @@ export default function EditBranchPage({ params }: PageProps) {
             <div className="sm:col-span-2">
               <button
                 type="button"
-                onClick={captureCurrentGpsLocation}
+                onClick={captureCurrentGps}
                 disabled={isCapturingGps}
                 className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition cursor-pointer"
               >
                 {isCapturingGps ? 'جاري الالتقاط بالـ GPS...' : '🎯 تثبيت موقعي الحالي كإحداثيات للفرع'}
               </button>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                العنوان النصي
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
             </div>
           </div>
 
