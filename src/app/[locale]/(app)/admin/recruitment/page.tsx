@@ -1,139 +1,683 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+'use client';
 
-// 1. استرجاع طلبات التوظيف واستمارات المتقدمين
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const view = searchParams.get('view');
+import React, { useState, useEffect, use } from 'react';
 
-    if (view === 'MANPOWER_REQUESTS') {
-      const raw = await db.execute(sql`
-        SELECT 
-          id, branch_id as "branchId", branch_name as "branchName",
-          requested_by_name as "requestedByName", job_title as "jobTitle",
-          quantity, urgency, reason, status, admin_notes as "adminNotes",
-          created_at as "createdAt"
-        FROM manpower_requests
-        ORDER BY created_at DESC;
-      `);
-      const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-      return NextResponse.json(rows, { status: 200 });
-    }
-
-    const rawApps = await db.execute(sql`
-      SELECT 
-        id, 
-        full_name as "fullName", 
-        phone, 
-        age, 
-        birth_date::text as "birthDate",
-        city,
-        military_status as "militaryStatus", 
-        job_title as "jobTitle",
-        expected_salary as "expectedSalary",
-        skills_courses as "skillsCourses",
-        experience_notes as "experienceNotes",
-        preferred_branch_name as "preferredBranchName", 
-        cv_url as "cvUrl",
-        status, 
-        hr_notes as "hrNotes", 
-        created_at as "createdAt"
-      FROM job_applications
-      ORDER BY created_at DESC;
-    `);
-
-    const apps = Array.isArray(rawApps) ? rawApps : (rawApps as any)?.rows || [];
-    return NextResponse.json(apps, { status: 200 });
-  } catch (error: any) {
-    console.error('Recruitment GET error:', error);
-    return NextResponse.json({ message: 'فشل استرجاع البيانات', error: error?.message }, { status: 500 });
-  }
+interface ApplicationItem {
+  id: number;
+  fullName: string;
+  phone: string;
+  age: number;
+  birthDate?: string;
+  city: string;
+  militaryStatus: string;
+  jobTitle: string;
+  expectedSalary?: number;
+  skillsCourses?: string;
+  experienceNotes?: string;
+  cvUrl?: string;
+  status: string;
+  createdAt: string;
 }
 
-// 2. استقبال وحفظ استمارة التقديم مع الحقول الجديدة
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const action = body.action;
+interface ManpowerItem {
+  id: number;
+  branchName: string;
+  requestedByName: string;
+  jobTitle: string;
+  quantity: number;
+  urgency: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+}
 
-    if (action === 'REQUEST_MANPOWER') {
-      const branchId = parseInt(String(body.branchId), 10);
-      const branchName = body.branchName || 'فرع';
-      const requestedByName = body.requestedByName || 'مدير الفرع';
-      const jobTitle = body.jobTitle;
-      const quantity = parseInt(String(body.quantity || '1'), 10);
-      const urgency = body.urgency || 'NORMAL';
-      const reason = body.reason || '';
+interface PageProps {
+  params: Promise<{
+    locale: string;
+  }>;
+}
 
-      if (!jobTitle || !reason) {
-        return NextResponse.json({ message: 'المسمى الوظيفي وسبب طلب العمالة حقول مطلوبة' }, { status: 400 });
-      }
+export default function AdminRecruitmentPage({ params }: PageProps) {
+  const resolvedParams = use(params);
+  const locale = resolvedParams?.locale || 'ar';
+  const isRtl = locale === 'ar';
 
-      await db.execute(sql`
-        INSERT INTO manpower_requests (
-          branch_id, branch_name, requested_by_name, job_title, quantity, urgency, reason, status, created_at
-        ) VALUES (
-          ${branchId}, ${branchName}, ${requestedByName}, ${jobTitle}, ${quantity}, ${urgency}, ${reason}, 'PENDING', NOW()
-        );
-      `);
+  const [activeTab, setActiveTab] = useState<'APPLICATIONS' | 'MANPOWER'>('APPLICATIONS');
+  const [applications, setApplications] = useState<ApplicationItem[]>([]);
+  const [manpowerRequests, setManpowerRequests] = useState<ManpowerItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-      return NextResponse.json({ success: true, message: 'تم إرسال طلب عجز العمالة بنجاح' }, { status: 201 });
+  // نافذة طلب عمالة
+  const [showManpowerModal, setShowManpowerModal] = useState(false);
+  const [reqJobTitle, setReqJobTitle] = useState('شيف بروست ومطبخ');
+  const [reqQty, setReqQty] = useState('2');
+  const [reqUrgency, setReqUrgency] = useState('URGENT');
+  const [reqReason, setReqReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [appsRes, manRes] = await Promise.all([
+        fetch('/api/recruitment', { cache: 'no-store' }),
+        fetch('/api/recruitment?view=MANPOWER_REQUESTS', { cache: 'no-store' }),
+      ]);
+
+      if (appsRes.ok) setApplications(await appsRes.json());
+      if (manRes.ok) setManpowerRequests(await manRes.json());
+    } catch (err) {
+      console.error('Failed to load recruitment data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleCopyCareerLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const careerUrl = `${origin}/${locale}/careers`;
+    navigator.clipboard.writeText(careerUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  // توليد ملف الـ PDF الشامل لجميع الحقول والبيانات
+  const handleDownloadApplicantPDF = (app: ApplicationItem) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('يرجى السماح بالنوافذ المنبثقة لتحميل ملف الـ PDF');
+      return;
     }
 
-    // استمارة التقديم العامة
-    const fullName = (body.fullName || '').toString().trim();
-    const phone = (body.phone || '').toString().trim();
-    const age = parseInt(String(body.age || '22'), 10);
-    const birthDate = body.birthDate || null;
-    const city = (body.city || '').toString().trim();
-    const militaryStatus = body.militaryStatus || 'تم التأدية';
-    const jobTitle = (body.jobTitle || 'عضو فريق').toString().trim();
-    const expectedSalary = body.expectedSalary ? parseFloat(String(body.expectedSalary)) : null;
-    const skillsCourses = (body.skillsCourses || '').toString().trim();
-    const experienceNotes = (body.experienceNotes || '').toString().trim();
-    const cvUrl = body.cvUrl || null;
+    const applicationDate = new Date(app.createdAt).toLocaleDateString('ar-EG', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
 
-    if (!fullName || !phone || !jobTitle) {
-      return NextResponse.json({ message: 'الاسم، رقم الهاتف، والوظيفة المطلوبة حقول إلزامية' }, { status: 400 });
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="utf-8" />
+        <title>استمارة توظيف - ${app.fullName}</title>
+        <style>
+          @page { size: A4 portrait; margin: 12mm; }
+          body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            color: #0f172a;
+            margin: 0;
+            padding: 15px;
+            direction: rtl;
+            background: #fff;
+          }
+          .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px solid #ea580c;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+          }
+          .logo-box {
+            background: linear-gradient(135deg, #ea580c, #e11d48);
+            color: #fff;
+            font-weight: 900;
+            font-size: 24px;
+            padding: 10px 18px;
+            border-radius: 12px;
+          }
+          .title-box h1 { margin: 0; font-size: 20px; color: #0f172a; }
+          .title-box p { margin: 4px 0 0; font-size: 11px; color: #64748b; }
+          .badge {
+            display: inline-block;
+            background: #ffedd5;
+            color: #c2410c;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 3px 8px;
+            border-radius: 6px;
+            margin-top: 4px;
+          }
+          .section { margin-bottom: 18px; }
+          .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            background: #f8fafc;
+            border-right: 4px solid #ea580c;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            color: #334155;
+          }
+          .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 18px;
+          }
+          .field {
+            border-bottom: 1px dashed #e2e8f0;
+            padding-bottom: 5px;
+          }
+          .label {
+            font-size: 10.5px;
+            color: #64748b;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 2px;
+          }
+          .value {
+            font-size: 12.5px;
+            font-weight: bold;
+            color: #0f172a;
+          }
+          .notes-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11.5px;
+            line-height: 1.6;
+            color: #1e293b;
+            white-space: pre-wrap;
+          }
+          .evaluation-box {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 90px;
+            background: #fcfcfc;
+          }
+          .signatures {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-top: 30px;
+            text-align: center;
+          }
+          .sig-line {
+            border-top: 1px solid #94a3b8;
+            margin-top: 40px;
+            padding-top: 5px;
+            font-size: 10.5px;
+            color: #475569;
+            font-weight: bold;
+          }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title-box">
+            <h1>استمارة طلب التحاق بالعمل (Job Application)</h1>
+            <p>منظومة إدارة الكوادر والموارد البشرية — L-K Shift</p>
+            <span class="badge">كود الملف: APP-${app.id}</span>
+          </div>
+          <div class="logo-box">LK</div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">أولاً: البيانات الشخصية للمتقدم</div>
+          <div class="grid">
+            <div class="field">
+              <span class="label">الاسم رباعي (كما بالبطاقة):</span>
+              <span class="value">${app.fullName}</span>
+            </div>
+            <div class="field">
+              <span class="label">رقم الهاتف (واتساب):</span>
+              <span class="value" dir="ltr">${app.phone}</span>
+            </div>
+            <div class="field">
+              <span class="label">السن وتاريخ الميلاد:</span>
+              <span class="value">${app.age} سنة ${app.birthDate ? `(تاريخ الميلاد: ${app.birthDate})` : ''}</span>
+            </div>
+            <div class="field">
+              <span class="label">محل السكن / المدينة:</span>
+              <span class="value">${app.city}</span>
+            </div>
+            <div class="field">
+              <span class="label">الموقف من التجنيد:</span>
+              <span class="value">${app.militaryStatus}</span>
+            </div>
+            <div class="field">
+              <span class="label">تاريخ استلام الطلب:</span>
+              <span class="value">${applicationDate}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">ثانياً: الوظيفة والراتب المتوقع</div>
+          <div class="grid">
+            <div class="field">
+              <span class="label">الوظيفة المراد التقديم عليها:</span>
+              <span class="value" style="color: #ea580c;">${app.jobTitle}</span>
+            </div>
+            <div class="field">
+              <span class="label">الراتب المتوقع:</span>
+              <span class="value">${app.expectedSalary ? `${app.expectedSalary} ج.م` : 'لم يحدد'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">ثالثاً: الكورسات والمهارات الشخصية</div>
+          <div class="notes-box">
+            ${app.skillsCourses || 'لا توجد كورسات أو مهارات مسجلة'}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">رابعاً: سابقة الأعمال والملاحظات (الخبرات السابقة)</div>
+          <div class="notes-box">
+            ${app.experienceNotes || 'لا توجد سابقة أعمال أو ملاحظات مسجلة'}
+          </div>
+        </div>
+
+        ${app.cvUrl ? `
+          <div class="section">
+            <div class="section-title">خامساً: رابط السيرة الذاتية (CV Link)</div>
+            <div style="font-size: 11px; color: #ea580c; word-break: break-all;">
+              <a href="${app.cvUrl}" target="_blank">${app.cvUrl}</a>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="section">
+          <div class="section-title">تقييم وقرار المقابلة الشخصية (خاص بإدارة الـ HR)</div>
+          <div class="evaluation-box">
+            <div style="font-size: 10.5px; color: #64748b; margin-bottom: 6px;">
+              [ &nbsp; ] مقبول &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] قائمة انتظار &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] مرفوض &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; الراتب المعتمد: .......................... ج.م
+            </div>
+            <div style="font-size: 10.5px; color: #64748b;">
+              ملاحظات مسؤول المقابلة:
+            </div>
+          </div>
+        </div>
+
+        <div class="signatures">
+          <div>
+            <div class="sig-line">توقيع المتقدم</div>
+          </div>
+          <div>
+            <div class="sig-line">مسؤول المقابلة (HR)</div>
+          </div>
+          <div>
+            <div class="sig-line">اعتماد الإدارة</div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 300);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const handleCreateManpowerRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    const bId = localStorage.getItem('userBranchId') || '1';
+    const bName = localStorage.getItem('userBranchName') || 'الفرع';
+    const uName = localStorage.getItem('userName') || 'مدير الفرع';
+
+    try {
+      const res = await fetch('/api/recruitment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'REQUEST_MANPOWER',
+          branchId: bId,
+          branchName: bName,
+          requestedByName: uName,
+          jobTitle: reqJobTitle,
+          quantity: parseInt(reqQty, 10),
+          urgency: reqUrgency,
+          reason: reqReason.trim(),
+        }),
+      });
+
+      if (!res.ok) throw new Error('فشل إرسال الطلب');
+
+      alert('تم إرسال طلب عجز العمالة بنجاح إلى إدارة الموارد البشرية');
+      setShowManpowerModal(false);
+      setReqReason('');
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ أثناء إرسال الطلب');
+    } finally {
+      setIsSubmitting(false);
     }
+  };
 
-    await db.execute(sql`
-      INSERT INTO job_applications (
-        full_name, 
-        phone, 
-        age, 
-        birth_date,
-        city, 
-        military_status, 
-        job_title, 
-        expected_salary,
-        skills_courses,
-        experience_notes,
-        cv_url, 
-        status, 
-        created_at
-      ) VALUES (
-        ${fullName}, 
-        ${phone}, 
-        ${age}, 
-        ${birthDate ? sql`${birthDate}::date` : null},
-        ${city}, 
-        ${militaryStatus}, 
-        ${jobTitle}, 
-        ${expectedSalary},
-        ${skillsCourses},
-        ${experienceNotes},
-        ${cvUrl}, 
-        'NEW', 
-        NOW()
-      );
-    `);
+  return (
+    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
+            {isRtl ? 'إدارة التوظيف واستمارات المتقدمين' : 'Recruitment & Job Applications'}
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {isRtl
+              ? 'متابعة استمارات المتقدمين للعمل، تحميل ملفات PDF الرسمية، وطلبات عمالة الفروع'
+              : 'Candidate profiles, PDF generation, and branch requisitions'}
+          </p>
+        </div>
 
-    return NextResponse.json({ success: true, message: 'تم استلام طلب توظيفك بنجاح! سيتواصل معك قسم الموارد البشرية.' }, { status: 201 });
-  } catch (error: any) {
-    console.error('Recruitment POST error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل إرسال الطلب', error: error?.message }, { status: 500 });
-  }
+        <button
+          type="button"
+          onClick={() => setShowManpowerModal(true)}
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 cursor-pointer"
+        >
+          {isRtl ? '+ طلب نواقص عمالة للفرع' : '+ Request Manpower'}
+        </button>
+      </div>
+
+      {/* كارت رابط الاستمارة */}
+      <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-rose-500/5 to-transparent p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <span className="inline-flex rounded-md bg-orange-500/20 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
+              {isRtl ? 'استمارة التقديم العامة المتاحة للجمهور' : 'Public Application Link'}
+            </span>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mt-1">
+              {isRtl ? 'استمارة التوظيف المباشرة (هوية L-K Shift المتميزة)' : 'Careers Portal Link'}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {isRtl
+                ? 'انسخ هذا الرابط لمشاركته مع المتقدمين لتصلك كافة استماراتهم هنا مع إمكانية طباعتها وتنزيلها كملف PDF'
+                : 'Share this link with applicants to receive their detailed applications and print official PDFs'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyCareerLink}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-md transition cursor-pointer ${
+                copiedLink ? 'bg-emerald-600' : 'bg-orange-600 hover:bg-orange-700'
+              }`}
+            >
+              <span>{copiedLink ? '✓ تم النسخ للحافظة!' : '📋 نسخ رابط التقديم'}</span>
+            </button>
+
+            <a
+              href={`/${locale}/careers`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl border border-slate-300 bg-white dark:bg-white/5 dark:border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+            >
+              👁️ {isRtl ? 'معاينة الاستمارة' : 'Preview Form'}
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* تبويبات التبديل */}
+      <div className="flex rounded-2xl bg-slate-200/60 dark:bg-white/5 p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveTab('APPLICATIONS')}
+          className={`px-5 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+            activeTab === 'APPLICATIONS'
+              ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+          }`}
+        >
+          {isRtl ? `استمارات المتقدمين (${applications.length})` : 'Applications'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('MANPOWER')}
+          className={`px-5 py-2 text-xs font-bold rounded-xl transition cursor-pointer ${
+            activeTab === 'MANPOWER'
+              ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+          }`}
+        >
+          {isRtl ? `طلبات عجز الفروع (${manpowerRequests.length})` : 'Branch Requisitions'}
+        </button>
+      </div>
+
+      {activeTab === 'APPLICATIONS' ? (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+          {isLoading ? (
+            <div className="flex min-h-[300px] items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+            </div>
+          ) : applications.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 dark:text-slate-400 text-xs">
+              {isRtl ? 'لا توجد استمارات تقديم مسجلة حتى الآن' : 'No applications found'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-right text-sm dark:divide-white/5" dir={isRtl ? 'rtl' : 'ltr'}>
+                <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'اسم المتقدم' : 'Applicant'}</th>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'الوظيفة والراتب' : 'Position & Salary'}</th>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'السن والميلاد' : 'Age & Birth'}</th>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'المدينة والتجنيد' : 'City & Military'}</th>
+                    <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الإجراءات والـ PDF' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {applications.map((app) => (
+                    <tr key={app.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
+                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                        <div>{app.fullName}</div>
+                        <div className="text-xs font-mono font-normal text-slate-500">{app.phone}</div>
+                      </td>
+                      <td className="px-6 py-4 text-xs">
+                        <span className="font-bold text-orange-600">{app.jobTitle}</span>
+                        {app.expectedSalary && (
+                          <div className="text-emerald-500 font-mono mt-0.5">الراتب المتوقع: {app.expectedSalary} ج.م</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-300">
+                        <div>{app.age} سنة</div>
+                        {app.birthDate && <div className="text-[11px] font-mono text-slate-400">{app.birthDate}</div>}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-300">
+                        <div>{app.city}</div>
+                        <div className="text-[11px] text-slate-400">{app.militaryStatus}</div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadApplicantPDF(app)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3.5 py-1.5 text-xs font-bold text-orange-600 hover:bg-orange-500/20 transition cursor-pointer"
+                            title="تحميل وطباعة الاستمارة بصيغة PDF الرسمية"
+                          >
+                            <span>📄 تحميل PDF</span>
+                          </button>
+
+                          {app.cvUrl && (
+                            <a
+                              href={app.cvUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:border-white/10 dark:text-slate-300 hover:bg-slate-50"
+                            >
+                              الـ CV ↗
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
+          {manpowerRequests.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 dark:text-slate-400 text-xs">
+              {isRtl ? 'لا توجد طلبات عجز عمالة حالياً' : 'No manpower requests'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-right text-sm dark:divide-white/5" dir={isRtl ? 'rtl' : 'ltr'}>
+                <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'الفرع ومقدم الطلب' : 'Branch'}</th>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'الوظيفة والعدد' : 'Position & Qty'}</th>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'درجة الأهمية' : 'Urgency'}</th>
+                    <th className="px-6 py-4 font-semibold">{isRtl ? 'السبب' : 'Reason'}</th>
+                    <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الحالة' : 'Status'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                  {manpowerRequests.map((m) => (
+                    <tr key={m.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
+                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                        <div>{m.branchName}</div>
+                        <div className="text-xs font-normal text-slate-500">{m.requestedByName}</div>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-bold text-orange-600">
+                        {m.jobTitle} ({m.quantity} أفراد)
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="rounded-lg bg-rose-500/10 px-2 py-0.5 text-xs font-bold text-rose-600">
+                          {m.urgency === 'CRITICAL' ? 'حرج وفوري' : m.urgency === 'URGENT' ? 'عاجل' : 'عادي'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-600 dark:text-slate-400 max-w-sm">
+                        {m.reason}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs font-bold text-blue-600">
+                          قيد المراجعة
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* نافذة طلب عمالة */}
+      {showManpowerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition dark:border-white/10 dark:bg-[#121526]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-white/5">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                طلب نواقص عمالة وتشغيل للفرع
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowManpowerModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateManpowerRequest} className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    المسمى الوظيفي
+                  </label>
+                  <select
+                    value={reqJobTitle}
+                    onChange={(e) => setReqJobTitle(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  >
+                    <option value="شيف بروست ومطبخ">شيف بروست ومطبخ</option>
+                    <option value="كاشير">كاشير</option>
+                    <option value="عضو صالة">عضو صالة</option>
+                    <option value="ديليفري">ديليفري</option>
+                    <option value="مشرف تشغيل">مشرف تشغيل</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    العدد المطلوب
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    required
+                    value={reqQty}
+                    onChange={(e) => setReqQty(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  درجة الأهمية
+                </label>
+                <select
+                  value={reqUrgency}
+                  onChange={(e) => setReqUrgency(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                >
+                  <option value="NORMAL">عادي</option>
+                  <option value="URGENT">عاجل</option>
+                  <option value="CRITICAL">حرج وفوري (عجز بالشيفت)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  سبب الطلب وتفاصيل العجز
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={reqReason}
+                  onChange={(e) => setReqReason(e.target.value)}
+                  placeholder="وضح سبب الحاجة للعمالة..."
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowManpowerModal(false)}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2 text-xs font-bold text-white shadow-md hover:opacity-95 transition disabled:opacity-50"
+                >
+                  {isSubmitting ? 'جاري الإرسال...' : 'إرسال الطلب'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
