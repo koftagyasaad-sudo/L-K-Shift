@@ -25,14 +25,6 @@ interface EmployeeFormProps {
   onSuccess?: () => void;
 }
 
-const DEFAULT_ROLES = [
-  { id: '1', name: 'EMPLOYEE', nameAr: 'موظف' },
-  { id: '2', name: 'BRANCH_MANAGER', nameAr: 'مدير فرع' },
-  { id: '3', name: 'SUPERVISOR', nameAr: 'مشرف تشغيل' },
-  { id: '4', name: 'CALL_CENTER', nameAr: 'كول سنتر' },
-  { id: '5', name: 'SUPER_ADMIN', nameAr: 'مدير نظام' },
-];
-
 export default function EmployeeForm({
   initialData,
   branches: initialBranches = [],
@@ -43,8 +35,8 @@ export default function EmployeeForm({
   const router = useRouter();
   const isRtl = locale === 'ar';
 
-  const [branchList, setBranchList] = useState(initialBranches);
-  const [roleList, setRoleList] = useState(initialRoles.length > 0 ? initialRoles : DEFAULT_ROLES);
+  const [branchList, setBranchList] = useState<any[]>(initialBranches);
+  const [roleList, setRoleList] = useState<any[]>(initialRoles);
 
   const [name, setName] = useState(initialData?.name || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
@@ -59,17 +51,41 @@ export default function EmployeeForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // جلب الفروع والأدوار المحدثة من قاعدة البيانات مباشرة وفورياً
   useEffect(() => {
-    if (branchList.length === 0 || roleList.length === 0) {
-      Promise.all([
-        fetch('/api/branches', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])),
-        fetch('/api/roles', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])),
-      ]).then(([branchesData, rolesData]) => {
-        if (Array.isArray(branchesData) && branchesData.length > 0) setBranchList(branchesData);
-        if (Array.isArray(rolesData) && rolesData.length > 0) setRoleList(rolesData);
+    // 1. جلب الفروع
+    fetch('/api/branches', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setBranchList(data);
+        }
+      })
+      .catch((err) => console.error('Failed to fetch branches:', err));
+
+    // 2. جلب جميع الأدوار المضافة في المنظومة
+    fetch('/api/roles', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRoleList(data);
+        } else if (initialRoles.length > 0) {
+          setRoleList(initialRoles);
+        } else {
+          // أدوار احتياطية في حال كانت قاعدة البيانات فارغة تماماً
+          setRoleList([
+            { id: 1, name: 'EMPLOYEE', name_ar: 'موظف' },
+            { id: 2, name: 'BRANCH_MANAGER', name_ar: 'مدير فرع' },
+            { id: 3, name: 'SUPERVISOR', name_ar: 'مشرف تشغيل' },
+            { id: 4, name: 'CALL_CENTER', name_ar: 'كول سنتر' },
+            { id: 5, name: 'SUPER_ADMIN', name_ar: 'مدير نظام' },
+          ]);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch roles:', err);
       });
-    }
-  }, [branchList.length, roleList.length]);
+  }, [initialRoles]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,11 +158,10 @@ export default function EmployeeForm({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           />
         </div>
 
-        {/* الرقم الوظيفي الإلزامي والفريد */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             الرقم الوظيفي (كود الموظف الثابت) <span className="text-rose-500">*</span>
@@ -157,7 +172,7 @@ export default function EmployeeForm({
             value={employeeCode}
             onChange={(e) => setEmployeeCode(e.target.value)}
             placeholder="مثال: 1001 أو EMP-01"
-            className="w-full rounded-xl border border-orange-500/40 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 focus:outline-none dark:border-orange-500/40 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-orange-500/40 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 focus:outline-none dark:border-orange-500/40 dark:bg-slate-900 dark:text-white"
           />
           <span className="text-[10px] text-slate-400 mt-0.5 block">رقم وظيفي فريد لا يمكن تكراره لأكثر من موظف.</span>
         </div>
@@ -171,7 +186,7 @@ export default function EmployeeForm({
             required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white text-left font-mono"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white text-left font-mono"
             dir="ltr"
           />
         </div>
@@ -185,7 +200,7 @@ export default function EmployeeForm({
             required={!initialData?.id}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             placeholder={initialData?.id ? 'اتركه فارغاً لعدم التغيير' : '••••••'}
           />
         </div>
@@ -195,25 +210,34 @@ export default function EmployeeForm({
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
             <option value="">-- اختر الفرع --</option>
             {branchList.map((b) => (
-              <option key={b.id} value={String(b.id)}>{b.nameAr || b.name}</option>
+              <option key={b.id} value={String(b.id)}>{b.nameAr || b.name_ar || b.name}</option>
             ))}
           </select>
         </div>
 
+        {/* قائمة الأدوار الوظيفية المسترجعة بالكامل من قاعدة البيانات */}
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">الدور الوظيفي</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            الدور الوظيفي والصلاحيات <span className="text-rose-500">*</span>
+          </label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
-            {roleList.map((r) => (
-              <option key={r.id || r.name} value={r.nameAr || r.name}>{r.nameAr || r.name}</option>
-            ))}
+            <option value="">-- اختر الدور الوظيفي --</option>
+            {roleList.map((r: any) => {
+              const roleLabel = r.nameAr || r.name_ar || r.name;
+              return (
+                <option key={r.id || roleLabel} value={roleLabel}>
+                  {roleLabel}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -228,7 +252,7 @@ export default function EmployeeForm({
             required
             value={workingHoursPerDay}
             onChange={(e) => setWorkingHoursPerDay(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           />
         </div>
 
@@ -238,7 +262,7 @@ export default function EmployeeForm({
             type="number"
             value={basicSalary}
             onChange={(e) => setBasicSalary(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           />
         </div>
 
@@ -248,7 +272,7 @@ export default function EmployeeForm({
             type="number"
             value={annualLeaveDays}
             onChange={(e) => setAnnualLeaveDays(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           />
         </div>
       </div>
