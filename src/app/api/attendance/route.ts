@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع سجلات الحضور والانصراف
+// 1. استرجاع سجلات الحضور والانصراف مع الفلاتر
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -13,35 +13,37 @@ export async function GET(request: NextRequest) {
     let query = sql`
       SELECT 
         a.id,
-        a.user_id as "userId",
-        COALESCE(u.full_name_ar, u.name, a.user_name, 'موظف') as "userName",
-        COALESCE(u.phone, a.user_phone, '') as "userPhone",
+        CAST(a.user_id AS TEXT) as "userId",
+        COALESCE(a.user_name, u.full_name_ar, u.name, 'موظف') as "userName",
+        COALESCE(a.user_phone, u.phone, '') as "userPhone",
         COALESCE(u.annual_leave_days, 21) as "totalLeaves",
         COALESCE(u.used_leave_days, 0) as "usedLeaves",
         COALESCE(u.monthly_permissions_hours, 0) as "permissionHours",
-        COALESCE(b.name_ar, b.name, a.branch_name, '—') as "branchName",
-        a.type,
-        a.timestamp,
-        a.distance_meters as "distanceMeters",
-        a.is_verified_geofence as "isVerifiedGeofence",
-        a.verification_method as "verificationMethod"
+        COALESCE(u.monthly_salary, 0) as "basicSalary",
+        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
+        COALESCE(a.branch_name, b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
+        COALESCE(a.type, 'CHECK_IN') as type,
+        COALESCE(a.timestamp, a.created_at, NOW()) as timestamp,
+        COALESCE(a.distance_meters, 0) as "distanceMeters",
+        COALESCE(a.is_verified_geofence, true) as "isVerifiedGeofence",
+        COALESCE(a.photo_url, '') as "photoUrl"
       FROM attendance_logs a
-      LEFT JOIN users u ON a.user_id = u.id::text
+      LEFT JOIN users u ON CAST(a.user_id AS TEXT) = CAST(u.id AS TEXT)
       LEFT JOIN branches b ON a.branch_id = b.id
       WHERE 1=1
     `;
 
-    if (userId) {
-      query = sql`${query} AND (a.user_id = ${userId} OR a.user_id = ${parseInt(userId, 10) || 0}::text)`;
+    if (userId && userId.trim() !== '' && userId !== 'ALL') {
+      query = sql`${query} AND CAST(a.user_id AS TEXT) = ${userId.trim()}`;
     }
-    if (fromDate) {
-      query = sql`${query} AND a.timestamp >= ${fromDate}::timestamptz`;
+    if (fromDate && fromDate.trim() !== '') {
+      query = sql`${query} AND COALESCE(a.timestamp, a.created_at) >= ${fromDate}::timestamptz`;
     }
-    if (toDate) {
-      query = sql`${query} AND a.timestamp <= ${toDate}::timestamptz`;
+    if (toDate && toDate.trim() !== '') {
+      query = sql`${query} AND COALESCE(a.timestamp, a.created_at) <= (${toDate}::timestamptz + INTERVAL '1 day')`;
     }
 
-    query = sql`${query} ORDER BY a.timestamp DESC LIMIT 300;`;
+    query = sql`${query} ORDER BY COALESCE(a.timestamp, a.created_at) DESC LIMIT 400;`;
 
     const raw = await db.execute(query);
     const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. تسجيل حركة الحضور بنظام Self-Healing المحصن ضد أخطاء قاعدة البيانات
+// 2. تسجيل حركة الحضور والانصراف مع الصورة الحية
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -61,14 +63,14 @@ export async function POST(request: NextRequest) {
     const userName = (body.userName || 'موظف').toString().trim();
     const userPhone = (body.userPhone || '').toString().trim();
     const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
-    const branchName = (body.branchName || '').toString().trim();
+    const branchName = (body.branchName || 'الفرع الرئيسي').toString().trim();
     const type = body.type === 'CHECK_OUT' ? 'CHECK_OUT' : 'CHECK_IN';
     const latitude = body.latitude ? parseFloat(String(body.latitude)) : null;
     const longitude = body.longitude ? parseFloat(String(body.longitude)) : null;
     const distanceMeters = Math.round(parseFloat(String(body.distanceMeters || '0')) || 0);
     const isVerifiedGeofence = body.isVerifiedGeofence !== undefined ? Boolean(body.isVerifiedGeofence) : true;
+    const photoUrl = body.photoUrl || null;
 
-    // استعلام إدخال محصن بالكامل
     const raw = await db.execute(sql`
       INSERT INTO attendance_logs (
         user_id,
@@ -81,8 +83,10 @@ export async function POST(request: NextRequest) {
         longitude,
         distance_meters,
         is_verified_geofence,
-        verification_method,
-        timestamp
+        photo_url,
+        work_date,
+        timestamp,
+        created_at
       ) VALUES (
         ${userId},
         ${userName},
@@ -94,7 +98,9 @@ export async function POST(request: NextRequest) {
         ${longitude},
         ${distanceMeters},
         ${isVerifiedGeofence},
-        'GPS_GEOFENCE',
+        ${photoUrl},
+        CURRENT_DATE,
+        NOW(),
         NOW()
       )
       RETURNING id, type, timestamp;
@@ -107,36 +113,6 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error('Attendance Save Error:', error);
-
-    // خطة إنقاذ تلقائية لإنشاء الجدول فوراً في حال عدم وجوده
-    if (error?.message?.includes('does not exist') || error?.code === '42P01') {
-      try {
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS attendance_logs (
-            id SERIAL PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            user_name TEXT,
-            user_phone TEXT,
-            branch_id INTEGER,
-            branch_name TEXT,
-            type VARCHAR(20) NOT NULL DEFAULT 'CHECK_IN',
-            timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            latitude DOUBLE PRECISION,
-            longitude DOUBLE PRECISION,
-            distance_meters INTEGER DEFAULT 0,
-            is_verified_geofence BOOLEAN DEFAULT true,
-            verification_method VARCHAR(50) DEFAULT 'GPS_GEOFENCE'
-          );
-        `);
-        return NextResponse.json(
-          { message: 'تمت تهيئة قاعدة البيانات بنجاح، اضغط مرة أخرى لتسجيل البصمة الآن' },
-          { status: 200 }
-        );
-      } catch (tableErr: any) {
-        return NextResponse.json({ message: 'فشل تهيئة قاعدة البيانات', error: tableErr?.message }, { status: 500 });
-      }
-    }
-
     return NextResponse.json(
       { message: error?.message || 'فشل حفظ البصمة في السيرفر', error: error?.message },
       { status: 500 }
