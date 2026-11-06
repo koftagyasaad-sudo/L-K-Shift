@@ -3,44 +3,36 @@ import { db } from "@/db";
 import {
   attendanceLogs,
   notifications,
-  shifts,
   leaveRequests,
   customRoleAssignments,
   adminBranchScopes,
-  users,
-  customRoles,
-  branches,
 } from "@/db/schema";
+import { sql } from "drizzle-orm";
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    // مسح البيانات من الجداول المعتمدة بالترتيب التنازلي للتعديلات
-    await db.delete(attendanceLogs);
-    await db.delete(notifications);
-    await db.delete(shifts);
-    await db.delete(leaveRequests);
-    await db.delete(customRoleAssignments);
-    await db.delete(adminBranchScopes);
-    await db.delete(users);
-    await db.delete(customRoles);
-    await db.delete(branches);
+    await db.execute(sql`
+      DO $$ BEGIN
+        TRUNCATE TABLE attendance_logs CASCADE;
+        TRUNCATE TABLE leave_requests CASCADE;
+        TRUNCATE TABLE notifications CASCADE;
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
+    `);
 
     return NextResponse.json({
       success: true,
-      message: "Database reset successfully",
+      message: "تمت إعادة تعيين البيانات بنجاح",
     });
   } catch (error: any) {
-    console.error("Reset database error:", error);
+    console.error("Reset Database Error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Failed to reset database",
-      },
+      { success: false, error: error.message },
       { status: 500 }
     );
   }
 }
 
-export async function GET(request: Request) {
-  return POST(request);
+export async function GET() {
+  return NextResponse.json({ status: "ready" });
 }
