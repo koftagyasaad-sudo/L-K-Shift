@@ -109,7 +109,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
   const isDark = theme === 'dark';
   const isSuper = userPermissions.includes('*') || userRole === 'مدير النظام' || userRole === 'SUPER_ADMIN';
 
-  // تحديد القوائم المسموحة
+  // القوائم المسموحة
   const allowedNavItems = [];
 
   if (isSuper || userPermissions.includes('dashboard.view')) {
@@ -135,18 +135,18 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     ),
   });
 
-  // 2. مراجعة الحضور (متاح دائماً: شخصي للموظف، وإداري شامل للمدير)
+  // 2. مراجعة الحضور ومسير الرواتب
   allowedNavItems.push({
-    name: isSuper ? (isRtl ? 'مراجعة الحضور' : 'Attendance Review') : (isRtl ? 'سجل حضورك' : 'My Attendance Logs'),
+    name: isSuper ? (isRtl ? 'مراجعة الحضور والرواتب' : 'Attendance & Payroll') : (isRtl ? 'سجل حضورك' : 'My Attendance Logs'),
     href: `/${locale}/admin/attendance-review`,
     icon: (
       <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
       </svg>
     ),
   });
 
-  // 3. تقديم الإجازات والأذونات والسلف (متاح دائماً للموظف العادي)
+  // 3. تقديم الإجازات والأذونات والسلف
   allowedNavItems.push({
     name: isRtl ? 'تقديم إجازة / إذن / سلفة' : 'Requests & Leaves',
     href: `/${locale}/requests`,
@@ -157,7 +157,6 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
     ),
   });
 
-  // باقي الأقسام بحسب صلاحيات الأدوار المخصصة
   if (isSuper || userPermissions.includes('employees.view')) {
     allowedNavItems.push({
       name: isRtl ? 'الموظفين' : 'Employees',
@@ -172,7 +171,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
 
   if (isSuper || userPermissions.includes('branches.view')) {
     allowedNavItems.push({
-      name: isRtl ? 'الفروع' : 'Branches',
+      name: isRtl ? 'الفروع والورديات' : 'Branches & Shifts',
       href: `/${locale}/admin/branches`,
       icon: (
         <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -240,7 +239,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         />
       )}
 
-      {/* القائمة الجانبية */}
+      {/* القائمة الجانبية (Sidebar) مع اللوجو الحقيقي */}
       <aside
         className={`fixed inset-y-0 z-50 flex flex-col shadow-2xl transition-all duration-300 ease-in-out ${
           isRtl ? 'right-0' : 'left-0'
@@ -256,15 +255,26 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
             : 'border-slate-200 bg-white text-slate-800'
         } ${isRtl ? 'border-l' : 'border-r'}`}
       >
+        {/* هيدر القائمة مع اللوجو الحقيقي */}
         <div
-          className={`flex h-20 items-center justify-between px-5 border-b shrink-0 ${
+          className={`flex h-20 items-center justify-between px-4 border-b shrink-0 ${
             isDark ? 'border-white/5' : 'border-slate-200'
           }`}
         >
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-600 text-white font-black text-lg shadow-lg shadow-orange-500/20">
-              LK
+            {/* اللوجو الحقيقي المرفوع Logo.png */}
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-black/40 p-1 border border-white/10 shadow-md">
+              <img
+                src="/Logo.png"
+                alt="L-K Shift Logo"
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                  // في حال تعذر قراءة مسار الصورة
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
             </div>
+
             {(!isSidebarCollapsed || isMobileMenuOpen) && (
               <div className="overflow-hidden">
                 <h1 className={`text-base font-extrabold tracking-wide truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -326,7 +336,7 @@ export default function AppLayout({ children, params }: AppLayoutProps) {
         </div>
       </aside>
 
-      {/* مساحة المحتوى: تم ضبط العرض الداخلي المرن ليتسع بدقة دون أي انزياح أو قطع للشاشة */}
+      {/* مساحة المحتوى */}
       <div
         className={`flex min-h-screen flex-col transition-all duration-300 ease-in-out min-w-0 ${
           isSidebarCollapsed
