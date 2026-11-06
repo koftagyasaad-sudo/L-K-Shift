@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
+// 1. استرجاع كافة الأدوار والصلاحيات المضافة
 export async function GET() {
   try {
     const raw = await db.execute(sql`
@@ -13,7 +14,7 @@ export async function GET() {
         description, 
         COALESCE(permissions, '[]'::jsonb) as permissions,
         COALESCE(is_system, false) as "isSystem"
-      FROM roles
+      FROM custom_roles
       ORDER BY id ASC;
     `);
 
@@ -25,12 +26,13 @@ export async function GET() {
   }
 }
 
+// 2. إنشاء دور جديد وحفظ صلاحياته
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const name = body.name || body.nameAr;
-    const nameAr = body.nameAr || body.name_ar || name;
-    const description = body.description || '';
+    const name = (body.name || body.nameAr || '').toString().trim();
+    const nameAr = (body.nameAr || body.name_ar || name).toString().trim();
+    const description = (body.description || '').toString().trim();
     const permissions = JSON.stringify(body.permissions || []);
 
     if (!nameAr) {
@@ -38,9 +40,22 @@ export async function POST(request: NextRequest) {
     }
 
     const raw = await db.execute(sql`
-      INSERT INTO roles (name, name_ar, description, permissions, is_system, created_at, updated_at)
-      VALUES (${name}, ${nameAr}, ${description}, ${permissions}::jsonb, false, NOW(), NOW())
-      RETURNING id, name, name_ar as "nameAr";
+      INSERT INTO custom_roles (
+        name, 
+        name_ar, 
+        description, 
+        permissions, 
+        is_system, 
+        created_at
+      ) VALUES (
+        ${name}, 
+        ${nameAr}, 
+        ${description}, 
+        ${permissions}::jsonb, 
+        false, 
+        NOW()
+      )
+      RETURNING id, name, name_ar as "nameAr", permissions;
     `);
 
     const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
