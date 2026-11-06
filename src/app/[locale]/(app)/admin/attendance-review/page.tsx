@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 
 interface AttendanceLog {
   id: number;
-  userId: number;
+  userId: string;
   userName?: string;
   userPhone?: string;
   totalLeaves?: number;
@@ -15,6 +15,7 @@ interface AttendanceLog {
   timestamp: string;
   distanceMeters?: number;
   isVerifiedGeofence?: boolean;
+  photoUrl?: string;
 }
 
 interface PageProps {
@@ -37,6 +38,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userRole, setUserRole] = useState<string>('موظف');
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     const role = localStorage.getItem('userRole') || 'موظف';
@@ -46,12 +48,10 @@ export default function AttendanceReviewPage({ params }: PageProps) {
 
     const isAdmin = role === 'مدير النظام' || role === 'SUPER_ADMIN' || role === 'admin';
 
-    // إذا كان الموظف عادياً، يتم حصر السجلات على معرّفه فقط
     if (!isAdmin && uid) {
       setSelectedUser(uid);
     }
 
-    // جلب قائمة الموظفين للأدمن فقط
     if (isAdmin) {
       fetch('/api/employees', { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : []))
@@ -67,7 +67,6 @@ export default function AttendanceReviewPage({ params }: PageProps) {
       setIsLoading(true);
       const paramsObj = new URLSearchParams();
 
-      // فرض معرّف الموظف في حال لم يكن مديراً
       const targetUserId = isAdmin ? selectedUser : currentUserId;
       if (targetUserId) paramsObj.set('userId', targetUserId);
       if (fromDate) paramsObj.set('from', fromDate);
@@ -150,12 +149,12 @@ export default function AttendanceReviewPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
-            {isAdmin ? (isRtl ? 'سجل بصمات الحضور والإنصراف' : 'Attendance Audit & Logs') : (isRtl ? 'سجل حضوري وإجازاتي' : 'My Attendance & Leaves')}
+            {isAdmin ? (isRtl ? 'سجل بصمات الحضور والإنصراف' : 'Attendance Audit & Logs') : (isRtl ? 'سجل حضورك' : 'My Attendance Logs')}
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {isAdmin
-              ? (isRtl ? 'متابعة فورية للحركات المسجلة عبر البصمة والتحقق الجغرافي بالـ GPS' : 'Live check-in audit & GPS proofs')
-              : (isRtl ? 'ملخص حركات حضورك وانصرافك ورصيد إجازاتك المتبقية' : 'Personal attendance history & leave balance')}
+              ? (isRtl ? 'متابعة فورية للحركات المسجلة عبر البصمة والصورة والتحقق الجغرافي بالـ GPS' : 'Live check-in audit & GPS proofs')
+              : (isRtl ? 'ملخص حركات حضورك وانصرافك ورصيد إجازاتك' : 'Personal attendance history')}
           </p>
         </div>
 
@@ -179,7 +178,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* كروت الإحصائيات والأرصدة */}
+      {/* كروت الإحصائيات */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{isRtl ? 'إجمالي الحركات' : 'Total Logs'}</span>
@@ -208,7 +207,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* قسم الفلاتر (تظهر قائمة الموظفين للأدمن فقط) */}
+      {/* قسم الفلاتر */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
         {isAdmin && (
           <div>
@@ -276,7 +275,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
           </div>
         ) : filteredLogs.length === 0 ? (
           <div className="p-12 text-center text-slate-500 dark:text-slate-400">
-            <p className="text-base font-medium">{isRtl ? 'لا توجد سجلات متطابقة مع البحث' : 'No logs found'}[cite: 5]</p>
+            <p className="text-base font-medium">{isRtl ? 'لا توجد سجلات متطابقة مع البحث' : 'No logs found'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -288,7 +287,7 @@ export default function AttendanceReviewPage({ params }: PageProps) {
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'نوع البصمة' : 'Type'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'التوقيت' : 'Timestamp'}</th>
                   <th className="px-6 py-4 font-semibold">{isRtl ? 'المسافة عن الفرع' : 'Distance'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'التحقق' : 'Status'}</th>
+                  <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الصورة الحية' : 'Selfie'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -316,16 +315,18 @@ export default function AttendanceReviewPage({ params }: PageProps) {
                     <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300">
                       {log.distanceMeters !== undefined ? `${log.distanceMeters} م` : '—'}
                     </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                          log.isVerifiedGeofence
-                            ? 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400'
-                            : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
-                        }`}
-                      >
-                        {log.isVerifiedGeofence ? (isRtl ? 'GPS مطابق' : 'Verified') : (isRtl ? 'يدوي' : 'Manual')}
-                      </span>
+                    <td className="px-6 py-4 text-center">
+                      {log.photoUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPhoto(log.photoUrl || null)}
+                          className="inline-flex rounded-lg bg-orange-500/10 px-2.5 py-1 text-xs font-bold text-orange-600 hover:bg-orange-500/20"
+                        >
+                          عرض السيلفي 👁️
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -334,6 +335,19 @@ export default function AttendanceReviewPage({ params }: PageProps) {
           </div>
         )}
       </div>
+
+      {/* نافذة عرض الصورة السيلفي المكبرة */}
+      {selectedPhoto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setSelectedPhoto(null)}>
+          <div className="max-w-md w-full bg-[#121526] p-4 rounded-2xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-bold text-white">صورة السيلفي الحية لحظة البصمة</h3>
+              <button onClick={() => setSelectedPhoto(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <img src={selectedPhoto} alt="Attendance Selfie" className="w-full rounded-xl object-cover" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
