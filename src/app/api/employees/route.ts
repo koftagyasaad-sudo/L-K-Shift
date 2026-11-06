@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 
-// 1. استرجاع قائمة الموظفين أو موظف محدد
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -16,9 +15,11 @@ export async function GET(request: NextRequest) {
           COALESCE(u.full_name_ar, u.name, 'موظف') as name,
           COALESCE(u.full_name_ar, u.name, 'موظف') as "fullName",
           u.phone,
+          u.employee_code as "employeeCode",
           COALESCE(u.job_role, u.role, 'موظف') as role,
           COALESCE(u.primary_branch_id, u.branch_id) as "branchId",
           COALESCE(u.monthly_salary, 0) as "basicSalary",
+          COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
           COALESCE(u.annual_leave_days, 21) as "annualLeaveDays",
           u.password,
           u.password_hash,
@@ -43,9 +44,11 @@ export async function GET(request: NextRequest) {
         COALESCE(u.full_name_ar, u.name, 'موظف') as name,
         COALESCE(u.full_name_ar, u.name, 'موظف') as "fullName",
         u.phone,
+        u.employee_code as "employeeCode",
         COALESCE(u.job_role, u.role, 'موظف') as role,
         COALESCE(u.primary_branch_id, u.branch_id) as "branchId",
         COALESCE(u.monthly_salary, 0) as "basicSalary",
+        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
         COALESCE(u.annual_leave_days, 21) as "annualLeaveDays",
         u.password,
         u.password_hash,
@@ -61,111 +64,77 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(allRows, { status: 200 });
   } catch (error: any) {
     console.error('Error fetching employees:', error);
-    return NextResponse.json(
-      { message: 'فشل استرجاع بيانات الموظفين', error: error?.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'فشل استرجاع بيانات الموظفين', error: error?.message }, { status: 500 });
   }
 }
 
-// 2. إضافة موظف جديد مع فحص مسبق لمنع تكرار رقم الهاتف
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const name = body.name || body.fullName || body.fullNameAr;
+    const name = body.name || body.fullName;
     const phone = body.phone ? String(body.phone).trim() : null;
+    const employeeCode = body.employeeCode ? String(body.employeeCode).trim() : null;
     const password = body.password ? String(body.password).trim() : '123456';
     const role = body.role || 'موظف';
     const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
-    const basicSalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
+    const basicSalary = parseFloat(body.basicSalary || '0') || 0;
+    const workingHoursPerDay = parseInt(body.workingHoursPerDay || '8', 10) || 8;
     const annualLeaveDays = parseInt(body.annualLeaveDays || '21', 10) || 21;
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
 
-    if (!name || !phone) {
+    if (!name || !phone || !employeeCode) {
+      return NextResponse.json({ message: 'الاسم ورقم الهاتف والرقم الوظيفي حقول إلزامية' }, { status: 400 });
+    }
+
+    // فحص الرقم الوظيفي لمنع تكراره
+    const codeCheck = await db.execute(sql`
+      SELECT id, full_name_ar as name FROM users WHERE employee_code = ${employeeCode} LIMIT 1;
+    `);
+    const codeRows = Array.isArray(codeCheck) ? codeCheck : (codeCheck as any)?.rows || [];
+    if (codeRows.length > 0) {
       return NextResponse.json(
-        { message: 'الاسم ورقم التليفون حقول مطلوبة' },
-        { status: 400 }
+        { message: `الرقم الوظيفي (${employeeCode}) مسجل بالفعل للموظف "${codeRows[0].name}". يرجى اختيار رقم وظيفي مختلف.` },
+        { status: 409 }
       );
     }
 
-    // فحص مسبق في قاعدة البيانات لمنع أخطاء الـ Unique Constraint
-    const existingCheck = await db.execute(sql`
+    // فحص رقم الهاتف
+    const phoneCheck = await db.execute(sql`
       SELECT id, full_name_ar as name FROM users WHERE phone = ${phone} LIMIT 1;
     `);
-    const existingRows = Array.isArray(existingCheck) ? existingCheck : (existingCheck as any)?.rows || [];
-    if (existingRows.length > 0) {
+    const phoneRows = Array.isArray(phoneCheck) ? phoneCheck : (phoneCheck as any)?.rows || [];
+    if (phoneRows.length > 0) {
       return NextResponse.json(
-        {
-          message: `رقم الهاتف (${phone}) مسجل بالفعل باسم الموظف "${existingRows[0].name}". يرجى استخدام رقم آخر أو تعديل الحساب القائم.`,
-        },
+        { message: `رقم الهاتف (${phone}) مسجل بالفعل للموظف "${phoneRows[0].name}".` },
         { status: 409 }
       );
     }
 
     const insertResult = await db.execute(sql`
       INSERT INTO users (
-        full_name_ar,
-        full_name_en,
-        name,
-        phone,
-        password,
-        password_hash,
-        job_role,
-        role,
-        system_role,
-        primary_branch_id,
-        branch_id,
-        monthly_salary,
-        annual_leave_days,
-        is_active,
-        created_at,
-        updated_at
+        full_name_ar, full_name_en, name, phone, employee_code, password, password_hash,
+        job_role, role, system_role, primary_branch_id, branch_id, monthly_salary,
+        working_hours_per_day, annual_leave_days, is_active, created_at, updated_at
       ) VALUES (
-        ${name},
-        ${name},
-        ${name},
-        ${phone},
-        ${password},
-        ${password},
-        ${role},
-        ${role},
-        'EMPLOYEE',
-        ${branchId},
-        ${branchId},
-        ${basicSalary},
-        ${annualLeaveDays},
-        ${isActive},
-        NOW(),
-        NOW()
+        ${name}, ${name}, ${name}, ${phone}, ${employeeCode}, ${password}, ${password},
+        ${role}, ${role}, 'EMPLOYEE', ${branchId}, ${branchId}, ${basicSalary},
+        ${workingHoursPerDay}, ${annualLeaveDays}, ${isActive}, NOW(), NOW()
       )
-      RETURNING id, full_name_ar as name, phone, job_role as role;
+      RETURNING id, full_name_ar as name, employee_code as "employeeCode";
     `);
 
     const rows = Array.isArray(insertResult) ? insertResult : (insertResult as any)?.rows || [];
-    return NextResponse.json(
-      { message: 'تم حفظ الموظف بنجاح', employee: rows[0] },
-      { status: 201 }
-    );
+    return NextResponse.json({ message: 'تم حفظ الموظف بنجاح', employee: rows[0] }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating employee:', error);
-
-    // التعامل مع تعارض المفاتيح في حال تم إرسال طلبين في نفس اللحظة
-    if (error?.message?.includes('users_phone_unique') || error?.code === '23505') {
-      return NextResponse.json(
-        { message: 'رقم الهاتف مسجل بالفعل في المنظومة، يرجى كتابة رقم آخر.' },
-        { status: 409 }
-      );
+    if (error?.message?.includes('users_employee_code_unique')) {
+      return NextResponse.json({ message: 'الرقم الوظيفي مسجل مسبقاً لموظف آخر.' }, { status: 409 });
     }
-
-    return NextResponse.json(
-      { message: error?.message || 'فشل حفظ بيانات الموظف', error: error?.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: error?.message || 'فشل حفظ بيانات الموظف', error: error?.message }, { status: 500 });
   }
 }
 
-// 3. تحديث بيانات الموظف مع منع تضارب رقم الهاتف مع موظف آخر
 export async function PUT(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -177,23 +146,25 @@ export async function PUT(request: NextRequest) {
     }
 
     const employeeId = parseInt(String(rawId), 10);
-    const name = body.name || body.fullName || body.fullNameAr;
+    const name = body.name || body.fullName;
     const phone = body.phone ? String(body.phone).trim() : null;
+    const employeeCode = body.employeeCode ? String(body.employeeCode).trim() : null;
     const role = body.role || 'موظف';
     const branchId = body.branchId ? parseInt(String(body.branchId), 10) : null;
-    const basicSalary = parseFloat(body.basicSalary || body.monthlySalary || '0') || 0;
+    const basicSalary = parseFloat(body.basicSalary || '0') || 0;
+    const workingHoursPerDay = parseInt(body.workingHoursPerDay || '8', 10) || 8;
     const annualLeaveDays = parseInt(body.annualLeaveDays || '21', 10) || 21;
     const isActive = body.isActive !== undefined ? Boolean(body.isActive) : true;
     const password = body.password ? String(body.password).trim() : null;
 
-    if (phone) {
-      const conflictCheck = await db.execute(sql`
-        SELECT id, full_name_ar as name FROM users WHERE phone = ${phone} AND id != ${employeeId} LIMIT 1;
+    if (employeeCode) {
+      const codeCheck = await db.execute(sql`
+        SELECT id, full_name_ar as name FROM users WHERE employee_code = ${employeeCode} AND id != ${employeeId} LIMIT 1;
       `);
-      const conflictRows = Array.isArray(conflictCheck) ? conflictCheck : (conflictCheck as any)?.rows || [];
-      if (conflictRows.length > 0) {
+      const codeRows = Array.isArray(codeCheck) ? codeCheck : (codeCheck as any)?.rows || [];
+      if (codeRows.length > 0) {
         return NextResponse.json(
-          { message: `لا يمكن استخدام رقم الهاتف (${phone}) لأنه مسجل لموظف آخر.` },
+          { message: `لا يمكن استخدام الرقم الوظيفي (${employeeCode}) لأنه مسجل للموظف "${codeRows[0].name}".` },
           { status: 409 }
         );
       }
@@ -206,11 +177,13 @@ export async function PUT(request: NextRequest) {
         full_name_en = ${name},
         name = ${name},
         phone = ${phone},
+        employee_code = ${employeeCode},
         job_role = ${role},
         role = ${role},
         primary_branch_id = ${branchId},
         branch_id = ${branchId},
         monthly_salary = ${basicSalary},
+        working_hours_per_day = ${workingHoursPerDay},
         annual_leave_days = ${annualLeaveDays},
         is_active = ${isActive},
         updated_at = NOW()
@@ -227,14 +200,10 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ message: 'تم تحديث بيانات الموظف بنجاح' }, { status: 200 });
   } catch (error: any) {
     console.error('Error updating employee:', error);
-    return NextResponse.json(
-      { message: 'فشل تحديث بيانات الموظف', error: error?.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'فشل تحديث بيانات الموظف', error: error?.message }, { status: 500 });
   }
 }
 
-// 4. حذف موظف
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -249,9 +218,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'تم حذف الموظف بنجاح' }, { status: 200 });
   } catch (error: any) {
     console.error('Error deleting employee:', error);
-    return NextResponse.json(
-      { message: 'فشل حذف الموظف', error: error?.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'فشل حذف الموظف', error: error?.message }, { status: 500 });
   }
 }
