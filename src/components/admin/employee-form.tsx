@@ -1,267 +1,294 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { saveEmployeeAction } from "@/actions/employeeActions";
-import { useRouter } from "next/navigation";
-import { User, Phone, Lock, Building2, Shield, DollarSign, Calendar, AlertCircle, CheckCircle2, X } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export interface EmployeeFormProps {
-  initialData?: any;
-  branches?: any[];
-  roles?: any[];
-  mode?: "create" | "edit";
-  onClose?: () => void;
-  redirectTo?: string;
-  [key: string]: any;
+export interface EmployeeFormData {
+  id?: string | number;
+  name?: string;
+  fullName?: string;
+  phone?: string;
+  role?: string;
+  branchId?: string | number | null;
+  employeeCode?: string;
+  basicSalary?: number | string;
+  annualLeaveDays?: number | string;
+  workingHoursPerDay?: number | string;
+  password?: string;
+  isActive?: boolean;
 }
 
-export function EmployeeForm({
+interface EmployeeFormProps {
+  initialData?: EmployeeFormData | null;
+  branches?: Array<{ id: string | number; name?: string; nameAr?: string; name_ar?: string }>;
+  roles?: Array<{ id: string | number; name?: string; nameAr?: string; name_ar?: string; permissions?: any }>;
+  locale?: string;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
+export default function EmployeeFormComponent({
   initialData,
-  branches = [],
-  roles = [],
-  mode = "create",
-  onClose,
-  redirectTo,
+  branches: initialBranches = [],
+  roles: initialRoles = [],
+  locale = 'ar',
+  onSuccess,
+  onCancel,
 }: EmployeeFormProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const isRtl = locale === 'ar';
 
-  const [formData, setFormData] = useState({
-    id: initialData?.id || "",
-    name: initialData?.fullNameAr || initialData?.name || "",
-    phone: initialData?.phone || "",
-    password: "",
-    code: initialData?.code || "",
-    baseSalary: initialData?.baseSalary || 0,
-    branchId: initialData?.branchId || initialData?.primaryBranchId || "",
-    roleId: initialData?.roleId || initialData?.role || "",
-    vacationDays: initialData?.vacationDays || 21,
-    isActive: initialData?.isActive ?? initialData?.active ?? true,
-  });
+  const [branchList, setBranchList] = useState<any[]>(initialBranches);
+  const [roleList, setRoleList] = useState<any[]>(initialRoles);
 
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setFeedback({ type, text });
-    setTimeout(() => setFeedback(null), 4000);
-  };
+  const [name, setName] = useState(initialData?.fullName || initialData?.name || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
+  const [password, setPassword] = useState('');
+  const [employeeCode, setEmployeeCode] = useState(initialData?.employeeCode || '');
+  const [branchId, setBranchId] = useState(initialData?.branchId ? String(initialData.branchId) : '');
+  const [role, setRole] = useState(initialData?.role || 'موظف');
+  const [basicSalary, setBasicSalary] = useState(initialData?.basicSalary ? String(initialData.basicSalary) : '5000');
+  const [workingHoursPerDay, setWorkingHoursPerDay] = useState(initialData?.workingHoursPerDay ? String(initialData.workingHoursPerDay) : '8');
+  const [annualLeaveDays, setAnnualLeaveDays] = useState(initialData?.annualLeaveDays ? String(initialData.annualLeaveDays) : '21');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // جلب الفروع وكافة الأدوار المضافة من السيرفر مباشرة فور فتح نافذة التعديل
+  useEffect(() => {
+    fetch('/api/branches', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setBranchList(data);
+      })
+      .catch((err) => console.error('Failed to fetch branches:', err));
+
+    fetch('/api/roles', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRoleList(data);
+        }
+      })
+      .catch((err) => console.error('Failed to fetch roles:', err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (!name.trim() || !phone.trim() || !employeeCode.trim()) {
+      setErrorMessage('الاسم الكامل، رقم الهاتف، والكود الوظيفي حقول إلزامية');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    // ربط مصفوفة صلاحيات الدور المختار بالموظف
+    const matchedRoleObj = roleList.find(
+      (r) => (r.nameAr || r.name_ar || r.name) === role || r.name === role
+    );
+    const assignedPermissions = matchedRoleObj?.permissions || [];
+
+    const payload = {
+      name: name.trim(),
+      fullName: name.trim(),
+      phone: phone.trim(),
+      password: password ? password.trim() : (initialData?.id ? undefined : '123456'),
+      employeeCode: employeeCode.trim(),
+      branchId: branchId ? parseInt(branchId, 10) : null,
+      role: role.trim(),
+      permissions: assignedPermissions,
+      basicSalary: parseFloat(basicSalary) || 0,
+      workingHoursPerDay: parseInt(workingHoursPerDay, 10) || 8,
+      annualLeaveDays: parseInt(annualLeaveDays, 10) || 21,
+      isActive: true,
+    };
 
     try {
-      const res = await saveEmployeeAction(formData);
-      if (res && (res.success || !res.error)) {
-        showToast(mode === "edit" ? "تم تعديل بيانات الموظف بنجاح" : "تم إضافة الموظف بنجاح", "success");
-        setTimeout(() => {
-          if (onClose) onClose();
-          if (redirectTo) router.push(redirectTo);
-          else router.push("/admin/employees");
-          router.refresh();
-        }, 800);
-      } else {
-        showToast(res?.error || "حدث خطأ أثناء حفظ البيانات", "error");
+      const isEdit = Boolean(initialData?.id);
+      const endpoint = isEdit ? `/api/employees?id=${initialData?.id}` : '/api/employees';
+
+      const response = await fetch(endpoint, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const resData = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(resData.message || 'فشل حفظ بيانات الموظف');
       }
-    } catch (err) {
-      showToast("حدث خطأ غير متوقع", "error");
+
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.refresh();
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'حدث خطأ أثناء حفظ البيانات');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6" dir="rtl">
-      {feedback && (
-        <div
-          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
-            feedback.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
-          }`}
-        >
-          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-          <span className="font-medium text-sm">{feedback.text}</span>
+    <form onSubmit={handleSubmit} className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
+      {errorMessage && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-xs font-bold text-rose-800">
+          {errorMessage}
         </div>
       )}
 
-      <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <User className="text-blue-500" />
-          {mode === "edit" ? "تعديل بيانات موظف" : "إضافة موظف جديد"}
-        </h2>
-        {onClose && (
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full">
-            <X size={18} />
-          </button>
-        )}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            الاسم الكامل <span className="text-rose-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            الرقم الوظيفي (كود الموظف الثابت) <span className="text-rose-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={employeeCode}
+            onChange={(e) => setEmployeeCode(e.target.value)}
+            placeholder="مثال: 1001"
+            className="w-full rounded-xl border border-orange-500/40 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 focus:outline-none dark:border-orange-500/40 dark:bg-slate-900 dark:text-white"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            رقم التليفون (اسم المستخدم) <span className="text-rose-500">*</span>
+          </label>
+          <input
+            type="tel"
+            required
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white text-left font-mono"
+            dir="ltr"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            كلمة المرور {initialData?.id && <span className="text-slate-400 font-normal">(اتركه فارغاً لعدم التغيير)</span>}
+          </label>
+          <input
+            type="password"
+            required={!initialData?.id}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+            placeholder={initialData?.id ? '••••••' : 'كلمة المرور الأولية'}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">الفرع المسند</label>
+          <select
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="">-- اختر الفرع --</option>
+            {branchList.map((b) => (
+              <option key={b.id} value={String(b.id)}>{b.nameAr || b.name_ar || b.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* قائمة الأدوار الوظيفية المسترجعة بالكامل ديناميكياً */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            الدور الوظيفي والصلاحيات <span className="text-rose-500">*</span>
+          </label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          >
+            <option value="">-- اختر الدور الوظيفي --</option>
+            {roleList.map((r: any) => {
+              const roleLabel = r.nameAr || r.name_ar || r.name;
+              return (
+                <option key={r.id || roleLabel} value={roleLabel}>
+                  {roleLabel} {r.description ? `(${r.description})` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            ساعات العمل اليومية (الشيفت) *
+          </label>
+          <input
+            type="number"
+            min="4"
+            max="16"
+            required
+            value={workingHoursPerDay}
+            onChange={(e) => setWorkingHoursPerDay(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">الراتب الأساسي (ج.م)</label>
+          <input
+            type="number"
+            value={basicSalary}
+            onChange={(e) => setBasicSalary(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">رصيد الإجازات السنوية (أيام)</label>
+          <input
+            type="number"
+            value={annualLeaveDays}
+            onChange={(e) => setAnnualLeaveDays(e.target.value)}
+            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+          />
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">الاسم الكامل *</label>
-            <input
-              type="text"
-              name="name"
-              required
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="مثال: أحمد محمد"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
-              <Phone size={14} className="text-blue-400" /> رقم التليفون (اسم المستخدم) *
-            </label>
-            <input
-              type="text"
-              name="phone"
-              required
-              value={formData.phone}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
-              placeholder="01012345678"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
-              <Lock size={14} className="text-amber-400" /> كلمة المرور {mode === "edit" ? "(اتركها فارغة للإبقاء على الحالية)" : "*"}
-            </label>
-            <input
-              type="password"
-              name="password"
-              required={mode === "create"}
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
-              placeholder={mode === "create" ? "الافتراضي: 123456" : "••••••"}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">كود الموظف (اختياري)</label>
-            <input
-              type="text"
-              name="code"
-              value={formData.code}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="اختياري — افتراضي رقم الهاتف"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
-              <Building2 size={14} className="text-blue-400" /> الفرع
-            </label>
-            <select
-              name="branchId"
-              value={formData.branchId}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="">-- اختر الفرع --</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.nameAr || b.nameEn || b.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
-              <Shield size={14} className="text-purple-400" /> الدور / المسمى
-            </label>
-            <select
-              name="roleId"
-              value={formData.roleId}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="">-- بدون دور (موظف عادي) --</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.nameAr || r.name || r.nameEn}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
-              <DollarSign size={14} className="text-emerald-400" /> الراتب الأساسي
-            </label>
-            <input
-              type="number"
-              name="baseSalary"
-              value={formData.baseSalary}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300 flex items-center gap-1">
-              <Calendar size={14} className="text-amber-400" /> أيام الإجازة السنوية
-            </label>
-            <input
-              type="number"
-              name="vacationDays"
-              value={formData.vacationDays}
-              onChange={handleChange}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-              dir="ltr"
-            />
-          </div>
-        </div>
-
-        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs">
-          الموظف يسجل الدخول برقم التليفون + كلمة المرور. الافتراضي للإضافة الجديدة: 123456
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800"
-            >
-              إلغاء
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all disabled:opacity-50"
-          >
-            {loading ? "جاري الحفظ..." : "حفظ الموظف"}
-          </button>
-        </div>
-      </form>
-    </div>
+      <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-6 dark:border-white/5">
+        <button
+          type="button"
+          onClick={() => {
+            if (onCancel) onCancel();
+            else router.refresh();
+          }}
+          className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-slate-800 dark:text-slate-200 cursor-pointer"
+        >
+          إلغاء
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50 cursor-pointer"
+        >
+          {isSubmitting ? 'جاري الحفظ...' : initialData?.id ? 'حفظ تعديلات الموظف' : 'إضافة الموظف'}
+        </button>
+      </div>
+    </form>
   );
 }
 
-export default EmployeeForm;
+export { EmployeeFormComponent as EmployeeForm };
