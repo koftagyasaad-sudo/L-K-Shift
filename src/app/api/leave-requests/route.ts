@@ -16,15 +16,15 @@ export async function GET(request: NextRequest) {
         COALESCE(l.user_name, u.full_name_ar, u.name, 'موظف') as "userName",
         COALESCE(l.user_phone, u.phone, '') as "userPhone",
         COALESCE(l.branch_name, b.name_ar, b.name, 'الفرع') as "branchName",
-        COALESCE(l.request_type, 'ANNUAL') as "requestType",
+        COALESCE(l.request_type, l.leave_type, 'ANNUAL') as "requestType",
         COALESCE(l.start_date::text, CURRENT_DATE::text) as "startDate",
         COALESCE(l.end_date::text, CURRENT_DATE::text) as "endDate",
-        COALESCE(l.duration_days, 1) as "durationDays",
+        COALESCE(l.duration_days, l.total_days, 1) as "durationDays",
         COALESCE(l.duration_hours, 0) as "durationHours",
         COALESCE(l.advance_amount, 0) as "advanceAmount",
         COALESCE(l.substitute_name, '—') as "substituteName",
         COALESCE(l.reason, '') as reason,
-        COALESCE(l.final_status, 'PENDING_BRANCH') as "finalStatus",
+        COALESCE(l.final_status, l.status::text, 'PENDING_BRANCH') as "finalStatus",
         COALESCE(l.branch_notes, '') as "branchNotes",
         COALESCE(l.hr_notes, '') as "hrNotes",
         COALESCE(l.created_at, NOW()) as "createdAt"
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'سبب الطلب مطلوب' }, { status: 400 });
     }
 
+    // إدخال كل من leave_type و request_type معاً، وكذلك duration_days و total_days
     await db.execute(sql`
       INSERT INTO leave_requests (
         user_id,
@@ -82,9 +83,11 @@ export async function POST(request: NextRequest) {
         user_phone,
         branch_name,
         request_type,
+        leave_type,
         start_date,
         end_date,
         duration_days,
+        total_days,
         duration_hours,
         advance_amount,
         substitute_name,
@@ -97,8 +100,10 @@ export async function POST(request: NextRequest) {
         ${userPhone},
         ${branchName},
         ${requestType},
+        ${requestType},
         ${startDate}::date,
         ${endDate}::date,
+        ${durationDays},
         ${durationDays},
         ${durationHours},
         ${advanceAmount},
