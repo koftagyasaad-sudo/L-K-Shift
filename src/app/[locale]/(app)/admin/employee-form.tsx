@@ -73,6 +73,11 @@ export default function EmployeeForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim() || !phone.trim() || !employeeCode.trim()) {
+      setErrorMessage('الاسم الكامل، رقم الهاتف، والرقم الوظيفي حقول إلزامية');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
@@ -81,7 +86,7 @@ export default function EmployeeForm({
       fullName: name.trim(),
       phone: phone.trim(),
       password: password ? password.trim() : '123456',
-      employeeCode: employeeCode.trim() || null,
+      employeeCode: employeeCode.trim(),
       branchId: branchId ? parseInt(branchId, 10) : null,
       role: role.trim(),
       basicSalary: parseFloat(basicSalary) || 0,
@@ -100,8 +105,9 @@ export default function EmployeeForm({
         body: JSON.stringify(payload),
       });
 
+      const resData = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const resData = await response.json().catch(() => ({}));
         throw new Error(resData.message || 'فشل حفظ بيانات الموظف');
       }
 
@@ -128,7 +134,9 @@ export default function EmployeeForm({
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">الاسم الكامل *</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            الاسم الكامل <span className="text-rose-500">*</span>
+          </label>
           <input
             type="text"
             required
@@ -138,8 +146,26 @@ export default function EmployeeForm({
           />
         </div>
 
+        {/* الرقم الوظيفي الإلزامي والفريد */}
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">رقم التليفون *</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            الرقم الوظيفي (كود الموظف الثابت) <span className="text-rose-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={employeeCode}
+            onChange={(e) => setEmployeeCode(e.target.value)}
+            placeholder="مثال: 1001 أو EMP-01"
+            className="w-full rounded-xl border border-orange-500/40 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 focus:outline-none dark:border-orange-500/40 dark:bg-slate-900 dark:text-white"
+          />
+          <span className="text-[10px] text-slate-400 mt-0.5 block">رقم وظيفي فريد لا يمكن تكراره لأكثر من موظف.</span>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            رقم التليفون (اسم المستخدم) <span className="text-rose-500">*</span>
+          </label>
           <input
             type="tel"
             required
@@ -151,7 +177,9 @@ export default function EmployeeForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">كلمة المرور *</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+            كلمة المرور <span className="text-rose-500">*</span>
+          </label>
           <input
             type="password"
             required={!initialData?.id}
@@ -189,7 +217,6 @@ export default function EmployeeForm({
           </select>
         </div>
 
-        {/* حقل ساعات العمل المقررة لربطها بالراتب والشيفت */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             ساعات العمل اليومية المقررة (الشيفت) *
@@ -202,12 +229,11 @@ export default function EmployeeForm({
             value={workingHoursPerDay}
             onChange={(e) => setWorkingHoursPerDay(e.target.value)}
             className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-            placeholder="8"
           />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">الراتب الشهري الأساسي (ج.م)</label>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">الراتب الأساسي (ج.م)</label>
           <input
             type="number"
             value={basicSalary}
