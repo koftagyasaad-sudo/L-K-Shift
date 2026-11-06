@@ -18,7 +18,6 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
 
   // Toast Feedback State
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   const showToast = (text: string, type: "success" | "error" = "success") => {
     setFeedback({ type, text });
     setTimeout(() => setFeedback(null), 4000);
@@ -28,6 +27,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
   const [mapLink, setMapLink] = useState("");
   const [formData, setFormData] = useState<BranchData>({
     id: "",
+    name: "",
     nameAr: "",
     nameEn: "",
     address: "",
@@ -43,6 +43,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     setMapLink("");
     setFormData({
       id: "",
+      name: "",
       nameAr: "",
       nameEn: "",
       address: "",
@@ -60,6 +61,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     setMapLink("");
     setFormData({
       id: branch.id,
+      name: branch.name || branch.nameAr || "",
       nameAr: branch.nameAr || "",
       nameEn: branch.nameEn || "",
       address: branch.address || "",
@@ -77,17 +79,16 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
+      ...(name === "nameAr" ? { name: value } : {}),
     }));
   };
 
   const handleMapLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const url = e.target.value;
     setMapLink(url);
-
     const atRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
     const qRegex = /q=(-?\d+\.\d+),(-?\d+\.\d+)/;
     const placeRegex = /search\/(-?\d+\.\d+),(-?\d+\.\d+)/;
-
     const match = url.match(atRegex) || url.match(qRegex) || url.match(placeRegex);
     if (match) {
       setFormData((prev) => ({
@@ -102,9 +103,11 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      const res = await saveBranchAction(formData);
+      const res = await saveBranchAction({
+        ...formData,
+        name: formData.name || formData.nameAr || "فرع",
+      });
       if (res.success) {
         showToast(formData.id ? "تم تعديل الفرع بنجاح" : "تم إضافة الفرع بنجاح", "success");
         setIsModalOpen(false);
@@ -120,7 +123,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("هل أنت تأكد من حذف هذا الفرع؟")) return;
+    if (!confirm("هل أنت متأكد من حذف هذا الفرع؟")) return;
     try {
       const res = await deleteBranchAction(id);
       if (res.success) {
@@ -170,8 +173,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Building2 className="text-blue-500" />
-            إدارة الفروع والنطاق الجغرافي
+            <Building2 className="text-blue-500" /> إدارة الفروع والنطاق الجغرافي
           </h1>
           <p className="text-slate-400 text-sm mt-1">
             إضافة وتعديل الفروع وتحديد نطاق بصمة الحضور والانصراف (GPS Geofence)
@@ -181,8 +183,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
           onClick={openAddModal}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-600/20"
         >
-          <Plus size={18} />
-          إضافة فرع جديد
+          <Plus size={18} /> إضافة فرع جديد
         </button>
       </div>
 
@@ -196,7 +197,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-bold text-white">
-                  {branch.nameAr || branch.nameEn || "فرع بدون اسم"}
+                  {branch.nameAr || branch.name || branch.nameEn || "فرع بدون اسم"}
                 </h3>
                 {branch.nameEn && <p className="text-xs text-slate-400">{branch.nameEn}</p>}
               </div>
@@ -222,8 +223,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
 
             <div className="text-sm text-slate-300 space-y-2 bg-slate-800/50 p-3 rounded-xl">
               <p className="flex items-center gap-2 text-slate-400">
-                <MapPin size={14} className="text-blue-400" />
-                {branch.address || "لا يوجد عنوان محدد"}
+                <MapPin size={14} className="text-blue-400" /> {branch.address || "لا يوجد عنوان محدد"}
               </p>
               <div className="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-700/50">
                 <span>الإحداثيات: {branch.latitude}, {branch.longitude}</span>
@@ -310,8 +310,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
 
               <div className="space-y-2 bg-blue-900/20 p-4 rounded-xl border border-blue-500/20">
                 <label className="text-sm font-medium text-blue-300 flex items-center gap-2">
-                  <MapPin size={16} />
-                  رابط خرائط جوجل (سحب الإحداثيات تلقائياً)
+                  <MapPin size={16} /> رابط خرائط جوجل (سحب الإحداثيات تلقائياً)
                 </label>
                 <input
                   type="text"
