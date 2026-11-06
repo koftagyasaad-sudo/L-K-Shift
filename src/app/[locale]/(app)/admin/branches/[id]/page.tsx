@@ -57,7 +57,7 @@ export default function EditBranchPage({ params }: PageProps) {
         setAddress(branchData.address || '');
         setLatitude(branchData.latitude ? String(branchData.latitude) : '');
         setLongitude(branchData.longitude ? String(branchData.longitude) : '');
-        setRadiusMeters(String(branchData.radiusMeters || 100));
+        setRadiusMeters(String(branchData.radiusMeters || branchData.geofenceRadius || '100'));
         setMorningStart(branchData.morningStart || '09:00');
         setMorningEnd(branchData.morningEnd || '17:00');
         setEveningStart(branchData.eveningStart || '17:00');
@@ -133,7 +133,7 @@ export default function EditBranchPage({ params }: PageProps) {
 
       if (!res.ok) throw new Error('فشل تحديث بيانات الفرع');
 
-      alert('تم تحديث كافة بيانات الفرع والورديات بنجاح!');
+      alert('تم تحديث كافة بيانات الفرع ونطاق البصمة والورديات بنجاح!');
       router.push(`/${locale}/admin/branches`);
       router.refresh();
     } catch (err: any) {
@@ -156,10 +156,10 @@ export default function EditBranchPage({ params }: PageProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            تعديل بيانات الفرع والورديات
+            تعديل بيانات الفرع ونطاق البصمة
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            تحديث شامل للإحداثيات، الورديات الثلاث، وتعيين مدير الفرع المسؤول
+            تحديث شامل للإحداثيات، نصف قطر نطاق البصمة بالمتر، والورديات الثلاث
           </p>
         </div>
         <Link
@@ -348,6 +348,26 @@ export default function EditBranchPage({ params }: PageProps) {
               />
             </div>
 
+            {/* نصف قطر نطاق البصمة */}
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                نصف قطر نطاق البصمة الجغرافي (بالمتر) *
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="3000"
+                required
+                value={radiusMeters}
+                onChange={(e) => setRadiusMeters(e.target.value)}
+                placeholder="100"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white font-bold"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                المدى المسموح للموظف لتسجيل الحضور حول الفرع (مستحسن 50 - 150م لمراعاة ضعف الشبكة داخل المقرات).
+              </span>
+            </div>
+
             <div className="sm:col-span-2">
               <button
                 type="button"
@@ -361,7 +381,7 @@ export default function EditBranchPage({ params }: PageProps) {
 
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                العنوان النصي
+                العنوان النصي للفرع
               </label>
               <input
                 type="text"
