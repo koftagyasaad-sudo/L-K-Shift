@@ -1,12 +1,5 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import {
-  attendanceLogs,
-  notifications,
-  leaveRequests,
-  customRoleAssignments,
-  adminBranchScopes,
-} from "@/db/schema";
 import { sql } from "drizzle-orm";
 
 export async function POST() {
