@@ -164,7 +164,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={nameAr}
                 onChange={(e) => setNameAr(e.target.value)}
                 placeholder="فرع دسوق / كفر الشيخ..."
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
               />
             </div>
 
@@ -177,7 +177,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={nameEn}
                 onChange={(e) => setNameEn(e.target.value)}
                 placeholder="Branch Name (EN)"
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
               />
             </div>
 
@@ -188,7 +188,7 @@ export default function NewBranchPage({ params }: PageProps) {
               <select
                 value={managerId}
                 onChange={(e) => handleManagerSelect(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
               >
                 <option value="">-- اختر مدير الفرع من القائمة --</option>
                 {managersList.map((m) => (
@@ -208,84 +208,87 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="05XXXXXXXX"
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
               />
             </div>
 
-            {/* الورديات الثلاث */}
-            <div className="sm:col-span-2 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-4">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                ⏰ إعدادات الورديات الثلاث للفرع (صباحية، بينية، مسائية)
+            {/* الورديات الثلاث بعد تصحيح التباين وظهور النص بوضوح تام */}
+            <div className="sm:col-span-2 rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5 space-y-4">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>⏰</span> مواعيد ورديات الفرع الثلاث (صباحية، بينية، مسائية)
               </h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
-                  <span className="text-xs font-bold text-orange-500">1. الوردية الصباحية</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                {/* 1. الصباحية */}
+                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm space-y-2.5">
+                  <span className="text-xs font-bold text-orange-600 dark:text-orange-400 block">1. الوردية الصباحية</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[10px] text-slate-500">من</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">من</label>
                       <input
                         type="time"
                         value={morningStart}
                         onChange={(e) => setMorningStart(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-black/40 px-2 py-1.5 text-xs font-bold text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-orange-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-500">إلى</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">إلى</label>
                       <input
                         type="time"
                         value={morningEnd}
                         onChange={(e) => setMorningEnd(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-black/40 px-2 py-1.5 text-xs font-bold text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-orange-500"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
-                  <span className="text-xs font-bold text-blue-500">2. الوردية البينية (Between)</span>
+                {/* 2. البينية */}
+                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm space-y-2.5">
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 block">2. الوردية البينية (Between)</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[10px] text-slate-500">من</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">من</label>
                       <input
                         type="time"
                         value={betweenStart}
                         onChange={(e) => setBetweenStart(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-black/40 px-2 py-1.5 text-xs font-bold text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-500">إلى</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">إلى</label>
                       <input
                         type="time"
                         value={betweenEnd}
                         onChange={(e) => setBetweenEnd(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-black/40 px-2 py-1.5 text-xs font-bold text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
-                  <span className="text-xs font-bold text-purple-500">3. الوردية المسائية</span>
+                {/* 3. المسائية */}
+                <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm space-y-2.5">
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400 block">3. الوردية المسائية</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="block text-[10px] text-slate-500">من</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">من</label>
                       <input
                         type="time"
                         value={eveningStart}
                         onChange={(e) => setEveningStart(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-black/40 px-2 py-1.5 text-xs font-bold text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-purple-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-500">إلى</label>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">إلى</label>
                       <input
                         type="time"
                         value={eveningEnd}
                         onChange={(e) => setEveningEnd(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 p-1 dark:bg-slate-900"
+                        className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-black/40 px-2 py-1.5 text-xs font-bold text-slate-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-purple-500"
                       />
                     </div>
                   </div>
@@ -293,20 +296,19 @@ export default function NewBranchPage({ params }: PageProps) {
               </div>
 
               <div className="flex items-center gap-2 pt-1 text-xs">
-                <label className="font-semibold text-slate-600 dark:text-slate-400">فترة السماح قبل التأخير:</label>
+                <label className="font-semibold text-slate-700 dark:text-slate-300">فترة السماح قبل احتساب تأخير:</label>
                 <input
                   type="number"
                   min="0"
                   max="60"
                   value={gracePeriod}
                   onChange={(e) => setGracePeriod(e.target.value)}
-                  className="w-16 rounded-lg border border-slate-300 p-1.5 dark:bg-slate-900 text-center font-bold"
+                  className="w-16 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-black/40 p-1.5 text-center text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
                 <span className="text-slate-500">دقيقة</span>
               </div>
             </div>
 
-            {/* إحداثيات الفرع ونطاق البصمة */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 خط العرض (Latitude) *
@@ -316,7 +318,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 required
                 value={latitude}
                 onChange={(e) => setLatitude(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
 
@@ -329,7 +331,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 required
                 value={longitude}
                 onChange={(e) => setLongitude(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 font-mono text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
 
@@ -346,10 +348,10 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={radiusMeters}
                 onChange={(e) => setRadiusMeters(e.target.value)}
                 placeholder="100"
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none font-bold"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
-                المدى الأقصى المسموح للموظف بالبصمة حول نقطة الفرع (يُفضل ضبطه بين 50 إلى 150 متراً لمراعاة المباني الخرسانية وضعف الإشارة).
+                المدى المسموح للموظف لتسجيل الحضور حول الفرع (مستحسن 50 - 150م لمراعاة ضعف الشبكة داخل المقرات).
               </span>
             </div>
 
@@ -373,7 +375,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="الشارع، الحي، المعلم الرئيسي..."
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
               />
             </div>
           </div>
