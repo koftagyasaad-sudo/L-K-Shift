@@ -59,7 +59,7 @@
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.1",
     "typescript": "^5.7.2"
-  }
+  },
   "allowScripts": {
     "esbuild": true,
     "sharp": true
