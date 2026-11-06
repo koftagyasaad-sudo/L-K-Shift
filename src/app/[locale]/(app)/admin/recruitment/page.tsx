@@ -48,7 +48,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // نافذة طلب عمالة خاصة بتبويب العمالة فقط
   const [showManpowerModal, setShowManpowerModal] = useState(false);
   const [reqJobTitle, setReqJobTitle] = useState('شيف بروست ومطبخ');
   const [reqQty, setReqQty] = useState('2');
@@ -78,7 +77,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
   }, []);
 
   const handleCopyCareerLink = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://l-k-shift.vercel.app';
     const careerUrl = `${origin}/${locale}/careers`;
     navigator.clipboard.writeText(careerUrl);
     setCopiedLink(true);
@@ -108,7 +107,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
           @page { size: A4 portrait; margin: 12mm; }
           body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #0f172a; margin: 0; padding: 15px; direction: rtl; background: #fff; }
           .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #ea580c; padding-bottom: 12px; margin-bottom: 16px; }
-          .logo-box { background: linear-gradient(135deg, #ea580c, #e11d48); color: #fff; font-weight: 900; font-size: 22px; padding: 8px 16px; border-radius: 10px; }
+          .logo-img { height: 60px; width: auto; object-fit: contain; }
           .title-box h1 { margin: 0; font-size: 19px; color: #0f172a; }
           .title-box p { margin: 3px 0 0; font-size: 11px; color: #64748b; }
           .badge { display: inline-block; background: #ffedd5; color: #c2410c; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 6px; margin-top: 4px; }
@@ -132,7 +131,7 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
             <p>منظومة إدارة الكوادر والموارد البشرية — L-K Shift</p>
             <span class="badge">كود الملف: APP-${app.id}</span>
           </div>
-          <div class="logo-box">LK</div>
+          <img src="/Logo.png" alt="L-K Shift Logo" class="logo-img" />
         </div>
 
         <div class="section">
@@ -239,7 +238,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 sm:p-8">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white sm:text-3xl">
@@ -252,7 +250,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
           </p>
         </div>
 
-        {/* أزرار الإجراءات المفصولة بحسب التبويب النشط */}
         <div className="flex items-center gap-2">
           {activeTab === 'APPLICATIONS' ? (
             <>
@@ -286,7 +283,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* تبويبات التبديل المفصولة بنقاء */}
       <div className="flex rounded-2xl bg-slate-200/60 dark:bg-white/5 p-1 w-fit">
         <button
           type="button"
@@ -312,7 +308,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
         </button>
       </div>
 
-      {/* 1. جدول استمارات المتقدمين مع زر PDF الرسمي لكل متقدم */}
       {activeTab === 'APPLICATIONS' ? (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
           {isLoading ? (
@@ -387,7 +382,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
           )}
         </div>
       ) : (
-        /* 2. جدول طلبات عجز وتشغيل الفروع */
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/5 dark:bg-[#121526]/80">
           {manpowerRequests.length === 0 ? (
             <div className="p-12 text-center text-slate-500 dark:text-slate-400 text-xs">
@@ -437,7 +431,6 @@ export default function AdminRecruitmentPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* نافذة طلب عمالة */}
       {showManpowerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl transition dark:border-white/10 dark:bg-[#121526]">
