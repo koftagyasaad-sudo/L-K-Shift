@@ -9,7 +9,7 @@ interface PageProps {
   }>;
 }
 
-export default function PublicCareersPage({ params }: PageProps) {
+export default function GoogleFormsStyleCareersPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const locale = resolvedParams?.locale || 'ar';
   const isRtl = locale === 'ar';
@@ -17,9 +17,9 @@ export default function PublicCareersPage({ params }: PageProps) {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [age, setAge] = useState('23');
-  const [city, setCity] = useState('دسوق');
-  const [militaryStatus, setMilitaryStatus] = useState('إعفاء نهائي');
-  const [jobTitle, setJobTitle] = useState('عضو فريق مطبخ (شيف بروست)');
+  const [city, setCity] = useState('');
+  const [militaryStatus, setMilitaryStatus] = useState('تم التأدية');
+  const [jobTitle, setJobTitle] = useState('شيف بروست ومطبخ');
   const [preferredBranchName, setPreferredBranchName] = useState('فرع دسوق');
   const [cvUrl, setCvUrl] = useState('');
 
@@ -50,188 +50,229 @@ export default function PublicCareersPage({ params }: PageProps) {
       });
 
       const resData = await res.json();
-      if (!res.ok) throw new Error(resData.message || 'فشل إرسال الطلب');
+      if (!res.ok) throw new Error(resData.message || 'فشل إرسال الاستمارة');
 
       setIsSuccess(true);
     } catch (err: any) {
-      setErrorMsg(err.message || 'حدث خطأ أثناء إرسال استمارة التقديم');
+      setErrorMsg(err.message || 'حدث خطأ أثناء إرسال الاستمارة');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div
-      className="min-h-screen bg-[#080911] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden"
-      dir={isRtl ? 'rtl' : 'ltr'}
-    >
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/10 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="relative z-10 w-full max-w-2xl">
-        <div className="text-center mb-8">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 text-2xl font-black text-white shadow-xl shadow-orange-500/20 mb-4">
-            LK
-          </div>
-          <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
-            {isRtl ? 'انضم إلى فريق عملنا' : 'Join Our Team'}
+    <div className="min-h-screen bg-[#f0ebf8] dark:bg-[#0f111a] py-8 px-4 font-sans text-slate-900 dark:text-slate-100" dir={isRtl ? 'rtl' : 'ltr'}>
+      <div className="max-w-2xl mx-auto space-y-4">
+        {/* كارت رأس الاستمارة (بنفس شريط جوجل فورمز العلوي) */}
+        <div className="rounded-2xl border-t-8 border-t-purple-600 bg-white dark:bg-[#1a1d2d] shadow-sm p-6 sm:p-8 space-y-3">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+            استمارة التقديم والتوظيف - L-K Shift
           </h1>
-          <p className="mt-2 text-xs sm:text-sm text-slate-400">
-            {isRtl ? 'بوابة التوظيف المباشرة لسلسلة المطاعم والفروع - L-K Shift' : 'Career Portal & Talent Acquisition'}
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+            يرجى تعبئة كافة الحقول بدقة. سيتم مراجعة طلبك بواسطة إدارة الموارد البشرية والتواصل معك هاتفياً لتحديد موعد المقابلة الشخصية.
           </p>
+          <div className="pt-2 text-[11px] text-rose-600 font-semibold border-t border-slate-100 dark:border-white/5">
+            * يشير إلى سؤال مطلوب
+          </div>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-[#121526]/90 p-8 shadow-2xl backdrop-blur-xl">
-          {isSuccess ? (
-            <div className="p-8 text-center space-y-4">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 text-3xl">
-                ✓
+        {isSuccess ? (
+          <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-8 text-center space-y-3">
+            <div className="text-4xl text-emerald-500">✓</div>
+            <h2 className="text-xl font-bold">تم تسجيل ردك بنجاح!</h2>
+            <p className="text-xs text-slate-500">شكراً لتقديمك. تم حفظ بياناتك وسيتم التواصل معك قريباً.</p>
+            <div className="pt-4">
+              <Link href={`/${locale}/careers`} onClick={() => setIsSuccess(false)} className="text-xs text-purple-600 underline font-bold">
+                إرسال رد آخر
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {errorMsg && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-50 p-4 text-xs font-bold text-rose-800">
+                {errorMsg}
               </div>
-              <h2 className="text-xl font-bold text-white">تم استلام طلبك بنجاح!</h2>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                شكراً لاهتمامك بالانضمام إلينا. تم حفظ بياناتك لدى إدارة الموارد البشرية، وسيتم التواصل معك هاتفياً لتحديد موعد المقابلة.
-              </p>
-              <div className="pt-4">
-                <Link
-                  href={`/${locale}/login`}
-                  className="inline-block text-xs font-bold text-orange-400 hover:underline"
-                >
-                  العودة لتسجيل الدخول &larr;
-                </Link>
+            )}
+
+            {/* سؤال 1: الاسم */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                الاسم رباعي (كما هو مدون بالبطاقة) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="إجابتك"
+                className="w-full border-b-2 border-slate-300 bg-transparent py-1.5 text-sm focus:border-purple-600 focus:outline-none dark:border-slate-700"
+              />
+            </div>
+
+            {/* سؤال 2: رقم الهاتف */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                رقم التليفون (متاح واتساب للمقابلة) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="01xxxxxxxxx"
+                className="w-full border-b-2 border-slate-300 bg-transparent py-1.5 text-sm focus:border-purple-600 focus:outline-none dark:border-slate-700 font-mono text-left"
+                dir="ltr"
+              />
+            </div>
+
+            {/* سؤال 3: السن */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                السن <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="18"
+                max="60"
+                required
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="إجابتك"
+                className="w-full border-b-2 border-slate-300 bg-transparent py-1.5 text-sm focus:border-purple-600 focus:outline-none dark:border-slate-700"
+              />
+            </div>
+
+            {/* سؤال 4: المدينة */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                المدينة / محل الإقامة الحالي <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="مثال: دسوق / كفر الشيخ"
+                className="w-full border-b-2 border-slate-300 bg-transparent py-1.5 text-sm focus:border-purple-600 focus:outline-none dark:border-slate-700"
+              />
+            </div>
+
+            {/* سؤال 5: الموقف التجنيدي (Radio Buttons) */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                الموقف من التجنيد <span className="text-rose-500">*</span>
+              </label>
+              <div className="space-y-2.5 pt-1">
+                {['تم التأدية', 'إعفاء نهائي', 'تأجيل دراسي / عائلي', 'غير مطلوب (إناث)'].map((opt) => (
+                  <label key={opt} className="flex items-center gap-3 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      name="militaryStatus"
+                      value={opt}
+                      checked={militaryStatus === opt}
+                      onChange={(e) => setMilitaryStatus(e.target.value)}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>{opt}</span>
+                  </label>
+                ))}
               </div>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {errorMsg && (
-                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-semibold text-rose-400">
-                  {errorMsg}
-                </div>
-              )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    الاسم رباعي <span className="text-rose-500">*</span>
+            {/* سؤال 6: الوظيفة المطلوبة (Radio Buttons) */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                الوظيفة المراد التقديم عليها <span className="text-rose-500">*</span>
+              </label>
+              <div className="space-y-2.5 pt-1">
+                {[
+                  'شيف بروست ومطبخ',
+                  'كاشير واستقبال',
+                  'عضو صالة وخدمة عملاء',
+                  'مندوب توصيل (ديليفري)',
+                  'مشرف تشغيل',
+                  'خدمة عملاء وكول سنتر',
+                ].map((opt) => (
+                  <label key={opt} className="flex items-center gap-3 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      name="jobTitle"
+                      value={opt}
+                      checked={jobTitle === opt}
+                      onChange={(e) => setJobTitle(e.target.value)}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>{opt}</span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="أدخل اسمك رباعي كما بالبطاقة"
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    رقم الهاتف والتواصل <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="01xxxxxxxxx"
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-orange-500 text-left font-mono"
-                    dir="ltr"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">السن</label>
-                  <input
-                    type="number"
-                    min="18"
-                    max="60"
-                    required
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">المدينة / محل الإقامة</label>
-                  <input
-                    type="text"
-                    required
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="دسوق، كفر الشيخ..."
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">الموقف من التجنيد</label>
-                  <select
-                    value={militaryStatus}
-                    onChange={(e) => setMilitaryStatus(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="تم التأدية">تم تأدية الخدمة العسكرية</option>
-                    <option value="إعفاء نهائي">إعفاء نهائي</option>
-                    <option value="تأجيل">تأجيل دراسي / عائلي</option>
-                    <option value="غير مطلوب">غير مطلوب (إناث)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">الوظيفة المرغوبة</label>
-                  <select
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="عضو فريق مطبخ (شيف بروست)">عضو فريق مطبخ (شيف بروست)</option>
-                    <option value="كاشير واستقبال">كاشير واستقبال</option>
-                    <option value="عضو صالة وخدمة عملاء">عضو صالة وخدمة عملاء</option>
-                    <option value="مندوب توصيل (ديليفري)">مندوب توصيل (ديليفري)</option>
-                    <option value="مشرف تشغيل / صالة">مشرف تشغيل / صالة</option>
-                    <option value="خدمة عملاء وكول سنتر">خدمة عملاء وكول سنتر</option>
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">الفرع الأقرب لك للعمل</label>
-                  <select
-                    value={preferredBranchName}
-                    onChange={(e) => setPreferredBranchName(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none"
-                  >
-                    <option value="فرع دسوق">فرع دسوق</option>
-                    <option value="فرع كفر الشيخ">فرع كفر الشيخ</option>
-                    <option value="الإدارة المركزية">الإدارة المركزية</option>
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    رابط السيرة الذاتية (CV) أو Google Drive (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    value={cvUrl}
-                    onChange={(e) => setCvUrl(e.target.value)}
-                    placeholder="https://drive.google.com/... أو رابط لينكد إن"
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs text-white focus:outline-none text-left"
-                    dir="ltr"
-                  />
-                </div>
+                ))}
               </div>
+            </div>
 
-              <div className="pt-4">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 py-3 text-xs font-bold text-white shadow-lg shadow-orange-500/20 hover:opacity-95 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'جاري إرسال الطلب...' : 'إرسال استمارة التقديم'}
-                </button>
+            {/* سؤال 7: الفرع الأقرب */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                الفرع الأقرب لك للعمل <span className="text-rose-500">*</span>
+              </label>
+              <div className="space-y-2.5 pt-1">
+                {['فرع دسوق', 'فرع كفر الشيخ', 'الإدارة المركزية'].map((opt) => (
+                  <label key={opt} className="flex items-center gap-3 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      name="preferredBranch"
+                      value={opt}
+                      checked={preferredBranchName === opt}
+                      onChange={(e) => setPreferredBranchName(e.target.value)}
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                    />
+                    <span>{opt}</span>
+                  </label>
+                ))}
               </div>
-            </form>
-          )}
+            </div>
+
+            {/* سؤال 8: رابط الـ CV */}
+            <div className="rounded-2xl bg-white dark:bg-[#1a1d2d] shadow-sm p-6 space-y-3">
+              <label className="block text-sm font-bold">
+                رابط السيرة الذاتية (CV) أو Google Drive (اختياري)
+              </label>
+              <input
+                type="url"
+                value={cvUrl}
+                onChange={(e) => setCvUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                className="w-full border-b-2 border-slate-300 bg-transparent py-1.5 text-sm focus:border-purple-600 focus:outline-none dark:border-slate-700 text-left font-mono"
+                dir="ltr"
+              />
+            </div>
+
+            {/* زر الإرسال بنمط جوجل فورمز */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-xl bg-purple-600 px-8 py-2.5 text-xs font-bold text-white shadow-md hover:bg-purple-700 transition disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmitting ? 'جاري الإرسال...' : 'إرسال'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFullName('');
+                  setPhone('');
+                  setCity('');
+                  setCvUrl('');
+                }}
+                className="text-xs text-slate-500 hover:text-slate-800"
+              >
+                محو النموذج
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="text-center text-[11px] text-slate-400 pt-4">
+          لم يتم إنشاء هذا النموذج أو اعتماده بواسطة Google. - نظام L-K Shift
         </div>
       </div>
     </div>
