@@ -1,8 +1,15 @@
-import createMiddleware from "next-intl/middleware";
-import { routing } from "@/i18n/routing";
+import createMiddleware from 'next-intl/middleware';
 
-export default createMiddleware(routing);
+export default createMiddleware({
+  locales: ['ar', 'en'],
+  defaultLocale: 'ar',
+  localePrefix: 'always',
+});
 
 export const config = {
-  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
+  // استثناء مسارات التوظيف العامة، الصور، الأيقونات، والـ API من أي اعتراض
+  matcher: [
+    '/((?!api|_next|_vercel|.*\\..*|careers).*)',
+    '/(ar|en)/:path*',
+  ],
 };
