@@ -41,7 +41,6 @@ export default function NewBranchPage({ params }: PageProps) {
   const [isCapturingGps, setIsCapturingGps] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // جلب الموظفين لاختيار مدير الفرع
   useEffect(() => {
     fetch('/api/employees', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : []))
@@ -128,14 +127,13 @@ export default function NewBranchPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* رأس الصفحة مع زر العودة الآمن لمنع 404 */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
             إضافة فرع جديد
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            تحديد موقع الفرع، نطاق GPS، وتعيين مدير الفرع ومواعيد الورديات
+            تحديد موقع الفرع، نطاق البصمة الجغرافي، وتعيين مدير الفرع والورديات
           </p>
         </div>
 
@@ -165,7 +163,7 @@ export default function NewBranchPage({ params }: PageProps) {
                 required
                 value={nameAr}
                 onChange={(e) => setNameAr(e.target.value)}
-                placeholder="فرع كفر الشيخ / دسوق..."
+                placeholder="فرع دسوق / كفر الشيخ..."
                 className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none"
               />
             </div>
@@ -183,7 +181,6 @@ export default function NewBranchPage({ params }: PageProps) {
               />
             </div>
 
-            {/* اختيار مدير الفرع من المستخدمين المسجلين */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 تعيين مدير الفرع المسؤول (تصل إليه إجازات الفرع)
@@ -215,14 +212,13 @@ export default function NewBranchPage({ params }: PageProps) {
               />
             </div>
 
-            {/* إعدادات الورديات الثلاث */}
+            {/* الورديات الثلاث */}
             <div className="sm:col-span-2 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-4">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                 ⏰ إعدادات الورديات الثلاث للفرع (صباحية، بينية، مسائية)
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* 1. صباحي */}
                 <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
                   <span className="text-xs font-bold text-orange-500">1. الوردية الصباحية</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -247,7 +243,6 @@ export default function NewBranchPage({ params }: PageProps) {
                   </div>
                 </div>
 
-                {/* 2. بينية */}
                 <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
                   <span className="text-xs font-bold text-blue-500">2. الوردية البينية (Between)</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -272,7 +267,6 @@ export default function NewBranchPage({ params }: PageProps) {
                   </div>
                 </div>
 
-                {/* 3. مسائي */}
                 <div className="p-3 rounded-xl bg-white dark:bg-black/30 border border-slate-200 dark:border-white/5 space-y-2">
                   <span className="text-xs font-bold text-purple-500">3. الوردية المسائية</span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -312,7 +306,7 @@ export default function NewBranchPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* الإحداثيات والموقع */}
+            {/* إحداثيات الفرع ونطاق البصمة */}
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 خط العرض (Latitude) *
@@ -339,6 +333,26 @@ export default function NewBranchPage({ params }: PageProps) {
               />
             </div>
 
+            {/* نصف قطر نطاق البصمة */}
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                نصف قطر نطاق البصمة الجغرافي (بالمتر) *
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="3000"
+                required
+                value={radiusMeters}
+                onChange={(e) => setRadiusMeters(e.target.value)}
+                placeholder="100"
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:outline-none font-bold"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                المدى الأقصى المسموح للموظف بالبصمة حول نقطة الفرع (يُفضل ضبطه بين 50 إلى 150 متراً لمراعاة المباني الخرسانية وضعف الإشارة).
+              </span>
+            </div>
+
             <div className="sm:col-span-2">
               <button
                 type="button"
@@ -352,7 +366,7 @@ export default function NewBranchPage({ params }: PageProps) {
 
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
-                العنوان النصي
+                العنوان النصي للفرع
               </label>
               <input
                 type="text"
