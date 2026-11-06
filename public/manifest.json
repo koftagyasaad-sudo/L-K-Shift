@@ -1,7 +1,7 @@
 {
   "name": "L-K Shift - نظام إدارة الورديات والبصمة",
   "short_name": "L-K Shift",
-  "description": "منظومة إدارة الكوادر والحضور والانصراف الذكي",
+  "description": "منظومة متكاملة لإدارة الكوادر والحضور والانصراف الذكي",
   "start_url": "/ar/login",
   "display": "standalone",
   "orientation": "portrait",
@@ -14,13 +14,19 @@
       "src": "/Logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/Logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/Logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
