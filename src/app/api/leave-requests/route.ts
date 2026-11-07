@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
         COALESCE(l.advance_amount, 0) as "advanceAmount",
         COALESCE(l.substitute_name, '—') as "substituteName",
         COALESCE(l.reason, '') as reason,
-        COALESCE(l.final_status, l.status::text, 'PENDING_BRANCH') as "finalStatus",
+        COALESCE(l.final_status, 'PENDING_BRANCH') as "finalStatus",
         COALESCE(l.branch_notes, '') as "branchNotes",
         COALESCE(l.hr_notes, '') as "hrNotes",
         COALESCE(l.created_at, NOW()) as "createdAt"
@@ -62,10 +62,10 @@ export async function POST(request: NextRequest) {
     const userName = (body.userName || 'موظف').toString().trim();
     const userPhone = (body.userPhone || '').toString().trim();
     const branchName = (body.branchName || 'الفرع').toString().trim();
-    const requestType = body.requestType || 'ANNUAL';
+    const requestType = body.requestType || body.leaveType || 'ANNUAL';
     const startDate = body.startDate || new Date().toISOString().slice(0, 10);
     const endDate = body.endDate || startDate;
-    const durationDays = parseInt(String(body.durationDays || '1'), 10);
+    const durationDays = parseInt(String(body.durationDays || body.totalDays || '1'), 10);
     const durationHours = parseFloat(String(body.durationHours || '0'));
     const advanceAmount = parseFloat(String(body.advanceAmount || '0'));
     const substituteName = (body.substituteName || '—').toString().trim();
@@ -75,7 +75,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'سبب الطلب مطلوب' }, { status: 400 });
     }
 
-    // إدخال كل من leave_type و request_type معاً، وكذلك duration_days و total_days
     await db.execute(sql`
       INSERT INTO leave_requests (
         user_id,
@@ -121,36 +120,53 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 3. مسار اعتماد الطلبات (مدير الفرع ➜ الموارد البشرية)
+// 3. مسار اعتماد الطلبات (معالجة ذكية تقبل كافة المسميات والقرارات)
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const id = parseInt(String(body.id), 10);
-    const stage = body.stage; // 'BRANCH' أو 'HR'
-    const action = body.action; // 'APPROVE' أو 'REJECT'
-    const notes = body.notes || '';
 
-    if (!id || !stage || !action) {
-      return NextResponse.json({ message: 'بيانات الاعتماد غير مكتملة' }, { status: 400 });
+    // 1. استخراج معرف الطلب بأي مسمى محتمل (id أو requestId أو leaveId)
+    const rawId = body.id || body.requestId || body.leaveId;
+    const id = parseInt(String(rawId), 10);
+
+    if (!id || isNaN(id)) {
+      return NextResponse.json({ message: 'رقم الطلب غير صحيح أو مفقود' }, { status: 400 });
     }
 
-    if (stage === 'BRANCH') {
-      const nextStatus = action === 'APPROVE' ? 'PENDING_HR' : 'REJECTED_BRANCH';
-      await db.execute(sql`
-        UPDATE leave_requests
-        SET final_status = ${nextStatus}, branch_notes = ${notes}
-        WHERE id = ${id};
-      `);
-    } else if (stage === 'HR') {
-      const nextStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED_HR';
-      await db.execute(sql`
-        UPDATE leave_requests
-        SET final_status = ${nextStatus}, hr_notes = ${notes}
-        WHERE id = ${id};
-      `);
+    // 2. تحليل القرار (موافقة أم رفض) من action أو status أو decision
+    const rawAction = (body.action || body.status || body.decision || '').toString().toUpperCase();
+    const isReject = rawAction.includes('REJECT') || rawAction.includes('رفض');
+    const isApprove = rawAction.includes('APPROV') || rawAction.includes('قبول') || rawAction.includes('موافق') || !isReject;
+
+    // 3. تحليل المرحلة (فرع أم إدارة / مدير عام)
+    const rawStage = (body.stage || body.role || '').toString().toUpperCase();
+    const isBranchStage = rawStage.includes('BRANCH') || rawStage.includes('فرع');
+
+    const notes = (body.notes || body.branchNotes || body.hrNotes || '').toString().trim();
+
+    // تحديد الحالة النهائية بدقة
+    let targetStatus = 'APPROVED';
+    if (isReject) {
+      targetStatus = isBranchStage ? 'REJECTED_BRANCH' : 'REJECTED';
+    } else if (isApprove) {
+      targetStatus = isBranchStage ? 'PENDING_HR' : 'APPROVED';
     }
 
-    return NextResponse.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' }, { status: 200 });
+    // تحديث قاعدة البيانات
+    await db.execute(sql`
+      UPDATE leave_requests
+      SET 
+        final_status = ${targetStatus},
+        branch_notes = CASE WHEN ${isBranchStage} THEN ${notes} ELSE COALESCE(branch_notes, '') END,
+        hr_notes = CASE WHEN ${!isBranchStage} THEN ${notes} ELSE COALESCE(hr_notes, '') END
+      WHERE id = ${id};
+    `);
+
+    return NextResponse.json({
+      success: true,
+      message: 'تم اعتماد وتحديث حالة الطلب بنجاح',
+      finalStatus: targetStatus,
+    }, { status: 200 });
   } catch (error: any) {
     console.error('Leave Requests PUT Error:', error);
     return NextResponse.json({ message: 'فشل اعتماد الطلب', error: error?.message }, { status: 500 });
