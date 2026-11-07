@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, use } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ShieldCheck, UserPlus, ArrowRight, Loader2 } from 'lucide-react';
+import { UserPlus, ArrowRight, Loader2, Sparkles, Shield } from 'lucide-react';
 
-export default function LoginPage({ params }: { params: Promise<{ locale: string }> }) {
-  const { locale } = use(params);
+export default function LoginPage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
   const router = useRouter();
 
@@ -60,10 +61,16 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
       localStorage.setItem('isOnboarded', String(user.isOnboarded));
 
       const perms: string[] = user.permissions || [];
-      const isAdmin = perms.includes('*') || user.role === 'مدير النظام' || user.role === 'SUPER_ADMIN';
+      const isAdmin =
+        perms.includes('*') ||
+        user.role === 'مدير النظام' ||
+        user.role === 'SUPER_ADMIN' ||
+        user.role === 'مدير فرع';
 
       if (isAdmin || perms.includes('dashboard.view')) {
-        router.push(`/${locale}/admin/dashboard`); } else { router.push(`/${locale}/attendance`);
+        router.push(`/${locale}/admin/dashboard`);
+      } else {
+        router.push(`/${locale}/attendance`);
       }
     } catch (err: any) {
       setError(err.message || (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
@@ -106,7 +113,6 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
       setUsername(regPhone.trim());
       setPassword(regPassword.trim());
 
-      // التحويل لتبويب الدخول بعد نجاح التسجيل
       setTimeout(() => {
         setActiveTab('LOGIN');
       }, 1500);
@@ -122,24 +128,32 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
       className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      {/* تأثيرات الإضاءة الخلفية */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] animate-pulse pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-[100px] animate-pulse delay-1000 pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[100px] animate-pulse delay-1000 pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        {/* اللوجو مع إخفاء خلفيته برمجياً في المتصفح */}
-        <div className="mb-6 flex flex-col items-center">
+        {/* الترويسة والشعار مع كتابة الاسم */}
+        <div className="mb-6 flex flex-col items-center text-center">
           <img
             src="/Logo.png"
             alt="L-K Shift Logo"
-            className="h-20 w-auto mb-4 drop-shadow-xl mix-blend-screen object-contain"
+            className="h-20 w-auto mb-3 drop-shadow-xl mix-blend-screen object-contain"
           />
           <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
-          <p className="text-gray-400 text-sm mt-2">
-            {isRtl ? 'نظام إدارة الحضور والورديات' : 'Attendance & Shift Management'}
+
+          {/* شارة إبراز الاسم: Omar Abd Elhalim */}
+          <div className="mt-2 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-orange-500/15 to-rose-500/15 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wide shadow-sm shadow-orange-500/10">
+            <Sparkles size={13} className="text-orange-400 animate-spin" style={{ animationDuration: '4s' }} />
+            <span>Omar Abd Elhalim</span>
+          </div>
+
+          <p className="text-gray-400 text-xs mt-2 font-medium">
+            {isRtl ? 'نظام إدارة الحضور والانصراف والورديات الميدانية' : 'Attendance & Shift Management System'}
           </p>
         </div>
 
-        {/* الكارد الزجاجي */}
+        {/* الكارد الزجاجي للنموذج */}
         <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-7 sm:p-8 rounded-[2rem] shadow-2xl">
           {/* تبويبات الدخول والتسجيل */}
           <div className="flex rounded-2xl bg-black/40 p-1 mb-6 border border-white/5">
@@ -150,7 +164,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
                 setError('');
                 setSuccessMsg('');
               }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${
+              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'LOGIN'
                   ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -165,7 +179,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
                 setError('');
                 setSuccessMsg('');
               }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${
+              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'REGISTER'
                   ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white'
@@ -215,21 +229,37 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all text-left text-sm"
+                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
                   dir="ltr"
                 />
               </div>
 
-              {/* رابط استعادة كلمة المرور */}
               <div className="flex justify-end pt-0.5">
                 <Link
-                  href={`/${locale}/forgot-password`} className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium" > {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'} </Link> </div>  <button type="submit" disabled={loading} className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer" > {loading ? ( <Loader2 className="w-5 h-5 animate-spin" /> ) : ( <> {isRtl ? 'دخول' : 'Sign In'} <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                  href={`/${locale}/forgot-password`}
+                  className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium"
+                >
+                  {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer"
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    {isRtl ? 'تسجيل الدخول' : 'Sign In'}
+                    <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
                   </>
                 )}
               </button>
             </form>
           ) : (
-            /* نموذج إنشاء حساب جديد */
+            /* نموذج تسجيل حساب موظف جديد */
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
@@ -247,7 +277,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
 
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'رقم الهاتف (سيكون اسم دخولك)' : 'Phone Number'} <span className="text-orange-500">*</span>
+                  {isRtl ? 'رقم الهاتف (اسم المستخدم)' : 'Phone Number'} <span className="text-orange-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -270,7 +300,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   placeholder="6 أحرف أو أرقام على الأقل"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all text-left text-sm"
+                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
                   dir="ltr"
                 />
               </div>
@@ -285,7 +315,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-pink-500/50 transition-all text-left text-sm"
+                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
                   dir="ltr"
                 />
               </div>
@@ -307,9 +337,11 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
             </form>
           )}
 
-          <p className="text-center text-xs text-gray-500 mt-6">
-            © {new Date().getFullYear()} L-K Shift. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}
-          </p>
+          {/* التذييل مع حفظ الحقوق واسمك */}
+          <div className="mt-6 pt-4 border-t border-white/5 text-center text-[11px] text-gray-400 flex flex-col items-center gap-1">
+            <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
+            <span className="font-semibold text-orange-400/80">Developed for Omar Abd Elhalim</span>
+          </div>
         </div>
       </div>
     </div>
