@@ -8,11 +8,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const { searchParams } = new URL(request.url);
     const now = new Date();
-    const month = parseInt(searchParams.get('month') || String(now.getMonth() + 1), 10);
-    const year = parseInt(searchParams.get('year') || String(now.getFullYear()), 10);
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
 
+    // 1. جلب بيانات الموظف
     const empRaw = await db.execute(sql`
       SELECT 
         u.id, 
@@ -35,6 +35,7 @@ export async function GET(
     }
     const employee = empRows[0];
 
+    // 2. جلب سجلات الحضور والانصراف
     const logsRaw = await db.execute(sql`
       SELECT 
         work_date::text as "workDate",
@@ -54,6 +55,7 @@ export async function GET(
     `);
     const logs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
 
+    // 3. جلب الإجازات والسلف
     const leavesRaw = await db.execute(sql`
       SELECT 
         request_type, 
