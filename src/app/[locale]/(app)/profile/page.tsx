@@ -1,20 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { 
-  User, Phone, Lock, CreditCard, MapPin, AlertCircle, 
-  CheckCircle2, Save, Loader2, ShieldCheck, FileText 
+  User, Phone, Lock, CreditCard, MapPin, 
+  CheckCircle2, AlertCircle, Save, Loader2, FileText 
 } from 'lucide-react';
 
-interface ProfilePageProps {
-  params: Promise<{
-    locale: string;
-  }>;
-}
-
-export default function EmployeeProfilePage({ params }: ProfilePageProps) {
-  const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
+export default function EmployeeProfilePage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
   const [loading, setLoading] = useState(true);
@@ -34,11 +29,13 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // تحميل بيانات الموظف الحالية
   useEffect(() => {
     const storedId = localStorage.getItem('userId') || '';
     const storedPhone = localStorage.getItem('userPhone') || '';
+    const storedName = localStorage.getItem('userName') || '';
     setUserId(storedId);
+    setFullName(storedName);
+    setPhone(storedPhone);
 
     async function fetchUserData() {
       try {
@@ -48,8 +45,8 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
           const data = await res.json();
           const user = Array.isArray(data) ? data.find((u: any) => String(u.id) === storedId) : data;
           if (user) {
-            setFullName(user.fullName || user.name || '');
-            setPhone(user.phone || storedPhone);
+            if (user.fullName || user.name) setFullName(user.fullName || user.name);
+            if (user.phone) setPhone(user.phone);
             setNationalId(user.nationalId || user.national_id || '');
             setAddress(user.address || '');
             setEmergencyContact(user.emergencyContact || user.emergency_contact || '');
@@ -69,7 +66,6 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
     }
   }, []);
 
-  // حفظ الاستمارة وتحديث كلمة المرور
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMsg(null);
@@ -102,14 +98,11 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
       });
 
       const resData = await res.json();
-
-      if (!res.ok) {
-        throw new Error(resData.message || 'فشل تحديث البيانات');
-      }
+      if (!res.ok) throw new Error(resData.message || 'فشل تحديث البيانات');
 
       setStatusMsg({
         type: 'ok',
-        text: 'تم حفظ استمارة بياناتك بنجاح، وتم تحديث كلمة المرور إن تم إدخالها!',
+        text: 'تم حفظ استمارة بياناتك بنجاح، وتحديث كلمة المرور بحسابك!',
       });
 
       setNewPassword('');
@@ -133,14 +126,14 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة */}
-      <div className="bg-slate-900 border border-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl">
+      {/* الترويسة الرئيسية */}
+      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
             <FileText size={24} />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white">استمارة بيانات الموظف (HR)</h1>
+            <h1 className="text-xl sm:text-2xl font-black text-white">الملف الشخصي واستمارة (HR)</h1>
             <p className="text-xs text-slate-400 mt-1">
               تحديث بياناتك الشخصية والرقم القومي، وتعيين كلمة المرور الخاصة بحسابك
             </p>
@@ -148,7 +141,6 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
         </div>
       </div>
 
-      {/* رسائل التنبيه والنجاح */}
       {statusMsg && (
         <div
           className={`p-4 rounded-2xl flex items-center gap-3 border text-xs font-bold ${
@@ -163,26 +155,26 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* القسم الأول: استمارة بيانات الموارد البشرية */}
-        <div className="bg-slate-900 border border-slate-800 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-slate-800 pb-3">
+        {/* استمارة بيانات الموارد البشرية */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <User size={16} className="text-orange-500" /> البيانات الشخصية والتعاقدية
+              <User size={16} className="text-orange-500" /> البيانات الشخصية والرقم القومي
             </h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                الاسم رباعي (كما في البطاقة) <span className="text-rose-500">*</span>
+                الاسم بالكامل (رباعي) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="أدخل اسمك بالكامل"
-                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                placeholder="أدخل اسمك رباعي"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
@@ -196,7 +188,7 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="01xxxxxxxxx"
-                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
@@ -213,7 +205,7 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
                   value={nationalId}
                   onChange={(e) => setNationalId(e.target.value)}
                   placeholder="299xxxxxxxxxxx"
-                  className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500 pl-10"
+                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500 pl-10"
                   dir="ltr"
                 />
                 <CreditCard size={15} className="absolute left-3 top-3 text-slate-500" />
@@ -222,29 +214,29 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                رقم هاتف للطوارئ (المنزل / ولي الأمر)
+                رقم هاتف للطوارئ (المنزل / الأقارب)
               </label>
               <input
                 type="tel"
                 value={emergencyContact}
                 onChange={(e) => setEmergencyContact(e.target.value)}
                 placeholder="01xxxxxxxxx"
-                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                العنوان التفصيلي ومحل الإقامة الحالي
+                العنوان التفصيلي ومحل الإقامة
               </label>
               <div className="relative">
                 <input
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="المدينة، الحي، اسم الشارع، رقم العقار..."
-                  className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pr-10"
+                  placeholder="المدينة، اسم الشارع، رقم العقار..."
+                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pr-10"
                 />
                 <MapPin size={15} className="absolute right-3.5 top-3 text-slate-500" />
               </div>
@@ -252,14 +244,14 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
           </div>
         </div>
 
-        {/* القسم الثاني: تغيير كلمة المرور بنفسه */}
-        <div className="bg-slate-900 border border-slate-800 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-slate-800 pb-3">
+        {/* تغيير كلمة المرور */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Lock size={16} className="text-orange-500" /> أمان الحساب وتغيير كلمة المرور
             </h2>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              اترك هذه الحقول فارغة إذا كنت لا ترغب في تغيير كلمة المرور الحالية.
+              اترك الحقول فارغة إذا كنت ترغب في الاحتفاظ بكلمة المرور الحالية دون تغيير.
             </p>
           </div>
 
@@ -273,7 +265,7 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="أدخل كلمة مرور جديدة"
-                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
@@ -286,13 +278,12 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="أعد إدخال كلمة المرور"
-                className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
           </div>
         </div>
 
-        {/* زر الحفظ */}
         <div className="flex justify-end">
           <button
             type="submit"
@@ -300,7 +291,7 @@ export default function EmployeeProfilePage({ params }: ProfilePageProps) {
             className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 px-8 py-3.5 text-xs font-bold text-white shadow-lg shadow-orange-500/20 hover:opacity-95 transition cursor-pointer disabled:opacity-50"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>{saving ? 'جاري حفظ البيانات...' : 'حفظ استمارة البيانات وتحديث الحساب'}</span>
+            <span>{saving ? 'جاري الحفظ والتحديث...' : 'حفظ استمارة البيانات وتحديث الحساب'}</span>
           </button>
         </div>
       </form>
