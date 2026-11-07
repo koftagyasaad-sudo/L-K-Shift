@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { hashPassword } from '@/lib/auth-security';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +13,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (newPassword && newPassword.trim().length > 0) {
+      const hashedPassword = hashPassword(newPassword.trim());
+
       await db.execute(sql`
         UPDATE users
         SET 
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
           national_id = ${nationalId || ''},
           address = ${address || ''},
           emergency_contact = ${emergencyContact || ''},
-          password_hash = ${newPassword.trim()},
+          password_hash = ${hashedPassword},
           updated_at = NOW()
         WHERE id::text = ${userId} OR phone = ${phone};
       `);
@@ -38,7 +41,7 @@ export async function POST(request: NextRequest) {
       `);
     }
 
-    return NextResponse.json({ success: true, message: 'تم حفظ استمارة البيانات بنجاح' });
+    return NextResponse.json({ success: true, message: 'تم حفظ استمارة البيانات وتشفير الحساب بنجاح' });
   } catch (error: any) {
     console.error('Profile update error:', error);
     return NextResponse.json({ message: 'فشل حفظ استمارة البيانات', error: error.message }, { status: 500 });
