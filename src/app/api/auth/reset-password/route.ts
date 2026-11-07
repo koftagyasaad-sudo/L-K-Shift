@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { hashPassword } from '@/lib/auth-security';
 
-// 1. طلب إرسال كود التحقق
+// 1. طلب إرسال كود التحقق للموبايل
 export async function POST(request: NextRequest) {
   try {
     const { phone } = await request.json();
-    if (!phone) return NextResponse.json({ message: 'رقم الهاتف مطلوب' }, { status: 400 });
+    if (!phone) {
+      return NextResponse.json({ message: 'رقم الهاتف مطلوب' }, { status: 400 });
+    }
 
     const raw = await db.execute(sql`SELECT id FROM users WHERE phone = ${phone.trim()} LIMIT 1;`);
     const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
@@ -23,20 +26,17 @@ export async function POST(request: NextRequest) {
       WHERE phone = ${phone.trim()};
     `);
 
-    // هنا يتم استدعاء بوابة الـ SMS أو طباعة الكود للاستخدام الفوري
-    console.log(`[PASSWORD RESET OTP for ${phone}]: ${otpCode}`);
-
     return NextResponse.json({
       success: true,
       message: 'تم إرسال كود التحقق بنجاح',
-      debugCode: otpCode, // متاح للاختبار المباشر الفوري
+      debugCode: otpCode, // متاح للتجربة السريعة
     });
   } catch (error: any) {
     return NextResponse.json({ message: 'فشل إرسال الكود', error: error.message }, { status: 500 });
   }
 }
 
-// 2. التحقق من الكود وتعيين كلمة المرور الجديدة
+// 2. التحقق من الكود وتعيين كلمة المرور المشفرة الجديدة
 export async function PUT(request: NextRequest) {
   try {
     const { phone, otp, newPassword } = await request.json();
@@ -57,13 +57,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ message: 'كود التحقق غير صحيح أو انتهت صلاحيته' }, { status: 400 });
     }
 
+    // تشفير كلمة المرور الجديدة
+    const hashedPassword = hashPassword(newPassword.trim());
+
     await db.execute(sql`
       UPDATE users 
-      SET password_hash = ${newPassword.trim()}, reset_otp = NULL, reset_otp_expires_at = NULL
+      SET password_hash = ${hashedPassword}, reset_otp = NULL, reset_otp_expires_at = NULL, updated_at = NOW()
       WHERE id = ${rows[0].id};
     `);
 
-    return NextResponse.json({ success: true, message: 'تم تعيين كلمة المرور الجديدة بنجاح' });
+    return NextResponse.json({ success: true, message: 'تم تعيين وتشفير كلمة المرور الجديدة بنجاح' });
   } catch (error: any) {
     return NextResponse.json({ message: 'فشل إعادة التعيين', error: error.message }, { status: 500 });
   }
