@@ -37,7 +37,7 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// 3. جدول الفروع (branches) - مدمج به حقول مفتاح الـ QR
+// 3. جدول الفروع (branches)
 export const branches = pgTable('branches', {
   id: serial('id').primaryKey(),
   nameAr: text('name_ar').notNull(),
@@ -107,6 +107,9 @@ export const customRoles = pgTable('custom_roles', {
   isSystem: boolean('is_system').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// تصدير roles كاسم بديل لـ customRoles لضمان التوافق الكامل مع أي استيراد قديم
+export const roles = customRoles;
 
 // 7. جدول الإشعارات (notifications)
 export const notifications = pgTable('notifications', {
