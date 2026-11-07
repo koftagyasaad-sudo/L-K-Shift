@@ -18,7 +18,7 @@ export async function GET(
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
-    // 1. استرجاع بيانات الموظف الأساسية وكوده الوظيفي
+    // 1. استرجاع بيانات الموظف الأساسية ومواعيد وردية الفرع المحددة
     const empRaw = await db.execute(sql`
       SELECT 
         u.id, 
@@ -32,7 +32,14 @@ export async function GET(
         COALESCE(u.job_role, 'موظف') as role,
         COALESCE(b.name_ar, b.name, 'الإدارة') as "branchName",
         COALESCE(u.monthly_salary, 5000) as "basicSalary",
-        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay"
+        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
+        -- جلب مواعيد وردية الفرع المسجلة
+        COALESCE(
+          NULLIF(TRIM(b.shift_schedule), ''),
+          NULLIF(TRIM(CONCAT(b.shift_start_time, ' - ', b.shift_end_time)), ' - '),
+          NULLIF(TRIM(b.shift_name), ''),
+          ''
+        ) as "branchShift"
       FROM users u
       LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
       WHERE u.id::text = ${id} OR CAST(u.id AS TEXT) = ${id}
@@ -44,13 +51,19 @@ export async function GET(
       return NextResponse.json({ message: 'الموظف غير موجود بالنظام' }, { status: 404 });
     }
     const employee = empRows[0];
+    const empCode = String(employee.employeeCode || '').trim();
+    const empPhone = String(employee.phone || '').trim();
 
-    // 2. استرجاع سجلات الحضور والانصراف للشهر الحالي بصيغة تاريخ موحدة
+    // 2. استرجاع سجلات الحضور والانصراف بتوقيت مصر وبكافة المعرفات (ID أو الكود أو الموبايل)
     let logs: any[] = [];
     try {
       const logsRaw = await db.execute(sql`
         SELECT 
-          TO_CHAR(work_date, 'YYYY-MM-DD') as "workDate",
+          COALESCE(
+            TO_CHAR(work_date, 'YYYY-MM-DD'),
+            TO_CHAR(check_in_time AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD'),
+            TO_CHAR(created_at AT TIME ZONE 'Africa/Cairo', 'YYYY-MM-DD')
+          ) as "workDate",
           check_in_time,
           check_out_time,
           COALESCE(check_in_distance, 0) as "gpsDistance",
@@ -60,10 +73,21 @@ export async function GET(
           COALESCE(overtime_minutes, 0) as "overtimeMinutes",
           status
         FROM attendance_logs
-        WHERE (user_id::text = ${id} OR CAST(user_id AS TEXT) = ${id})
-          AND EXTRACT(MONTH FROM work_date) = ${month}
-          AND EXTRACT(YEAR FROM work_date) = ${year}
-        ORDER BY work_date ASC;
+        WHERE (
+          user_id::text = ${id}
+          OR CAST(user_id AS TEXT) = ${id}
+          OR user_id::text = ${empCode}
+          OR user_id::text = ${empPhone}
+        )
+        AND (
+          EXTRACT(MONTH FROM COALESCE(work_date, check_in_time, created_at)) = ${month}
+          OR EXTRACT(MONTH FROM (check_in_time AT TIME ZONE 'Africa/Cairo')) = ${month}
+        )
+        AND (
+          EXTRACT(YEAR FROM COALESCE(work_date, check_in_time, created_at)) = ${year}
+          OR EXTRACT(YEAR FROM (check_in_time AT TIME ZONE 'Africa/Cairo')) = ${year}
+        )
+        ORDER BY COALESCE(check_in_time, created_at, work_date::timestamptz) ASC;
       `);
       logs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
     } catch (e) {
@@ -84,10 +108,14 @@ export async function GET(
           COALESCE(advance_amount, 0) as "advanceAmount",
           final_status
         FROM leave_requests
-        WHERE (user_id::text = ${id} OR CAST(user_id AS TEXT) = ${id})
-          AND (final_status = 'APPROVED' OR status::text = 'APPROVED')
-          AND EXTRACT(MONTH FROM start_date) = ${month}
-          AND EXTRACT(YEAR FROM start_date) = ${year};
+        WHERE (
+          user_id::text = ${id} 
+          OR CAST(user_id AS TEXT) = ${id}
+          OR user_id::text = ${empCode}
+        )
+        AND (final_status = 'APPROVED' OR status::text = 'APPROVED')
+        AND EXTRACT(MONTH FROM start_date) = ${month}
+        AND EXTRACT(YEAR FROM start_date) = ${year};
       `);
       leaves = Array.isArray(leavesRaw) ? leavesRaw : (leavesRaw as any)?.rows || [];
 
@@ -99,15 +127,15 @@ export async function GET(
       leaves = [];
     }
 
-    // 4. بناء مصفوفة أيام الشهر بتفاصيل الحضور الفعلي
+    // 4. تحديد مسمى الوردية من الفرع أو افتراضياً
+    const workHours = Number(employee.workingHoursPerDay) || 8;
+    const defaultShiftSchedule = `09:00 ص - ${workHours + 9 > 12 ? (workHours + 9 - 12) + ':00 م' : (workHours + 9) + ':00 ص'}`;
+    const activeShiftSchedule = employee.branchShift ? String(employee.branchShift) : defaultShiftSchedule;
+
+    // 5. بناء مصفوفة أيام الشهر واحتساب الساعات
     const daysInMonth = new Date(year, month, 0).getDate();
     const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const monthNamesAr = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-
-    const workHours = Number(employee.workingHoursPerDay) || 8;
-    const shiftEndHour = 9 + workHours;
-    const shiftEndLabel = shiftEndHour > 12 ? `${shiftEndHour - 12}:00 م` : `${shiftEndHour}:00 ص`;
-    const dynamicShiftSchedule = `09:00 ص - ${shiftEndLabel}`;
 
     const records = [];
     for (let day = 1; day <= daysInMonth; day++) {
@@ -115,45 +143,77 @@ export async function GET(
       const dObj = new Date(year, month - 1, day);
       const dayName = dayNamesAr[dObj.getDay()];
 
-      // مطابقة مرنة لتاريخ البصمة
+      // مطابقة مرنة للسجل باليوم أو بوقت البصمة الفعلي بتوقيت مصر
       const dayLog = logs.find((l: any) => {
-        const raw = l.workDate || l.workdate || l.work_date;
-        if (!raw) return false;
-        const dStr = typeof raw === 'string' ? raw.slice(0, 10) : new Date(raw).toISOString().slice(0, 10);
-        return dStr === dateStr;
+        const rawDate = l.workDate || l.workdate || l.work_date;
+        if (rawDate && String(rawDate).slice(0, 10) === dateStr) return true;
+
+        if (l.check_in_time) {
+          try {
+            const checkInDate = new Date(l.check_in_time).toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+            if (checkInDate === dateStr) return true;
+          } catch {}
+        }
+        return false;
       });
 
-      // استخراج قيم السجل بأمان
-      const checkInTimeRaw = dayLog ? (dayLog.check_in_time || dayLog.checkInTime || dayLog.checkintime) : null;
-      const checkOutTimeRaw = dayLog ? (dayLog.check_out_time || dayLog.checkOutTime || dayLog.checkouttime) : null;
-      const distance = dayLog ? Number(dayLog.gpsDistance ?? dayLog.gps_distance ?? dayLog.check_in_distance ?? 0) : 0;
-      const photoUrl = dayLog ? (dayLog.photoUrl || dayLog.photo_url || dayLog.check_in_photo_url || null) : null;
-      const workedMinutes = dayLog ? Number(dayLog.workedMinutes ?? dayLog.worked_minutes ?? dayLog.actual_worked_minutes ?? 0) : 0;
-      const lateMinutes = dayLog ? Number(dayLog.lateMinutes ?? dayLog.late_minutes ?? 0) : 0;
-      const overtimeMinutes = dayLog ? Number(dayLog.overtimeMinutes ?? dayLog.overtime_minutes ?? 0) : 0;
+      const checkInTimeRaw = dayLog ? (dayLog.check_in_time || dayLog.checkInTime) : null;
+      const checkOutTimeRaw = dayLog ? (dayLog.check_out_time || dayLog.checkOutTime) : null;
+      const distance = dayLog ? Number(dayLog.gpsDistance ?? dayLog.gps_distance ?? 0) : 0;
+      const photoUrl = dayLog ? (dayLog.photoUrl || dayLog.photo_url || null) : null;
+      let workedMinutes = dayLog ? Number(dayLog.workedMinutes ?? dayLog.worked_minutes ?? 0) : 0;
+      let lateMinutes = dayLog ? Number(dayLog.lateMinutes ?? dayLog.late_minutes ?? 0) : 0;
+      let overtimeMinutes = dayLog ? Number(dayLog.overtimeMinutes ?? dayLog.overtime_minutes ?? 0) : 0;
 
-      const isLeave = leaves.some((lv: any) => {
-        const start = String(lv.startDate || lv.start_date || '').slice(0, 10);
-        const end = String(lv.endDate || lv.end_date || start).slice(0, 10);
-        const reqType = lv.requestType || lv.request_type || lv.leave_type;
-        return dateStr >= start && dateStr <= end && reqType !== 'ADVANCE';
-      });
-
-      let status: 'PRESENT' | 'APPROVED_LEAVE' | 'ABSENT' | 'WEEKLY_OFF' = 'ABSENT';
-      if (dObj.getDay() === 5) {
-        status = 'WEEKLY_OFF'; // عطلة الجمعة
-      } else if (isLeave) {
-        status = 'APPROVED_LEAVE';
-      } else if (checkInTimeRaw || workedMinutes > 0) {
-        status = 'PRESENT';
+      // احتساب دقائق العمل آلياً إذا توفر وقت الحضور والانصراف
+      if ((!workedMinutes || workedMinutes === 0) && checkInTimeRaw) {
+        if (checkOutTimeRaw) {
+          const diffMs = new Date(checkOutTimeRaw).getTime() - new Date(checkInTimeRaw).getTime();
+          if (diffMs > 0) {
+            workedMinutes = Math.round(diffMs / 60000);
+          }
+        } else {
+          // في حال تسجيل حضور فقط
+          workedMinutes = workHours * 60;
+        }
       }
 
+      // حساب الإضافي آلياً
+      const scheduledMinutes = workHours * 60;
+      if (workedMinutes > scheduledMinutes && overtimeMinutes === 0) {
+        overtimeMinutes = workedMinutes - scheduledMinutes;
+      }
+
+      const isLeave = leaves.some((lv: any) => {
+        const start = String(lv.startDate || '').slice(0, 10);
+        const end = String(lv.endDate || start).slice(0, 10);
+        return dateStr >= start && dateStr <= end && lv.requestType !== 'ADVANCE';
+      });
+
+      // تحديد الحالة: الحضور الفعلي يسبق أي عطلة أسبوعية
+      let status: 'PRESENT' | 'APPROVED_LEAVE' | 'ABSENT' | 'WEEKLY_OFF' = 'ABSENT';
+      if (checkInTimeRaw || workedMinutes > 0) {
+        status = 'PRESENT'; // حاضر حتى لو كان يوم جمعة
+      } else if (isLeave) {
+        status = 'APPROVED_LEAVE';
+      } else if (dObj.getDay() === 5) {
+        status = 'WEEKLY_OFF'; // عطلة أسبوعية فقط إذا لم يحضر
+      } else {
+        status = 'ABSENT';
+      }
+
+      // تنسيق الوقت بتوقيت مصر
       const formatTime = (ts: string | null) => {
         if (!ts) return null;
         try {
           const d = new Date(ts);
           if (isNaN(d.getTime())) return null;
-          return d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
+          return d.toLocaleTimeString('ar-EG', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'Africa/Cairo',
+          });
         } catch {
           return null;
         }
@@ -162,7 +222,7 @@ export async function GET(
       records.push({
         date: dateStr,
         dayName,
-        shiftSchedule: dynamicShiftSchedule,
+        shiftSchedule: activeShiftSchedule,
         checkInTime: formatTime(checkInTimeRaw),
         checkOutTime: formatTime(checkOutTimeRaw),
         gpsVerified: distance <= 150,
