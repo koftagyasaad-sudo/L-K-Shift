@@ -32,6 +32,7 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
+// قائمة الروابط: ما هو adminOnly: false يظهر لأي موظف عادي لديه حساب
 const navItems: NavItem[] = [
   {
     titleAr: 'لوحة التحكم',
@@ -45,13 +46,21 @@ const navItems: NavItem[] = [
     titleEn: 'Attendance',
     href: '/attendance',
     icon: Clock,
+    adminOnly: false,
   },
   {
     titleAr: 'الملف الشخصي وبياناتي (HR)',
     titleEn: 'My Profile & HR Form',
     href: '/profile',
     icon: UserCheck,
-    adminOnly: false,
+    adminOnly: false, // متاح لجميع الموظفين
+  },
+  {
+    titleAr: 'تقديم إجازة / إذن / سلفة',
+    titleEn: 'Requests',
+    href: '/requests',
+    icon: Calendar,
+    adminOnly: false, // متاح لجميع الموظفين
   },
   {
     titleAr: 'مراجعة الحضور والرواتب',
@@ -59,12 +68,6 @@ const navItems: NavItem[] = [
     href: '/admin/attendance-review',
     icon: ClipboardCheck,
     adminOnly: true,
-  },
-  {
-    titleAr: 'تقديم إجازة / إذن / سلفة',
-    titleEn: 'Requests',
-    href: '/requests',
-    icon: Calendar,
   },
   {
     titleAr: 'الموظفين',
@@ -112,20 +115,21 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
   const isRtl = locale === 'ar';
 
   const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('مدير النظام');
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [userRole, setUserRole] = useState('موظف');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isOpenMobile, setIsOpenMobile] = useState(false);
 
   useEffect(() => {
     try {
       const storedName = localStorage.getItem('userName') || '';
-      const storedRole = localStorage.getItem('userRole') || 'مدير النظام';
+      const storedRole = localStorage.getItem('userRole') || 'موظف';
       const permsRaw = localStorage.getItem('userPermissions') || '[]';
       const perms: string[] = JSON.parse(permsRaw);
 
       setUserName(storedName);
       setUserRole(storedRole);
 
+      // التحقق من صلاحيات الإدارة
       const hasAdminPrivilege =
         perms.includes('*') ||
         storedRole === 'SUPER_ADMIN' ||
@@ -135,7 +139,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
 
       setIsAdmin(hasAdminPrivilege);
     } catch {
-      setIsAdmin(true);
+      setIsAdmin(false);
     }
   }, []);
 
@@ -149,6 +153,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
     }
   };
 
+  // ترشيح الروابط: الروابط العامة تظهر للكل، وروابط الإدارة تظهر للمديرين فقط
   const visibleNavItems = navItems.filter((item) => {
     if (!item.adminOnly) return true;
     return isAdmin;
@@ -174,13 +179,11 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         />
       )}
 
-      {/* القائمة الجانبية */}
+      {/* القائمة الجانبية على اليمين */}
       <aside
         className={`fixed inset-y-0 ${
-          isRtl ? 'right-0' : 'left-0'
-        } z-40 flex w-72 flex-col justify-between border-slate-200 bg-white dark:border-white/5 dark:bg-[#0c0e18] ${
-          isRtl ? 'border-l' : 'border-r'
-        } transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
+          isRtl ? 'right-0 border-l' : 'left-0 border-r'
+        } z-40 flex w-72 flex-col justify-between border-slate-200 bg-white dark:border-white/5 dark:bg-[#0c0e18] transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
           isOpenMobile
             ? 'translate-x-0'
             : isRtl
@@ -189,12 +192,12 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
-        {/* الترويسة العلوية - تنقل الموظف مباشرة لصفحته الشخصية */}
+        {/* الترويسة العلوية - تنقل الموظف لصفحته الشخصية */}
         <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
           <Link
             href={`/${locale}/profile`}
             className="flex items-center gap-3.5 group cursor-pointer"
-            title="فتح استمارة ملفي الشخصي وتغيير الباسورد"
+            title="فتح استمارة ملفي الشخصي"
           >
             <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-1.5 shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
               <img
@@ -208,13 +211,13 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
                 L-K Shift
               </h2>
               <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
-                {userRole || 'مدير النظام'}
+                {userRole || 'موظف'}
               </span>
             </div>
           </Link>
         </div>
 
-        {/* قائمة الروابط وبداخلها رابط الملف الشخصي في الترتيب الثالث مباشرة */}
+        {/* قائمة الروابط المتاحة للمستخدم */}
         <div className="flex-1 overflow-y-auto px-4 py-5 space-y-1.5 custom-scrollbar">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
