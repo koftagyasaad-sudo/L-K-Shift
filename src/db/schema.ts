@@ -1,151 +1,94 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  integer,
-  uuid,
-  numeric,
-} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { 
+  pgTable, serial, text, integer, boolean, 
+  timestamp, doublePrecision, numeric, pgEnum 
+} from 'drizzle-orm/pg-core';
 
-export const branches = pgTable("branches", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  nameAr: text("name_ar"),
-  nameEn: text("name_en"),
-  address: text("address"),
-  latitude: numeric("latitude"),
-  longitude: numeric("longitude"),
-  geofenceRadius: integer("geofence_radius").default(100),
-  radiusMeters: integer("radius_meters").default(100),
-  isActive: boolean("is_active").default(true),
-  googleMapsUrl: text("google_maps_url"),
-  phone: text("phone"),
-  managerName: text("manager_name"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// 1. تحديد الـ Enums
+export const userRoleEnum = pgEnum('user_role', ['SUPER_ADMIN', 'EMPLOYEE']);
+export const verificationModeEnum = pgEnum('verification_mode', ['QR_GPS', 'GPS_ONLY', 'GPS_WIFI', 'MANUAL']);
+export const attendanceStatusEnum = pgEnum('attendance_status', [
+  'ON_TIME', 'LATE', 'ABSENT', 'INCOMPLETE', 'EXCUSED', 'HOLIDAY', 'LEAVE', 'SICK_LEAVE', 'DAY_OFF'
+]);
+export const leaveStatusEnum = pgEnum('leave_status', ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']);
+
+// 2. جدول المستخدمين (users)
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  fullNameAr: text('full_name_ar').notNull(),
+  fullNameEn: text('full_name_en'),
+  phone: text('phone').notNull(),
+  nationalId: text('national_id'),
+  passwordHash: text('password_hash').notNull(),
+  systemRole: userRoleEnum('system_role').default('EMPLOYEE').notNull(),
+  jobRole: text('job_role').notNull(),
+  primaryBranchId: integer('primary_branch_id'),
+  verificationMode: verificationModeEnum('verification_mode').default('QR_GPS').notNull(),
+  monthlySalary: numeric('monthly_salary'),
+  workingHoursPerDay: integer('working_hours_per_day').default(8).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  address: text('address'),
+  emergencyContact: text('emergency_contact'),
+  employeeNumber: text('employee_number'),
+  employeeCode: text('employee_code'),
+  resetOtp: text('reset_otp'),
+  resetOtpExpiresAt: timestamp('reset_otp_expires_at', { withTimezone: true }),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const roles = pgTable("roles", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  nameAr: text("name_ar"),
-  nameEn: text("name_en"),
-  description: text("description"),
-  permissions: text("permissions"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// 3. جدول الفروع (branches)
+export const branches = pgTable('branches', {
+  id: serial('id').primaryKey(),
+  nameAr: text('name_ar').notNull(),
+  nameEn: text('name_en'),
+  address: text('address'),
+  latitude: doublePrecision('latitude').notNull(),
+  longitude: doublePrecision('longitude').notNull(),
+  geofenceRadius: integer('geofence_radius').default(100).notNull(),
+  shiftSchedule: text('shift_schedule'),
+  shiftStartTime: text('shift_start_time'),
+  shiftEndTime: text('shift_end_time'),
+  shiftName: text('shift_name'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const customRoles = roles;
-
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  phone: text("phone").notNull().unique(),
-  password: text("password").notNull(),
-  roleId: uuid("role_id").references(() => roles.id),
-  role: text("role").default("EMPLOYEE"),
-  branchId: uuid("branch_id").references(() => branches.id),
-  isActive: boolean("is_active").default(true),
-  employeeCode: text("employee_code"),
-  hourlyRate: numeric("hourly_rate"),
-  monthlySalary: numeric("monthly_salary"),
-  avatarUrl: text("avatar_url"),
-  gender: text("gender"),
-  nationalId: text("national_id"),
-  hireDate: timestamp("hire_date"),
-  birthDate: timestamp("birth_date"),
-  canUseAttendanceTerminal: boolean("can_use_attendance_terminal").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+// 4. جدول سجلات الحضور والانصراف (attendance_logs)
+export const attendanceLogs = pgTable('attendance_logs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  branchId: integer('branch_id'),
+  workDate: timestamp('work_date', { mode: 'string' }).notNull(),
+  checkInTime: timestamp('check_in_time', { withTimezone: true }),
+  checkInLat: doublePrecision('check_in_lat'),
+  checkInLng: doublePrecision('check_in_lng'),
+  checkInDistance: doublePrecision('check_in_distance'),
+  checkInPhotoUrl: text('check_in_photo_url'),
+  checkOutTime: timestamp('check_out_time', { withTimezone: true }),
+  checkOutLat: doublePrecision('check_out_lat'),
+  checkOutLng: doublePrecision('check_out_lng'),
+  checkOutDistance: doublePrecision('check_out_distance'),
+  status: attendanceStatusEnum('status').default('INCOMPLETE').notNull(),
+  actualWorkedMinutes: integer('actual_worked_minutes').default(0).notNull(),
+  lateMinutes: integer('late_minutes').default(0).notNull(),
+  overtimeMinutes: integer('overtime_minutes').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const adminBranchScopes = pgTable("admin_branch_scopes", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  branchId: uuid("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow(),
+// 5. جدول طلبات الإجازات والسلف (leave_requests)
+export const leaveRequests = pgTable('leave_requests', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  leaveType: text('leave_type'),
+  requestType: text('request_type'),
+  startDate: timestamp('start_date', { mode: 'string' }).notNull(),
+  endDate: timestamp('end_date', { mode: 'string' }).notNull(),
+  totalDays: integer('total_days').default(1),
+  durationDays: integer('duration_days').default(1),
+  advanceAmount: numeric('advance_amount').default('0'),
+  reason: text('reason'),
+  status: leaveStatusEnum('status').default('PENDING').notNull(),
+  finalStatus: text('final_status').default('PENDING'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
-
-export const attendanceLogs = pgTable("attendance_logs", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  branchId: uuid("branch_id").references(() => branches.id),
-  type: text("type").notNull(),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  selfieUrl: text("selfie_url"),
-  latitude: numeric("latitude"),
-  longitude: numeric("longitude"),
-  status: text("status").default("PENDING"),
-  verificationStatus: text("verification_status").default("VERIFIED"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const attendance = attendanceLogs;
-
-export const notifications = pgTable("notifications", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  isRead: boolean("is_read").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const branchesRelations = relations(branches, ({ many }) => ({
-  users: many(users),
-  attendanceLogs: many(attendanceLogs),
-  adminBranchScopes: many(adminBranchScopes),
-}));
-
-export const rolesRelations = relations(roles, ({ many }) => ({
-  users: many(users),
-}));
-
-export const usersRelations = relations(users, ({ one, many }) => ({
-  branch: one(branches, {
-    fields: [users.branchId],
-    references: [branches.id],
-  }),
-  role: one(roles, {
-    fields: [users.roleId],
-    references: [roles.id],
-  }),
-  attendanceLogs: many(attendanceLogs),
-  adminBranchScopes: many(adminBranchScopes),
-  notifications: many(notifications),
-}));
-
-export const adminBranchScopesRelations = relations(adminBranchScopes, ({ one }) => ({
-  user: one(users, {
-    fields: [adminBranchScopes.userId],
-    references: [users.id],
-  }),
-  branch: one(branches, {
-    fields: [adminBranchScopes.branchId],
-    references: [branches.id],
-  }),
-}));
-
-export const attendanceLogsRelations = relations(attendanceLogs, ({ one }) => ({
-  user: one(users, {
-    fields: [attendanceLogs.userId],
-    references: [users.id],
-  }),
-  branch: one(branches, {
-    fields: [attendanceLogs.branchId],
-    references: [branches.id],
-  }),
-}));
-
-export const notificationsRelations = relations(notifications, ({ one }) => ({
-  user: one(users, {
-    fields: [notifications.userId],
-    references: [users.id],
-  }),
-}));
