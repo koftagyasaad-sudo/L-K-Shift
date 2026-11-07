@@ -1,30 +1,28 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
-import { 
-  Briefcase, User, Phone, Mail, MapPin, Calendar, 
-  Search, Eye, Printer, CheckCircle2, Clock, XCircle, 
-  Download, Filter, ChevronLeft, ChevronRight, FileText, Loader2 
+import React, { useState } from 'react';
+import { useParams } from 'next/navigation';
+import {
+  Briefcase,
+  Search,
+  Eye,
+  Printer,
+  CheckCircle2,
+  Clock,
+  Filter,
+  FileText,
 } from 'lucide-react';
 
-interface RecruitmentPageProps {
-  params: Promise<{
-    locale: string;
-  }>;
-}
-
-export default function RecruitmentManagementPage({ params }: RecruitmentPageProps) {
-  const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
+export default function RecruitmentManagementPage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
-  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('ALL');
   const [selectedApplication, setSelectedApplication] = useState<any | null>(null);
 
-  // بيانات استمارات التقديم
-  const [applications, setApplications] = useState<any[]>([
+  const [applications] = useState<any[]>([
     {
       id: 1,
       fullName: 'أحمد محمود إبراهيم',
@@ -68,7 +66,7 @@ export default function RecruitmentManagementPage({ params }: RecruitmentPagePro
 
   return (
     <div className="space-y-6 pb-12 bg-slate-50 min-h-screen text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية - وايت ثيم */}
+      {/* الترويسة الرئيسية */}
       <div className="bg-white border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-600">
@@ -117,7 +115,7 @@ export default function RecruitmentManagementPage({ params }: RecruitmentPagePro
         </div>
       </div>
 
-      {/* جدول استمارات المتقدمين - وايت ثيم أنيق */}
+      {/* جدول المتقدمين */}
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
@@ -174,11 +172,10 @@ export default function RecruitmentManagementPage({ params }: RecruitmentPagePro
         </div>
       </div>
 
-      {/* نافذة استعراض وطباعة استمارة التقديم بالكامل (Modal - White Theme) */}
+      {/* نافذة استعراض وطباعة الاستمارة */}
       {selectedApplication && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6 text-slate-900">
-            {/* رأس الاستمارة المجهزة للطباعة */}
             <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-900">L-K SHIFT SYSTEMS</h2>
@@ -193,7 +190,6 @@ export default function RecruitmentManagementPage({ params }: RecruitmentPagePro
               </div>
             </div>
 
-            {/* تفاصيل المتقدم بالكامل */}
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <span className="text-slate-500 block">الاسم بالكامل:</span>
@@ -229,7 +225,6 @@ export default function RecruitmentManagementPage({ params }: RecruitmentPagePro
               </div>
             </div>
 
-            {/* أزرار الإجراءات والطباعة */}
             <div className="flex justify-between items-center pt-4 border-t border-slate-200">
               <button
                 type="button"
