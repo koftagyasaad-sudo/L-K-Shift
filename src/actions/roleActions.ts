@@ -1,205 +1,123 @@
-"use server";
+import { 
+  pgTable, serial, text, integer, boolean, 
+  timestamp, doublePrecision, numeric, pgEnum, jsonb 
+} from 'drizzle-orm/pg-core';
 
-import { db } from "@/db";
-import { roles, customRoles } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+// 1. تعريف الـ Enums
+export const userRoleEnum = pgEnum('user_role', ['SUPER_ADMIN', 'EMPLOYEE']);
+export const verificationModeEnum = pgEnum('verification_mode', ['QR_GPS', 'GPS_ONLY', 'GPS_WIFI', 'MANUAL']);
+export const attendanceStatusEnum = pgEnum('attendance_status', [
+  'ON_TIME', 'LATE', 'ABSENT', 'INCOMPLETE', 'EXCUSED', 'HOLIDAY', 'LEAVE', 'SICK_LEAVE', 'DAY_OFF'
+]);
+export const leaveStatusEnum = pgEnum('leave_status', ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']);
 
-export type RoleData = {
-  id: string;
-  name: string;
-  nameAr?: string | null;
-  nameEn?: string | null;
-  description?: string | null;
-  permissions?: string | string[] | null;
-  isActive?: boolean | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-};
+// 2. جدول المستخدمين (users)
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  fullNameAr: text('full_name_ar').notNull(),
+  fullNameEn: text('full_name_en'),
+  phone: text('phone').notNull(),
+  nationalId: text('national_id'),
+  passwordHash: text('password_hash').notNull(),
+  systemRole: userRoleEnum('system_role').default('EMPLOYEE').notNull(),
+  jobRole: text('job_role').notNull(),
+  primaryBranchId: integer('primary_branch_id'),
+  verificationMode: verificationModeEnum('verification_mode').default('QR_GPS').notNull(),
+  monthlySalary: numeric('monthly_salary'),
+  workingHoursPerDay: integer('working_hours_per_day').default(8).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  address: text('address'),
+  emergencyContact: text('emergency_contact'),
+  employeeNumber: text('employee_number'),
+  employeeCode: text('employee_code'),
+  resetOtp: text('reset_otp'),
+  resetOtpExpiresAt: timestamp('reset_otp_expires_at', { withTimezone: true }),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
-/**
-  تحويل الصلاحيات من مصفوفة أو كائن إلى نص JSON متوافق مع Drizzle Text Column
- */
-function formatPermissionsForDb(permissions: unknown): string | null {
-  if (!permissions) return null;
-  if (typeof permissions === "string") return permissions;
-  if (Array.isArray(permissions) || typeof permissions === "object") {
-    try {
-      return JSON.stringify(permissions);
-    } catch {
-      return null;
-    }
-  }
-  return String(permissions);
-}
+// 3. جدول الفروع (branches)
+export const branches = pgTable('branches', {
+  id: serial('id').primaryKey(),
+  nameAr: text('name_ar').notNull(),
+  nameEn: text('name_en'),
+  address: text('address'),
+  latitude: doublePrecision('latitude').notNull(),
+  longitude: doublePrecision('longitude').notNull(),
+  geofenceRadius: integer('geofence_radius').default(100).notNull(),
+  qrSecretKey: text('qr_secret_key'),
+  qrRefreshSec: integer('qr_refresh_sec').default(60),
+  shiftSchedule: text('shift_schedule'),
+  shiftStartTime: text('shift_start_time'),
+  shiftEndTime: text('shift_end_time'),
+  shiftName: text('shift_name'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
 
-/**
-  تحويل الصلاحيات من نص JSON مخزن بالمحرك إلى مصفوفة لسهولة استخدامها في واجهة المستخدم
- */
-function parsePermissionsFromDb(permissions: unknown): string[] | string | null {
-  if (!permissions) return [];
-  if (Array.isArray(permissions)) return permissions;
-  if (typeof permissions === "string") {
-    const trimmed = permissions.trim();
-    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
-      try {
-        return JSON.parse(trimmed);
-      } catch {
-        return trimmed;
-      }
-    }
-    return trimmed;
-  }
-  return [];
-}
+// 4. جدول سجلات الحضور والانصراف (attendance_logs)
+export const attendanceLogs = pgTable('attendance_logs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  branchId: integer('branch_id'),
+  workDate: timestamp('work_date', { mode: 'string' }).notNull(),
+  checkInTime: timestamp('check_in_time', { withTimezone: true }),
+  checkInLat: doublePrecision('check_in_lat'),
+  checkInLng: doublePrecision('check_in_lng'),
+  checkInDistance: doublePrecision('check_in_distance'),
+  checkInPhotoUrl: text('check_in_photo_url'),
+  checkOutTime: timestamp('check_out_time', { withTimezone: true }),
+  checkOutLat: doublePrecision('check_out_lat'),
+  checkOutLng: doublePrecision('check_out_lng'),
+  checkOutDistance: doublePrecision('check_out_distance'),
+  status: attendanceStatusEnum('status').default('INCOMPLETE').notNull(),
+  actualWorkedMinutes: integer('actual_worked_minutes').default(0).notNull(),
+  lateMinutes: integer('late_minutes').default(0).notNull(),
+  overtimeMinutes: integer('overtime_minutes').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
-export async function getRolesAction(): Promise<RoleData[]> {
-  try {
-    const targetTable = roles || customRoles;
-    const rows = await db.select().from(targetTable).orderBy(desc(targetTable.createdAt));
+// 5. جدول طلبات الإجازات والسلف (leave_requests)
+export const leaveRequests = pgTable('leave_requests', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  leaveType: text('leave_type'),
+  requestType: text('request_type'),
+  startDate: timestamp('start_date', { mode: 'string' }).notNull(),
+  endDate: timestamp('end_date', { mode: 'string' }).notNull(),
+  totalDays: integer('total_days').default(1),
+  durationDays: integer('duration_days').default(1),
+  advanceAmount: numeric('advance_amount').default('0'),
+  reason: text('reason'),
+  rejectionReason: text('rejection_reason'),
+  rejectionNotes: text('rejection_notes'),
+  status: leaveStatusEnum('status').default('PENDING').notNull(),
+  finalStatus: text('final_status').default('PENDING'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
-    return (rows || []).map((r: any) => ({
-      id: String(r.id),
-      name: r.name || r.nameAr || "دور بدون اسم",
-      nameAr: r.nameAr || r.name || "",
-      nameEn: r.nameEn || "",
-      description: r.description || "",
-      permissions: parsePermissionsFromDb(r.permissions),
-      isActive: r.isActive !== false && r.isActive !== 0,
-      createdAt: r.createdAt ? String(r.createdAt) : null,
-      updatedAt: r.updatedAt ? String(r.updatedAt) : null,
-    }));
-  } catch (error) {
-    console.error("getRolesAction error:", error);
-    return [];
-  }
-}
+// 6. جدول الأدوار المخصصة (custom_roles)
+export const customRoles = pgTable('custom_roles', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  nameAr: text('name_ar').notNull(),
+  permissions: jsonb('permissions').notNull(),
+  isSystem: boolean('is_system').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
-export async function getRoleByIdAction(id: string): Promise<RoleData | null> {
-  try {
-    const targetTable = roles || customRoles;
-    const rows = await db.select().from(targetTable).where(eq(targetTable.id, id)).limit(1);
-    if (!rows || rows.length === 0) return null;
+// تصدير roles كاسم بديل لـ customRoles لضمان التوافق الكامل مع أي استيراد قديم
+export const roles = customRoles;
 
-    const r = rows[0] as any;
-    return {
-      id: String(r.id),
-      name: r.name || r.nameAr || "دور بدون اسم",
-      nameAr: r.nameAr || r.name || "",
-      nameEn: r.nameEn || "",
-      description: r.description || "",
-      permissions: parsePermissionsFromDb(r.permissions),
-      isActive: r.isActive !== false && r.isActive !== 0,
-      createdAt: r.createdAt ? String(r.createdAt) : null,
-      updatedAt: r.updatedAt ? String(r.updatedAt) : null,
-    };
-  } catch (error) {
-    console.error("getRoleByIdAction error:", error);
-    return null;
-  }
-}
-
-export async function createRoleAction(payload: Record<string, any>) {
-  try {
-    const name = payload.name || payload.nameAr || "دور جديد";
-    const nameAr = payload.nameAr || name;
-    const nameEn = payload.nameEn || "";
-    const description = payload.description || "";
-    const permissionsStr = formatPermissionsForDb(payload.permissions);
-    const isActive = payload.isActive !== false && payload.isActive !== 0;
-
-    const targetTable = roles || customRoles;
-    const [inserted] = await db
-      .insert(targetTable)
-      .values({
-        name,
-        nameAr,
-        nameEn,
-        description,
-        permissions: permissionsStr,
-        isActive,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any)
-      .returning();
-
-    revalidatePath("/[locale]/(app)/admin/roles", "page");
-    return { success: true, data: inserted };
-  } catch (error: any) {
-    console.error("createRoleAction error:", error);
-    return { success: false, error: error.message || "فشل إنشاء الدور" };
-  }
-}
-
-export async function updateRoleAction(id: string, payload: Record<string, any>) {
-  try {
-    const name = payload.name || payload.nameAr || "دور";
-    const nameAr = payload.nameAr || name;
-    const nameEn = payload.nameEn || "";
-    const description = payload.description || "";
-    const permissionsStr = formatPermissionsForDb(payload.permissions);
-    const isActive = payload.isActive !== false && payload.isActive !== 0;
-
-    const targetTable = roles || customRoles;
-    await db
-      .update(targetTable)
-      .set({
-        name,
-        nameAr,
-        nameEn,
-        description,
-        permissions: permissionsStr,
-        isActive,
-        updatedAt: new Date(),
-      } as any)
-      .where(eq(targetTable.id, id));
-
-    revalidatePath("/[locale]/(app)/admin/roles", "page");
-    revalidatePath(`/[locale]/(app)/admin/roles/${id}`, "page");
-    return { success: true };
-  } catch (error: any) {
-    console.error("updateRoleAction error:", error);
-    return { success: false, error: error.message || "فشل تحديث بيانات الدور" };
-  }
-}
-
-export async function saveRoleAction(payload: Record<string, any>) {
-  if (payload.id && String(payload.id).trim() !== "") {
-    return await updateRoleAction(String(payload.id), payload);
-  } else {
-    return await createRoleAction(payload);
-  }
-}
-
-export async function toggleRoleStatusAction(id: string, currentStatus?: boolean) {
-  try {
-    const nextStatus = currentStatus !== undefined ? !currentStatus : true;
-    const targetTable = roles || customRoles;
-    await db
-      .update(targetTable)
-      .set({
-        isActive: nextStatus,
-        updatedAt: new Date(),
-      } as any)
-      .where(eq(targetTable.id, id));
-
-    revalidatePath("/[locale]/(app)/admin/roles", "page");
-    return { success: true, isActive: nextStatus };
-  } catch (error: any) {
-    console.error("toggleRoleStatusAction error:", error);
-    return { success: false, error: error.message || "فشل تغيير حالة الدور" };
-  }
-}
-
-export async function deleteRoleAction(id: string) {
-  try {
-    const targetTable = roles || customRoles;
-    await db.delete(targetTable).where(eq(targetTable.id, id));
-
-    revalidatePath("/[locale]/(app)/admin/roles", "page");
-    return { success: true };
-  } catch (error: any) {
-    console.error("deleteRoleAction error:", error);
-    return { success: false, error: error.message || "فشل حذف الدور" };
-  }
-}
+// 7. جدول الإشعارات (notifications)
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  isRead: boolean('is_read').default(false).notNull(),
+  link: text('link'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
