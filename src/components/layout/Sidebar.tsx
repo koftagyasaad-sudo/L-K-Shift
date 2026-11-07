@@ -112,14 +112,14 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
   const isRtl = locale === 'ar';
 
   const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('موظف');
+  const [userRole, setUserRole] = useState('مدير النظام');
   const [isAdmin, setIsAdmin] = useState(true);
   const [isOpenMobile, setIsOpenMobile] = useState(false);
 
   useEffect(() => {
     try {
       const storedName = localStorage.getItem('userName') || '';
-      const storedRole = localStorage.getItem('userRole') || 'موظف';
+      const storedRole = localStorage.getItem('userRole') || 'مدير النظام';
       const permsRaw = localStorage.getItem('userPermissions') || '[]';
       const perms: string[] = JSON.parse(permsRaw);
 
@@ -156,6 +156,19 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
 
   return (
     <>
+      {/* فلتر برمجي لعزل وتفريغ الخلفية الداكنة على الواجهات الفاتحة دون التأثير على الأندرويد */}
+      <svg className="sr-only" aria-hidden="true">
+        <filter id="remove-dark-bg" colorInterpolationFilters="sRGB">
+          <feColorMatrix
+            type="matrix"
+            values="1 0 0 0 0
+                    0 1 0 0 0
+                    0 0 1 0 0
+                    0.299 0.587 0.114 0 0"
+          />
+        </filter>
+      </svg>
+
       {/* زر القائمة للشاشات الصغيرة */}
       <button
         type="button"
@@ -189,18 +202,23 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
-        {/* الترويسة مع لوجو مفرغ برمجياً وبدون خلفية مربعة */}
+        {/* الترويسة مع شعار L-K Shift بهوية متناسقة وأنيقة */}
         <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
-          <Link href={`/${locale}/profile`} className="flex items-center gap-3 group cursor-pointer" title="فتح الملف الشخصي">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+          <Link
+            href={`/${locale}/profile`}
+            className="flex items-center gap-3.5 group cursor-pointer"
+            title="فتح الملف الشخصي"
+          >
+            {/* حاوية الشعار المتناسقة */}
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-1.5 shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
               <img
                 src="/Logo.png"
                 alt="L-K Shift Logo"
-                className="h-full w-full object-contain mix-blend-screen drop-shadow-md"
+                className="h-full w-full object-contain filter drop-shadow-sm brightness-110"
               />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-wide text-slate-900 dark:text-white group-hover:text-orange-500 transition">
+              <h2 className="text-base font-black tracking-wide text-slate-900 dark:text-white group-hover:text-orange-600 transition">
                 L-K Shift
               </h2>
               <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
