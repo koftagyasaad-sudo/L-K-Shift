@@ -1,65 +1,90 @@
 'use server';
 
 import { db } from '@/db';
-import { users } from '@/db/schema';
+import { users, branches } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { revalidatePath } from 'next/cache';
 
-export type EmployeeData = {
-  id: string;
-  phone: string;
-  password?: string;
-  name?: string | null;
-  fullNameAr?: string | null;
+export interface EmployeeData {
+  id: number;
+  name: string;
+  fullName?: string;
+  fullNameAr?: string;
   fullNameEn?: string | null;
-  email?: string | null;
-  role?: string;
+  phone: string;
+  role: string;
+  jobRole?: string;
   systemRole?: string;
-  jobTitle?: string | null;
   employeeCode?: string | null;
-  hourlyRate?: number | null;
-  monthlySalary?: number | null;
-  avatarUrl?: string | null;
-  gender?: string | null;
+  employeeNumber?: string | null;
+  branchId?: number | null;
+  branchName?: string | null;
+  basicSalary?: number;
+  monthlySalary?: number | string | null;
+  workingHoursPerDay?: number;
+  annualLeaveDays?: number;
   nationalId?: string | null;
-  canUseAttendanceTerminal?: boolean;
-  branchId?: string | null;
-  primaryBranchId?: string | null;
-  roleId?: string | null;
+  address?: string | null;
+  emergencyContact?: string | null;
+  verificationMode?: string;
   isActive: boolean;
-  notes?: string | null;
-  createdAt?: Date | null;
-  updatedAt?: Date | null;
-};
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
 
 export async function getEmployeesAction(): Promise<EmployeeData[]> {
   try {
-    const rawUsers = await db.select().from(users).orderBy(desc(users.createdAt));
-    return rawUsers.map((u: any) => ({
-      id: String(u.id),
-      phone: String(u.phone || ''),
-      password: String(u.password || ''),
-      name: u.fullNameAr ?? u.name ?? u.phone,
-      fullNameAr: u.fullNameAr ?? u.name ?? null,
-      fullNameEn: u.fullNameEn ?? null,
-      email: u.email ?? null,
-      role: u.role ?? 'employee',
-      systemRole: u.systemRole ?? u.role ?? 'employee',
-      jobTitle: u.jobTitle ?? null,
-      employeeCode: u.employeeCode ?? null,
-      hourlyRate: u.hourlyRate !== null && u.hourlyRate !== undefined ? Number(u.hourlyRate) : null,
-      monthlySalary: u.monthlySalary !== null && u.monthlySalary !== undefined ? Number(u.monthlySalary) : null,
-      avatarUrl: u.avatarUrl ?? null,
-      gender: u.gender ?? null,
-      nationalId: u.nationalId ?? null,
-      canUseAttendanceTerminal: Boolean(u.canUseAttendanceTerminal ?? true),
-      branchId: u.branchId ? String(u.branchId) : u.primaryBranchId ? String(u.primaryBranchId) : null,
-      primaryBranchId: u.primaryBranchId ? String(u.primaryBranchId) : u.branchId ? String(u.branchId) : null,
-      roleId: u.roleId ? String(u.roleId) : null,
-      isActive: Boolean(u.isActive ?? true),
-      notes: u.notes ?? null,
-      createdAt: u.createdAt ? new Date(u.createdAt) : null,
-      updatedAt: u.updatedAt ? new Date(u.updatedAt) : null,
+    const rows = await db
+      .select({
+        id: users.id,
+        fullNameAr: users.fullNameAr,
+        fullNameEn: users.fullNameEn,
+        phone: users.phone,
+        jobRole: users.jobRole,
+        systemRole: users.systemRole,
+        employeeCode: users.employeeCode,
+        employeeNumber: users.employeeNumber,
+        primaryBranchId: users.primaryBranchId,
+        monthlySalary: users.monthlySalary,
+        workingHoursPerDay: users.workingHoursPerDay,
+        nationalId: users.nationalId,
+        address: users.address,
+        emergencyContact: users.emergencyContact,
+        verificationMode: users.verificationMode,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        branchName: branches.nameAr,
+      })
+      .from(users)
+      .leftJoin(branches, eq(users.primaryBranchId, branches.id))
+      .orderBy(desc(users.createdAt));
+
+    return rows.map((u) => ({
+      id: u.id,
+      name: u.fullNameAr,
+      fullName: u.fullNameAr,
+      fullNameAr: u.fullNameAr,
+      fullNameEn: u.fullNameEn,
+      phone: u.phone,
+      role: u.jobRole || 'موظف',
+      jobRole: u.jobRole,
+      systemRole: u.systemRole,
+      employeeCode: u.employeeCode || u.employeeNumber || String(u.id),
+      employeeNumber: u.employeeNumber,
+      branchId: u.primaryBranchId,
+      branchName: u.branchName || 'الفرع الرئيسي',
+      basicSalary: Number(u.monthlySalary) || 0,
+      monthlySalary: u.monthlySalary,
+      workingHoursPerDay: u.workingHoursPerDay || 8,
+      annualLeaveDays: 21,
+      nationalId: u.nationalId,
+      address: u.address,
+      emergencyContact: u.emergencyContact,
+      verificationMode: u.verificationMode || 'QR_GPS',
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
     }));
   } catch (error) {
     console.error('Error fetching employees:', error);
@@ -67,160 +92,120 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
   }
 }
 
-export async function getEmployeeByIdAction(id: string): Promise<EmployeeData | null> {
+export async function getEmployeeByIdAction(id: string | number): Promise<EmployeeData | null> {
   try {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return null;
+
+    const result = await db
+      .select({
+        id: users.id,
+        fullNameAr: users.fullNameAr,
+        fullNameEn: users.fullNameEn,
+        phone: users.phone,
+        jobRole: users.jobRole,
+        systemRole: users.systemRole,
+        employeeCode: users.employeeCode,
+        employeeNumber: users.employeeNumber,
+        primaryBranchId: users.primaryBranchId,
+        monthlySalary: users.monthlySalary,
+        workingHoursPerDay: users.workingHoursPerDay,
+        nationalId: users.nationalId,
+        address: users.address,
+        emergencyContact: users.emergencyContact,
+        verificationMode: users.verificationMode,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        branchName: branches.nameAr,
+      })
+      .from(users)
+      .leftJoin(branches, eq(users.primaryBranchId, branches.id))
+      .where(eq(users.id, numericId))
+      .limit(1);
+
     if (!result || result.length === 0) return null;
-    const u: any = result[0];
+    const u = result[0];
+
     return {
-      id: String(u.id),
-      phone: String(u.phone || ''),
-      password: String(u.password || ''),
-      name: u.fullNameAr ?? u.name ?? u.phone,
-      fullNameAr: u.fullNameAr ?? u.name ?? null,
-      fullNameEn: u.fullNameEn ?? null,
-      email: u.email ?? null,
-      role: u.role ?? 'employee',
-      systemRole: u.systemRole ?? u.role ?? 'employee',
-      jobTitle: u.jobTitle ?? null,
-      employeeCode: u.employeeCode ?? null,
-      hourlyRate: u.hourlyRate !== null && u.hourlyRate !== undefined ? Number(u.hourlyRate) : null,
-      monthlySalary: u.monthlySalary !== null && u.monthlySalary !== undefined ? Number(u.monthlySalary) : null,
-      avatarUrl: u.avatarUrl ?? null,
-      gender: u.gender ?? null,
-      nationalId: u.nationalId ?? null,
-      canUseAttendanceTerminal: Boolean(u.canUseAttendanceTerminal ?? true),
-      branchId: u.branchId ? String(u.branchId) : u.primaryBranchId ? String(u.primaryBranchId) : null,
-      primaryBranchId: u.primaryBranchId ? String(u.primaryBranchId) : u.branchId ? String(u.branchId) : null,
-      roleId: u.roleId ? String(u.roleId) : null,
-      isActive: Boolean(u.isActive ?? true),
-      notes: u.notes ?? null,
-      createdAt: u.createdAt ? new Date(u.createdAt) : null,
-      updatedAt: u.updatedAt ? new Date(u.updatedAt) : null,
+      id: u.id,
+      name: u.fullNameAr,
+      fullName: u.fullNameAr,
+      fullNameAr: u.fullNameAr,
+      fullNameEn: u.fullNameEn,
+      phone: u.phone,
+      role: u.jobRole || 'موظف',
+      jobRole: u.jobRole,
+      systemRole: u.systemRole,
+      employeeCode: u.employeeCode || u.employeeNumber || String(u.id),
+      employeeNumber: u.employeeNumber,
+      branchId: u.primaryBranchId,
+      branchName: u.branchName || 'الفرع الرئيسي',
+      basicSalary: Number(u.monthlySalary) || 0,
+      monthlySalary: u.monthlySalary,
+      workingHoursPerDay: u.workingHoursPerDay || 8,
+      annualLeaveDays: 21,
+      nationalId: u.nationalId,
+      address: u.address,
+      emergencyContact: u.emergencyContact,
+      verificationMode: u.verificationMode || 'QR_GPS',
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
     };
   } catch (error) {
-    console.error(`Error fetching employee with ID ${id}:`, error);
+    console.error('Error fetching employee by id:', error);
     return null;
   }
 }
 
-export async function saveEmployeeAction(data: Partial<EmployeeData> & { phone: string }) {
+export async function updateEmployeeAction(
+  id: string | number,
+  data: Partial<EmployeeData>
+): Promise<{ success: boolean; message?: string }> {
   try {
-    const {
-      id,
-      phone,
-      password,
-      fullNameAr,
-      fullNameEn,
-      name,
-      email,
-      role,
-      systemRole,
-      jobTitle,
-      employeeCode,
-      hourlyRate,
-      monthlySalary,
-      canUseAttendanceTerminal,
-      branchId,
-      primaryBranchId,
-      roleId,
-      isActive,
-      notes,
-    } = data;
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return { success: false, message: 'معرف الموظف غير صالح' };
 
-    const resolvedNameAr = fullNameAr || name || 'موظف جديد';
-    const resolvedNameEn = fullNameEn || null;
-    const resolvedBranchId = branchId || primaryBranchId || null;
-
-    if (id) {
-      const updateData: Record<string, any> = {
-        phone,
-        name: resolvedNameAr,
-        fullNameAr: resolvedNameAr,
-        fullNameEn: resolvedNameEn,
-        email: email || null,
-        role: role || 'employee',
-        systemRole: systemRole || role || 'employee',
-        jobTitle: jobTitle || null,
-        employeeCode: employeeCode || null,
-        hourlyRate: hourlyRate !== undefined && hourlyRate !== null ? Number(hourlyRate) : null,
-        monthlySalary: monthlySalary !== undefined && monthlySalary !== null ? Number(monthlySalary) : null,
-        canUseAttendanceTerminal: canUseAttendanceTerminal !== undefined ? Boolean(canUseAttendanceTerminal) : true,
-        branchId: resolvedBranchId,
-        primaryBranchId: resolvedBranchId,
-        roleId: roleId || null,
-        isActive: isActive !== undefined ? Boolean(isActive) : true,
-        notes: notes || null,
+    await db
+      .update(users)
+      .set({
+        ...(data.fullNameAr && { fullNameAr: data.fullNameAr }),
+        ...(data.fullName && { fullNameAr: data.fullName }),
+        ...(data.phone && { phone: data.phone }),
+        ...(data.jobRole && { jobRole: data.jobRole }),
+        ...(data.role && { jobRole: data.role }),
+        ...(data.branchId !== undefined && { primaryBranchId: data.branchId }),
+        ...(data.basicSalary !== undefined && { monthlySalary: String(data.basicSalary) }),
+        ...(data.workingHoursPerDay !== undefined && { workingHoursPerDay: Number(data.workingHoursPerDay) }),
+        ...(data.nationalId !== undefined && { nationalId: data.nationalId }),
+        ...(data.address !== undefined && { address: data.address }),
+        ...(data.emergencyContact !== undefined && { emergencyContact: data.emergencyContact }),
+        ...(data.employeeCode !== undefined && { employeeCode: data.employeeCode }),
+        ...(data.verificationMode !== undefined && { verificationMode: data.verificationMode as any }),
+        ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
         updatedAt: new Date(),
-      };
+      })
+      .where(eq(users.id, numericId));
 
-      if (password && password.trim() !== '') {
-        updateData.password = await bcrypt.hash(password, 10);
-      }
-
-      await db.update(users).set(updateData).where(eq(users.id, id));
-      return { success: true, message: 'تم تحديث بيانات الموظف بنجاح', id };
-    } else {
-      const hashedPassword = await bcrypt.hash(password && password.trim() !== '' ? password : '123456', 10);
-      
-      const insertData: Record<string, any> = {
-        phone,
-        password: hashedPassword,
-        name: resolvedNameAr,
-        fullNameAr: resolvedNameAr,
-        fullNameEn: resolvedNameEn,
-        email: email || null,
-        role: role || 'employee',
-        systemRole: systemRole || role || 'employee',
-        jobTitle: jobTitle || null,
-        employeeCode: employeeCode || null,
-        hourlyRate: hourlyRate !== undefined && hourlyRate !== null ? Number(hourlyRate) : null,
-        monthlySalary: monthlySalary !== undefined && monthlySalary !== null ? Number(monthlySalary) : null,
-        canUseAttendanceTerminal: canUseAttendanceTerminal !== undefined ? Boolean(canUseAttendanceTerminal) : true,
-        branchId: resolvedBranchId,
-        primaryBranchId: resolvedBranchId,
-        roleId: roleId || null,
-        isActive: isActive !== undefined ? Boolean(isActive) : true,
-        notes: notes || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const newUsers = await db.insert(users).values(insertData as any).returning({ id: users.id });
-      const newId = newUsers[0]?.id ? String(newUsers[0].id) : undefined;
-      return { success: true, message: 'تم إنشاء الموظف بنجاح', id: newId };
-    }
+    revalidatePath('/[locale]/admin/employees', 'page');
+    return { success: true };
   } catch (error: any) {
-    console.error('Error saving employee:', error);
-    return { success: false, error: error?.message || 'فشل في حفظ بيانات الموظف' };
+    console.error('Error updating employee:', error);
+    return { success: false, message: error?.message || 'فشل تحديث بيانات الموظف' };
   }
 }
 
-export async function createEmployeeAction(data: Partial<EmployeeData> & { phone: string }) {
-  return saveEmployeeAction(data);
-}
-
-export async function updateEmployeeAction(id: string, data: Partial<EmployeeData> & { phone: string }) {
-  return saveEmployeeAction({ ...data, id });
-}
-
-export async function deleteEmployeeAction(id: string) {
+export async function deleteEmployeeAction(id: string | number): Promise<{ success: boolean; message?: string }> {
   try {
-    await db.delete(users).where(eq(users.id, id));
-    return { success: true, message: 'تم حذف الموظف بنجاح' };
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return { success: false, message: 'معرف الموظف غير صالح' };
+
+    await db.delete(users).where(eq(users.id, numericId));
+    revalidatePath('/[locale]/admin/employees', 'page');
+    return { success: true };
   } catch (error: any) {
     console.error('Error deleting employee:', error);
-    return { success: false, error: error?.message || 'فشل في حذف الموظف' };
-  }
-}
-
-export async function toggleEmployeeStatusAction(id: string, currentStatus?: boolean) {
-  try {
-    const isCurrentlyActive = currentStatus !== undefined ? currentStatus : true;
-    await db.update(users).set({ isActive: !isCurrentlyActive, updatedAt: new Date() }).where(eq(users.id, id));
-    return { success: true, message: 'تم تغيير حالة الموظف بنجاح' };
-  } catch (error: any) {
-    console.error('Error toggling employee status:', error);
-    return { success: false, error: error?.message || 'فشل في تغيير حالة الموظف' };
+    return { success: false, message: error?.message || 'فشل حذف الموظف' };
   }
 }
