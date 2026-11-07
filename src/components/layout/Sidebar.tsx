@@ -1,339 +1,265 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { UserPlus, ArrowRight, Loader2 } from 'lucide-react';
+import { usePathname, useRouter, useParams } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Clock,
+  ClipboardCheck,
+  Calendar,
+  Users,
+  Building2,
+  Shield,
+  Briefcase,
+  CheckCircle2,
+  UserCheck,
+  LogOut,
+  ChevronRight,
+  Menu,
+  X,
+} from 'lucide-react';
 
-export default function LoginPage() {
-  const params = useParams();
-  const locale = (params?.locale as string) || 'ar';
-  const isRtl = locale === 'ar';
+interface SidebarProps {
+  locale?: string;
+}
+
+interface NavItem {
+  titleAr: string;
+  titleEn: string;
+  href: string;
+  icon: React.ElementType;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
+  {
+    titleAr: 'لوحة التحكم',
+    titleEn: 'Dashboard',
+    href: '/admin/dashboard',
+    icon: LayoutDashboard,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الحضور والانصراف',
+    titleEn: 'Attendance',
+    href: '/attendance',
+    icon: Clock,
+    adminOnly: false,
+  },
+  {
+    titleAr: 'البيانات الشخصية',
+    titleEn: 'Personal Profile',
+    href: '/profile',
+    icon: UserCheck,
+    adminOnly: false,
+  },
+  {
+    titleAr: 'تقديم إجازة / إذن / سلفة',
+    titleEn: 'Requests',
+    href: '/requests',
+    icon: Calendar,
+    adminOnly: false,
+  },
+  {
+    titleAr: 'مراجعة الحضور والرواتب',
+    titleEn: 'Attendance & Payroll',
+    href: '/admin/attendance-review',
+    icon: ClipboardCheck,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الموظفين',
+    titleEn: 'Employees',
+    href: '/admin/employees',
+    icon: Users,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الفروع والورديات',
+    titleEn: 'Branches & Shifts',
+    href: '/admin/branches',
+    icon: Building2,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الأدوار',
+    titleEn: 'Roles',
+    href: '/admin/roles',
+    icon: Shield,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'التوظيف واستمارات التقديم',
+    titleEn: 'Recruitment',
+    href: '/admin/recruitment',
+    icon: Briefcase,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'اعتماد الإجازات والطلبات',
+    titleEn: 'Leave Approvals',
+    href: '/admin/leave-requests',
+    icon: CheckCircle2,
+    adminOnly: true,
+  },
+];
+
+export default function Sidebar({ locale: propLocale }: SidebarProps) {
+  const pathname = usePathname() || '';
   const router = useRouter();
+  const params = useParams();
 
-  const [activeTab, setActiveTab] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const locale = propLocale || (params?.locale as string) || 'ar';
+  const isRtl = locale === 'ar';
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState('مدير النظام');
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [isOpenMobile, setIsOpenMobile] = useState(false);
 
-  const [regFullName, setRegFullName] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirmPassword, setRegConfirmPassword] = useState('');
-
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMsg('');
-    setLoading(true);
-
+  useEffect(() => {
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: username.trim(), password: password.trim() }),
-      });
+      const storedName = localStorage.getItem('userName') || '';
+      const storedRole = localStorage.getItem('userRole') || 'مدير النظام';
+      const permsRaw = localStorage.getItem('userPermissions') || '[]';
+      const perms: string[] = JSON.parse(permsRaw);
 
-      const data = await res.json();
+      setUserName(storedName);
+      setUserRole(storedRole);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials'));
-      }
-
-      const user = data.user;
-
-      localStorage.clear();
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userId', String(user.id));
-      localStorage.setItem('userName', user.name);
-      localStorage.setItem('userPhone', user.phone);
-      localStorage.setItem('userRole', user.role);
-      localStorage.setItem('userBranchId', user.branchId ? String(user.branchId) : '');
-      localStorage.setItem('userBranchName', user.branchName || '');
-      localStorage.setItem('userPermissions', JSON.stringify(user.permissions || []));
-      localStorage.setItem('isOnboarded', String(user.isOnboarded));
-
-      const perms: string[] = user.permissions || [];
-      const isAdmin =
+      const hasAdminPrivilege =
         perms.includes('*') ||
-        user.role === 'مدير النظام' ||
-        user.role === 'SUPER_ADMIN' ||
-        user.role === 'مدير فرع';
+        storedRole === 'SUPER_ADMIN' ||
+        storedRole === 'مدير النظام' ||
+        storedRole === 'مدير فرع' ||
+        perms.includes('dashboard.view');
 
-      if (isAdmin || perms.includes('dashboard.view')) {
-        router.push(`/${locale}/admin/dashboard`);
-      } else {
-        router.push(`/${locale}/attendance`);
-      }
-    } catch (err: any) {
-      setError(err.message || (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
-    } finally {
-      setLoading(false);
+      setIsAdmin(hasAdminPrivilege);
+    } catch {
+      setIsAdmin(true);
     }
-  };
+  }, []);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccessMsg('');
-
-    if (regPassword !== regConfirmPassword) {
-      setError(isRtl ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match');
-      return;
-    }
-
-    setLoading(true);
-
+  const handleLogout = () => {
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: regFullName.trim(),
-          phone: regPhone.trim(),
-          password: regPassword.trim(),
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || (isRtl ? 'فشل إنشاء الحساب' : 'Registration failed'));
-      }
-
-      setSuccessMsg(data.message);
-      setUsername(regPhone.trim());
-      setPassword(regPassword.trim());
-
-      setTimeout(() => {
-        setActiveTab('LOGIN');
-      }, 1500);
-    } catch (err: any) {
-      setError(err.message || (isRtl ? 'فشل إنشاء الحساب' : 'Registration failed'));
-    } finally {
-      setLoading(false);
+      localStorage.clear();
+      router.push(`/${locale}/login`);
+      router.refresh();
+    } catch {
+      window.location.href = `/${locale}/login`;
     }
   };
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.adminOnly) return true;
+    return isAdmin;
+  });
 
   return (
-    <div
-      className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
-      dir={isRtl ? 'rtl' : 'ltr'}
-    >
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[100px] pointer-events-none" />
+    <>
+      {/* زر الموبايل للشاشات الصغيرة */}
+      <button
+        type="button"
+        onClick={() => setIsOpenMobile(!isOpenMobile)}
+        className="fixed top-4 right-4 z-50 rounded-xl bg-slate-900 border border-slate-800 p-2 text-slate-300 md:hidden shadow-lg cursor-pointer"
+        aria-label="Toggle Menu"
+      >
+        {isOpenMobile ? <X size={20} /> : <Menu size={20} />}
+      </button>
 
-      <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <img
-            src="/Logo.png"
-            alt="L-K Shift Logo"
-            className="h-20 w-auto mb-3 drop-shadow-xl mix-blend-screen object-contain"
-          />
-          <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
-          <p className="text-gray-400 text-xs mt-2 font-medium">
-            {isRtl ? 'نظام إدارة الحضور والانصراف والورديات الميدانية' : 'Attendance & Shift Management System'}
-          </p>
+      {isOpenMobile && (
+        <div
+          onClick={() => setIsOpenMobile(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+        />
+      )}
+
+      {/* السايدبار المعتمد */}
+      <aside
+        className={`fixed inset-y-0 ${
+          isRtl ? 'right-0 border-l' : 'left-0 border-r'
+        } z-40 flex w-72 shrink-0 flex-col justify-between border-slate-200 bg-white dark:border-white/5 dark:bg-[#0c0e18] transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
+          isOpenMobile
+            ? 'translate-x-0'
+            : isRtl
+            ? 'translate-x-full'
+            : '-translate-x-full'
+        }`}
+        dir={isRtl ? 'rtl' : 'ltr'}
+      >
+        {/* الترويسة العلوية للقائمة والشعار */}
+        <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
+          <Link
+            href={`/${locale}/profile`}
+            className="flex items-center gap-3.5 group cursor-pointer"
+            title="فتح البيانات الشخصية"
+          >
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-1.5 shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+              <img
+                src="/Logo.png"
+                alt="L-K Shift Logo"
+                className="h-full w-full object-contain filter drop-shadow-sm brightness-110"
+              />
+            </div>
+            <div>
+              <h2 className="text-base font-black tracking-wide text-slate-900 dark:text-white group-hover:text-orange-600 transition">
+                L-K Shift
+              </h2>
+              <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
+                {userRole || 'مدير النظام'}
+              </span>
+            </div>
+          </Link>
         </div>
 
-        <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-7 sm:p-8 rounded-[2rem] shadow-2xl">
-          <div className="flex rounded-2xl bg-black/40 p-1 mb-6 border border-white/5">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('LOGIN');
-                setError('');
-                setSuccessMsg('');
-              }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'LOGIN'
-                  ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {isRtl ? 'تسجيل الدخول' : 'Sign In'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('REGISTER');
-                setError('');
-                setSuccessMsg('');
-              }}
-              className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                activeTab === 'REGISTER'
-                  ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {isRtl ? 'إنشاء حساب موظف' : 'New Account'}
-            </button>
-          </div>
+        {/* روابط التنقل */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-1.5 custom-scrollbar">
+          {visibleNavItems.map((item) => {
+            const Icon = item.icon;
+            const fullHref = `/${locale}${item.href}`;
+            const isActive =
+              pathname === fullHref ||
+              (item.href !== '/admin/dashboard' &&
+                item.href !== '/attendance' &&
+                pathname.startsWith(fullHref));
 
-          {error && (
-            <div className="mb-5 p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs text-center font-semibold leading-relaxed">
-              {error}
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="mb-5 p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs text-center font-semibold leading-relaxed">
-              {successMsg}
-            </div>
-          )}
-
-          {activeTab === 'LOGIN' ? (
-            <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'رقم التليفون (اسم المستخدم)' : 'Phone Number'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoComplete="off"
-                  name="login_phone_field_lk"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder={isRtl ? 'أدخل رقم الهاتف المسجل' : '01xxxxxxxxx'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left text-sm"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'كلمة المرور' : 'Password'}
-                </label>
-                <input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  name="login_pwd_field_lk"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
-                  dir="ltr"
-                />
-              </div>
-
-              <div className="flex justify-end pt-0.5">
-                <Link
-                  href={`/${locale}/forgot-password`}
-                  className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium"
-                >
-                  {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
-                </Link>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer"
+            return (
+              <Link
+                key={item.href}
+                href={fullHref}
+                onClick={() => setIsOpenMobile(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-lg shadow-orange-500/20 font-black'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5'
+                }`}
               >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    {isRtl ? 'تسجيل الدخول' : 'Sign In'}
-                    <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
-                  </>
-                )}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4" autoComplete="off">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'الاسم رباعي' : 'Full Name'} <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  autoComplete="off"
-                  value={regFullName}
-                  onChange={(e) => setRegFullName(e.target.value)}
-                  placeholder={isRtl ? 'أدخل اسمك رباعي' : 'Enter full name'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-sm"
+                <Icon
+                  size={18}
+                  className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'رقم الهاتف (اسم المستخدم)' : 'Phone Number'} <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  autoComplete="off"
-                  value={regPhone}
-                  onChange={(e) => setRegPhone(e.target.value)}
-                  placeholder="01xxxxxxxxx"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left text-sm"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'كلمة المرور' : 'Password'} <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="6 أحرف أو أرقام على الأقل"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'تأكيد كلمة المرور' : 'Confirm Password'} <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={regConfirmPassword}
-                  onChange={(e) => setRegConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
-                  dir="ltr"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-70 cursor-pointer"
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    {isRtl ? 'إنشاء حساب موظف جديد' : 'Register Account'}
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          <div className="mt-6 pt-4 border-t border-white/5 text-center text-[11px] text-gray-400 flex flex-col items-center gap-1">
-            <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
-            <span className="font-semibold text-orange-400/80">Developed by Omar Abd Elhalim</span>
-          </div>
+                <span className="flex-1">{isRtl ? item.titleAr : item.titleEn}</span>
+                {isActive && <ChevronRight size={14} className={isRtl ? 'rotate-180' : ''} />}
+              </Link>
+            );
+          })}
         </div>
-      </div>
-    </div>
+
+        {/* زر تسجيل الخروج */}
+        <div className="border-t border-slate-100 p-4 dark:border-white/5">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-500 hover:bg-rose-500/20 transition-all cursor-pointer"
+          >
+            <LogOut size={16} />
+            <span>{isRtl ? 'تسجيل الخروج' : 'Sign Out'}</span>
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
+
+export { Sidebar };
