@@ -63,9 +63,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
       const isAdmin = perms.includes('*') || user.role === 'مدير النظام' || user.role === 'SUPER_ADMIN';
 
       if (isAdmin || perms.includes('dashboard.view')) {
-        router.push(`/${locale}/admin/dashboard`);
-      } else {
-        router.push(`/${locale}/attendance`);
+        router.push(`/${locale}/admin/dashboard`); } else { router.push(`/${locale}/attendance`);
       }
     } catch (err: any) {
       setError(err.message || (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
@@ -128,9 +126,13 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/20 rounded-full blur-[100px] animate-pulse delay-1000 pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        {/* اللوجو الأصلي */}
+        {/* اللوجو مع إخفاء خلفيته برمجياً في المتصفح */}
         <div className="mb-6 flex flex-col items-center">
-          <img src="/Logo.png" alt="L-K Shift Logo" className="h-20 w-auto mb-4 drop-shadow-xl" />
+          <img
+            src="/Logo.png"
+            alt="L-K Shift Logo"
+            className="h-20 w-auto mb-4 drop-shadow-xl mix-blend-screen object-contain"
+          />
           <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
           <p className="text-gray-400 text-sm mt-2">
             {isRtl ? 'نظام إدارة الحضور والورديات' : 'Attendance & Shift Management'}
@@ -221,24 +223,7 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
               {/* رابط استعادة كلمة المرور */}
               <div className="flex justify-end pt-0.5">
                 <Link
-                  href={`/${locale}/forgot-password`}
-                  className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium"
-                >
-                  {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
-                </Link>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer"
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    {isRtl ? 'دخول' : 'Sign In'}
-                    <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
+                  href={`/${locale}/forgot-password`} className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium" > {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'} </Link> </div>  <button type="submit" disabled={loading} className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer" > {loading ? ( <Loader2 className="w-5 h-5 animate-spin" /> ) : ( <> {isRtl ? 'دخول' : 'Sign In'} <ArrowRight className={`w-4 h-4 ${isRtl ? 'rotate-180' : ''}`} />
                   </>
                 )}
               </button>
