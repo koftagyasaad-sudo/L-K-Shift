@@ -13,7 +13,7 @@ import {
   Shield,
   Briefcase,
   CheckCircle2,
-  User,
+  UserCheck,
   LogOut,
   ChevronRight,
   Menu,
@@ -45,6 +45,13 @@ const navItems: NavItem[] = [
     titleEn: 'Attendance',
     href: '/attendance',
     icon: Clock,
+  },
+  {
+    titleAr: 'الملف الشخصي وبياناتي (HR)',
+    titleEn: 'My Profile & HR Form',
+    href: '/profile',
+    icon: UserCheck,
+    adminOnly: false,
   },
   {
     titleAr: 'مراجعة الحضور والرواتب',
@@ -93,13 +100,6 @@ const navItems: NavItem[] = [
     href: '/admin/leave-requests',
     icon: CheckCircle2,
     adminOnly: true,
-  },
-  {
-    titleAr: 'الملف الشخصي وبياناتي',
-    titleEn: 'My Profile',
-    href: '/profile',
-    icon: User,
-    adminOnly: false,
   },
 ];
 
@@ -156,19 +156,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
 
   return (
     <>
-      {/* فلتر برمجي لعزل وتفريغ الخلفية الداكنة على الواجهات الفاتحة دون التأثير على الأندرويد */}
-      <svg className="sr-only" aria-hidden="true">
-        <filter id="remove-dark-bg" colorInterpolationFilters="sRGB">
-          <feColorMatrix
-            type="matrix"
-            values="1 0 0 0 0
-                    0 1 0 0 0
-                    0 0 1 0 0
-                    0.299 0.587 0.114 0 0"
-          />
-        </filter>
-      </svg>
-
       {/* زر القائمة للشاشات الصغيرة */}
       <button
         type="button"
@@ -202,14 +189,13 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
-        {/* الترويسة مع شعار L-K Shift بهوية متناسقة وأنيقة */}
+        {/* الترويسة العلوية - تنقل الموظف مباشرة لصفحته الشخصية */}
         <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
           <Link
             href={`/${locale}/profile`}
             className="flex items-center gap-3.5 group cursor-pointer"
-            title="فتح الملف الشخصي"
+            title="فتح استمارة ملفي الشخصي وتغيير الباسورد"
           >
-            {/* حاوية الشعار المتناسقة */}
             <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-1.5 shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
               <img
                 src="/Logo.png"
@@ -228,7 +214,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
           </Link>
         </div>
 
-        {/* قائمة الروابط وبداخلها رابط الملف الشخصي */}
+        {/* قائمة الروابط وبداخلها رابط الملف الشخصي في الترتيب الثالث مباشرة */}
         <div className="flex-1 overflow-y-auto px-4 py-5 space-y-1.5 custom-scrollbar">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
