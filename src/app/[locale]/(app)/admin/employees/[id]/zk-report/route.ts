@@ -52,7 +52,7 @@ export async function GET(
     const employee = empRows[0];
     const empCode = String(employee.employeeCode || '').trim();
 
-    // 2. استرجاع سجلات الحضور بدون COALESCE المسبب للخطأ
+    // 2. استرجاع سجلات الحضور بدون دمج الأنواع المسبب للخطأ
     const logsRaw = await db.execute(sql`
       SELECT 
         TO_CHAR(work_date, 'YYYY-MM-DD') as "workDate",
