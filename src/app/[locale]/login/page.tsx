@@ -13,11 +13,9 @@ export default function LoginPage() {
 
   const [activeTab, setActiveTab] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
 
-  // حقول الدخول
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  // حقول التسجيل الجديد
   const [regFullName, setRegFullName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -27,7 +25,6 @@ export default function LoginPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // معالجة تسجيل الدخول
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -79,7 +76,6 @@ export default function LoginPage() {
     }
   };
 
-  // معالجة إنشاء حساب موظف جديد
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -128,12 +124,10 @@ export default function LoginPage() {
       className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* تأثيرات الإضاءة الخلفية */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] animate-pulse pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[100px] animate-pulse delay-1000 pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        {/* الترويسة والشعار */}
         <div className="mb-6 flex flex-col items-center text-center">
           <img
             src="/Logo.png"
@@ -141,15 +135,12 @@ export default function LoginPage() {
             className="h-20 w-auto mb-3 drop-shadow-xl mix-blend-screen object-contain"
           />
           <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
-
           <p className="text-gray-400 text-xs mt-2 font-medium">
             {isRtl ? 'نظام إدارة الحضور والانصراف والورديات الميدانية' : 'Attendance & Shift Management System'}
           </p>
         </div>
 
-        {/* الكارد الزجاجي للنموذج */}
         <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-7 sm:p-8 rounded-[2rem] shadow-2xl">
-          {/* تبويبات الدخول والتسجيل */}
           <div className="flex rounded-2xl bg-black/40 p-1 mb-6 border border-white/5">
             <button
               type="button"
@@ -195,9 +186,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* نموذج تسجيل الدخول */}
           {activeTab === 'LOGIN' ? (
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   {isRtl ? 'رقم التليفون (اسم المستخدم)' : 'Phone Number'}
@@ -205,6 +195,8 @@ export default function LoginPage() {
                 <input
                   type="text"
                   required
+                  autoComplete="off"
+                  name="login_phone_field_lk"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={isRtl ? 'أدخل رقم الهاتف المسجل' : '01xxxxxxxxx'}
@@ -220,6 +212,8 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
+                  name="login_pwd_field_lk"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -253,8 +247,7 @@ export default function LoginPage() {
               </button>
             </form>
           ) : (
-            /* نموذج تسجيل حساب موظف جديد */
-            <form onSubmit={handleRegister} className="space-y-4">
+            <form onSubmit={handleRegister} className="space-y-4" autoComplete="off">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   {isRtl ? 'الاسم رباعي' : 'Full Name'} <span className="text-orange-500">*</span>
@@ -262,6 +255,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   required
+                  autoComplete="off"
                   value={regFullName}
                   onChange={(e) => setRegFullName(e.target.value)}
                   placeholder={isRtl ? 'أدخل اسمك رباعي' : 'Enter full name'}
@@ -276,6 +270,7 @@ export default function LoginPage() {
                 <input
                   type="tel"
                   required
+                  autoComplete="off"
                   value={regPhone}
                   onChange={(e) => setRegPhone(e.target.value)}
                   placeholder="01xxxxxxxxx"
@@ -291,6 +286,7 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   placeholder="6 أحرف أو أرقام على الأقل"
@@ -306,6 +302,7 @@ export default function LoginPage() {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
                   placeholder="••••••••"
@@ -331,7 +328,6 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* التذييل مع Developed by Omar Abd Elhalim */}
           <div className="mt-6 pt-4 border-t border-white/5 text-center text-[11px] text-gray-400 flex flex-col items-center gap-1">
             <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
             <span className="font-semibold text-orange-400/80">Developed by Omar Abd Elhalim</span>
