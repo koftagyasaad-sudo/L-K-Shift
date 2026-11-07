@@ -1,231 +1,146 @@
-"use server";
+'use server';
 
-import { db } from "@/db";
-import { branches } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { db } from '@/db';
+import { branches } from '@/db/schema';
+import { eq, desc } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 
-export type BranchData = {
-  id: string;
-  name: string;
-  nameAr?: string | null;
+export interface BranchData {
+  id: number;
+  nameAr: string;
   nameEn?: string | null;
+  type?: 'BRANCH' | 'CENTRAL_KITCHEN' | string;
   address?: string | null;
-  latitude?: string | number | null;
-  longitude?: string | number | null;
-  geofenceRadius?: number | null;
-  radiusMeters?: number | null;
-  isActive?: boolean | null;
-  googleMapsUrl?: string | null;
-  phone?: string | null;
-  managerName?: string | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-};
-
-function parseCoordinate(value: unknown): string | null {
-  if (value === null || value === undefined || value === "") return null;
-  const str = String(value).trim();
-  const num = parseFloat(str);
-  return isNaN(num) ? null : String(num);
-}
-
-function parseRadius(value: unknown): number {
-  if (typeof value === "number" && !isNaN(value)) return value;
-  if (typeof value === "string") {
-    const parsed = parseInt(value, 10);
-    if (!isNaN(parsed)) return parsed;
-  }
-  return 100;
+  latitude: number;
+  longitude: number;
+  geofenceRadius: number;
+  qrSecretKey?: string;
+  qrRefreshSec?: number;
+  wifiSsid?: string | null;
+  shiftSchedule?: string | null;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  shiftName?: string | null;
+  isActive: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export async function getBranchesAction(): Promise<BranchData[]> {
   try {
     const rows = await db.select().from(branches).orderBy(desc(branches.createdAt));
-
-    return (rows || []).map((b: any) => {
-      const nameAr = b.nameAr || b.name || "فرع بدون اسم";
-      const nameEn = b.nameEn || "";
-      const displayName = b.name || nameAr || nameEn || "فرع بدون اسم";
-      const radius = parseRadius(b.radiusMeters ?? b.geofenceRadius);
-
-      return {
-        id: String(b.id),
-        name: displayName,
-        nameAr,
-        nameEn,
-        address: b.address || "",
-        latitude: parseCoordinate(b.latitude),
-        longitude: parseCoordinate(b.longitude),
-        geofenceRadius: radius,
-        radiusMeters: radius,
-        isActive: b.isActive !== false && b.isActive !== 0,
-        googleMapsUrl: b.googleMapsUrl || b.mapsUrl || "",
-        phone: b.phone || "",
-        managerName: b.managerName || "",
-        createdAt: b.createdAt ? String(b.createdAt) : null,
-        updatedAt: b.updatedAt ? String(b.updatedAt) : null,
-      };
-    });
+    return rows as unknown as BranchData[];
   } catch (error) {
-    console.error("getBranchesAction error:", error);
+    console.error('Error fetching branches:', error);
     return [];
   }
 }
 
-export async function getBranchByIdAction(id: string): Promise<BranchData | null> {
+export async function getBranchByIdAction(id: string | number): Promise<BranchData | null> {
   try {
-    const rows = await db.select().from(branches).where(eq(branches.id, id)).limit(1);
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return null;
+
+    const rows = await db
+      .select()
+      .from(branches)
+      .where(eq(branches.id, numericId))
+      .limit(1);
+
     if (!rows || rows.length === 0) return null;
 
     const b = rows[0] as any;
-    const nameAr = b.nameAr || b.name || "فرع بدون اسم";
-    const nameEn = b.nameEn || "";
-    const displayName = b.name || nameAr || nameEn || "فرع بدون اسم";
-    const radius = parseRadius(b.radiusMeters ?? b.geofenceRadius);
-
-    return {
-      id: String(b.id),
-      name: displayName,
-      nameAr,
-      nameEn,
-      address: b.address || "",
-      latitude: parseCoordinate(b.latitude),
-      longitude: parseCoordinate(b.longitude),
-      geofenceRadius: radius,
-      radiusMeters: radius,
-      isActive: b.isActive !== false && b.isActive !== 0,
-      googleMapsUrl: b.googleMapsUrl || b.mapsUrl || "",
-      phone: b.phone || "",
-      managerName: b.managerName || "",
-      createdAt: b.createdAt ? String(b.createdAt) : null,
-      updatedAt: b.updatedAt ? String(b.updatedAt) : null,
-    };
+    return b as BranchData;
   } catch (error) {
-    console.error("getBranchByIdAction error:", error);
+    console.error('Error fetching branch by id:', error);
     return null;
   }
 }
 
-export async function createBranchAction(payload: Record<string, any>) {
+export async function createBranchAction(data: {
+  nameAr: string;
+  nameEn?: string;
+  address?: string;
+  latitude: number;
+  longitude: number;
+  geofenceRadius?: number;
+  shiftSchedule?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  shiftName?: string;
+}): Promise<{ success: boolean; message?: string; branch?: any }> {
   try {
-    const name = payload.name || payload.nameAr || "فرع جديد";
-    const nameAr = payload.nameAr || name;
-    const nameEn = payload.nameEn || "";
-    const address = payload.address || "";
-    const lat = parseCoordinate(payload.latitude);
-    const lng = parseCoordinate(payload.longitude);
-    const radius = parseRadius(payload.radiusMeters ?? payload.geofenceRadius);
-    const isActive = payload.isActive !== false && payload.isActive !== 0;
-    const googleMapsUrl = payload.googleMapsUrl || payload.mapsUrl || "";
-    const phone = payload.phone || "";
-    const managerName = payload.managerName || "";
-
-    const [inserted] = await db
+    const inserted = await db
       .insert(branches)
       .values({
-        name,
-        nameAr,
-        nameEn,
-        address,
-        latitude: lat,
-        longitude: lng,
-        geofenceRadius: radius,
-        radiusMeters: radius,
-        isActive,
-        googleMapsUrl,
-        phone,
-        managerName,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as any)
+        nameAr: data.nameAr,
+        nameEn: data.nameEn || data.nameAr,
+        address: data.address || '',
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+        geofenceRadius: data.geofenceRadius ? Number(data.geofenceRadius) : 100,
+        shiftSchedule: data.shiftSchedule || '',
+        shiftStartTime: data.shiftStartTime || '',
+        shiftEndTime: data.shiftEndTime || '',
+        shiftName: data.shiftName || '',
+        qrSecretKey: `lk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        qrRefreshSec: 60,
+        isActive: true,
+      })
       .returning();
 
-    revalidatePath("/[locale]/(app)/admin/branches", "page");
-    return { success: true, data: inserted };
+    revalidatePath('/[locale]/admin/branches', 'page');
+    return { success: true, branch: inserted[0] };
   } catch (error: any) {
-    console.error("createBranchAction error:", error);
-    return { success: false, error: error.message || "فشل إنشاء الفرع" };
+    console.error('Error creating branch:', error);
+    return { success: false, message: error?.message || 'فشل إضافة الفرع' };
   }
 }
 
-export async function updateBranchAction(id: string, payload: Record<string, any>) {
+export async function updateBranchAction(
+  id: string | number,
+  data: Partial<BranchData>
+): Promise<{ success: boolean; message?: string }> {
   try {
-    const name = payload.name || payload.nameAr || "فرع";
-    const nameAr = payload.nameAr || name;
-    const nameEn = payload.nameEn || "";
-    const address = payload.address || "";
-    const lat = parseCoordinate(payload.latitude);
-    const lng = parseCoordinate(payload.longitude);
-    const radius = parseRadius(payload.radiusMeters ?? payload.geofenceRadius);
-    const isActive = payload.isActive !== false && payload.isActive !== 0;
-    const googleMapsUrl = payload.googleMapsUrl || payload.mapsUrl || "";
-    const phone = payload.phone || "";
-    const managerName = payload.managerName || "";
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return { success: false, message: 'معرف الفرع غير صالح' };
 
     await db
       .update(branches)
       .set({
-        name,
-        nameAr,
-        nameEn,
-        address,
-        latitude: lat,
-        longitude: lng,
-        geofenceRadius: radius,
-        radiusMeters: radius,
-        isActive,
-        googleMapsUrl,
-        phone,
-        managerName,
+        ...(data.nameAr && { nameAr: data.nameAr }),
+        ...(data.nameEn && { nameEn: data.nameEn }),
+        ...(data.address !== undefined && { address: data.address }),
+        ...(data.latitude !== undefined && { latitude: Number(data.latitude) }),
+        ...(data.longitude !== undefined && { longitude: Number(data.longitude) }),
+        ...(data.geofenceRadius !== undefined && { geofenceRadius: Number(data.geofenceRadius) }),
+        ...(data.shiftSchedule !== undefined && { shiftSchedule: data.shiftSchedule }),
+        ...(data.shiftStartTime !== undefined && { shiftStartTime: data.shiftStartTime }),
+        ...(data.shiftEndTime !== undefined && { shiftEndTime: data.shiftEndTime }),
+        ...(data.shiftName !== undefined && { shiftName: data.shiftName }),
+        ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
         updatedAt: new Date(),
-      } as any)
-      .where(eq(branches.id, id));
+      })
+      .where(eq(branches.id, numericId));
 
-    revalidatePath("/[locale]/(app)/admin/branches", "page");
-    revalidatePath(`/[locale]/(app)/admin/branches/${id}`, "page");
+    revalidatePath('/[locale]/admin/branches', 'page');
     return { success: true };
   } catch (error: any) {
-    console.error("updateBranchAction error:", error);
-    return { success: false, error: error.message || "فشل تحديث بيانات الفرع" };
+    console.error('Error updating branch:', error);
+    return { success: false, message: error?.message || 'فشل تحديث الفرع' };
   }
 }
 
-export async function saveBranchAction(payload: Record<string, any>) {
-  if (payload.id && String(payload.id).trim() !== "") {
-    return await updateBranchAction(String(payload.id), payload);
-  } else {
-    return await createBranchAction(payload);
-  }
-}
-
-export async function toggleBranchStatusAction(id: string, currentStatus?: boolean) {
+export async function deleteBranchAction(id: string | number): Promise<{ success: boolean; message?: string }> {
   try {
-    const nextStatus = currentStatus !== undefined ? !currentStatus : true;
-    await db
-      .update(branches)
-      .set({
-        isActive: nextStatus,
-        updatedAt: new Date(),
-      } as any)
-      .where(eq(branches.id, id));
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return { success: false, message: 'معرف الفرع غير صالح' };
 
-    revalidatePath("/[locale]/(app)/admin/branches", "page");
-    return { success: true, isActive: nextStatus };
-  } catch (error: any) {
-    console.error("toggleBranchStatusAction error:", error);
-    return { success: false, error: error.message || "فشل تغيير حالة الفرع" };
-  }
-}
-
-export async function deleteBranchAction(id: string) {
-  try {
-    await db.delete(branches).where(eq(branches.id, id));
-
-    revalidatePath("/[locale]/(app)/admin/branches", "page");
+    await db.delete(branches).where(eq(branches.id, numericId));
+    revalidatePath('/[locale]/admin/branches', 'page');
     return { success: true };
   } catch (error: any) {
-    console.error("deleteBranchAction error:", error);
-    return { success: false, error: error.message || "فشل حذف الفرع" };
+    console.error('Error deleting branch:', error);
+    return { success: false, message: error?.message || 'فشل حذف الفرع' };
   }
 }
