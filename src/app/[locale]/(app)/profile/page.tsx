@@ -1,31 +1,81 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { 
-  User, Phone, Lock, CreditCard, MapPin, 
-  CheckCircle2, AlertCircle, Save, Loader2, FileText 
+import {
+  User,
+  Phone,
+  Lock,
+  CreditCard,
+  MapPin,
+  CheckCircle2,
+  AlertCircle,
+  Save,
+  Loader2,
+  Camera,
+  Upload,
+  Briefcase,
+  GraduationCap,
+  ShieldCheck,
+  HeartHandshake,
+  DollarSign,
+  Calendar,
+  Eye,
+  EyeOff,
+  Trash2,
 } from 'lucide-react';
 
 export default function EmployeeProfilePage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string>('');
 
-  // استمارة الموظف
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [nationalId, setNationalId] = useState('');
-  const [address, setAddress] = useState('');
-  const [emergencyContact, setEmergencyContact] = useState('');
+  // 1. الصورة الشخصية
+  const [profilePhoto, setProfilePhoto] = useState<string>('');
 
-  // كلمة المرور
+  // 2. البيانات الشخصية والمدنية
+  const [fullName, setFullName] = useState('');
+  const [fullNameEn, setFullNameEn] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState<'MALE' | 'FEMALE' | ''>('MALE');
+  const [maritalStatus, setMaritalStatus] = useState('');
+  const [militaryStatus, setMilitaryStatus] = useState('');
+
+  // 3. الهوية والتأمينات
+  const [nationalId, setNationalId] = useState('');
+  const [nationalIdExpiry, setNationalIdExpiry] = useState('');
+  const [socialInsuranceNo, setSocialInsuranceNo] = useState('');
+  const [drivingLicense, setDrivingLicense] = useState('');
+
+  // 4. الاتصال والإقامة والطوارئ
+  const [phone, setPhone] = useState('');
+  const [phoneAlt, setPhoneAlt] = useState('');
+  const [address, setAddress] = useState('');
+  const [emergencyName, setEmergencyName] = useState('');
+  const [emergencyRelation, setEmergencyRelation] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+
+  // 5. بيانات صرف المستحقات والرواتب
+  const [payoutMethod, setPayoutMethod] = useState<'INSTAPAY' | 'WALLET' | 'BANK' | 'CASH'>('INSTAPAY');
+  const [payoutAccount, setPayoutAccount] = useState('');
+  const [bankName, setBankName] = useState('');
+
+  // 6. المؤهلات والخبرات
+  const [educationLevel, setEducationLevel] = useState('');
+  const [educationField, setEducationField] = useState('');
+  const [graduationYear, setGraduationYear] = useState('');
+
+  // 7. تغيير كلمة المرور (مع اشتراط كلمة المرور الحالية)
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -33,6 +83,7 @@ export default function EmployeeProfilePage() {
     const storedId = localStorage.getItem('userId') || '';
     const storedPhone = localStorage.getItem('userPhone') || '';
     const storedName = localStorage.getItem('userName') || '';
+
     setUserId(storedId);
     setFullName(storedName);
     setPhone(storedPhone);
@@ -45,11 +96,29 @@ export default function EmployeeProfilePage() {
           const data = await res.json();
           const user = Array.isArray(data) ? data.find((u: any) => String(u.id) === storedId) : data;
           if (user) {
-            if (user.fullName || user.name) setFullName(user.fullName || user.name);
-            if (user.phone) setPhone(user.phone);
+            setFullName(user.fullName || user.fullNameAr || user.name || '');
+            setFullNameEn(user.fullNameEn || '');
+            setPhone(user.phone || '');
+            setPhoneAlt(user.phoneAlt || '');
             setNationalId(user.nationalId || user.national_id || '');
+            setNationalIdExpiry(user.nationalIdExpiry ? String(user.nationalIdExpiry).slice(0, 10) : '');
+            setSocialInsuranceNo(user.socialInsuranceNo || '');
+            setDrivingLicense(user.drivingLicense || '');
+            setBirthDate(user.birthDate ? String(user.birthDate).slice(0, 10) : '');
+            setGender(user.gender || 'MALE');
+            setMaritalStatus(user.maritalStatus || '');
+            setMilitaryStatus(user.militaryStatus || '');
             setAddress(user.address || '');
-            setEmergencyContact(user.emergencyContact || user.emergency_contact || '');
+            setEmergencyName(user.emergencyName || '');
+            setEmergencyRelation(user.emergencyRelation || '');
+            setEmergencyPhone(user.emergencyPhone || user.emergencyContact || '');
+            setPayoutMethod(user.payoutMethod || 'INSTAPAY');
+            setPayoutAccount(user.payoutAccount || '');
+            setBankName(user.bankName || '');
+            setEducationLevel(user.educationLevel || '');
+            setEducationField(user.educationField || '');
+            setGraduationYear(user.graduationYear ? String(user.graduationYear) : '');
+            setProfilePhoto(user.avatarUrl || user.photoUrl || '');
           }
         }
       } catch (err) {
@@ -66,17 +135,46 @@ export default function EmployeeProfilePage() {
     }
   }, []);
 
+  // معالجة رفع الصورة الشخصية
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 4 * 1024 * 1024) {
+      setStatusMsg({ type: 'err', text: 'حجم الصورة يجب ألا يتجاوز 4 ميجابايت' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      setProfilePhoto(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMsg(null);
 
-    if (newPassword && newPassword !== confirmPassword) {
-      setStatusMsg({ type: 'err', text: 'كلمة المرور وتأكيدها غير متطابقين' });
-      return;
+    // التحقق من كلمة المرور
+    if (newPassword) {
+      if (!currentPassword) {
+        setStatusMsg({ type: 'err', text: 'يرجى إدخال كلمة المرور الحالية لتأكيد تغيير كلمة المرور' });
+        return;
+      }
+      if (newPassword.length < 6) {
+        setStatusMsg({ type: 'err', text: 'كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف أو أرقام' });
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setStatusMsg({ type: 'err', text: 'كلمة المرور الجديدة وتأكيدها غير متطابقين' });
+        return;
+      }
     }
 
     if (nationalId && nationalId.trim().length !== 14) {
-      setStatusMsg({ type: 'err', text: 'الرقم القومي يجب أن يتكون من 14 رقماً' });
+      setStatusMsg({ type: 'err', text: 'الرقم القومي يجب أن يتكون من 14 رقماً بدقة' });
       return;
     }
 
@@ -88,11 +186,30 @@ export default function EmployeeProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
-          phone: phone.trim(),
           fullName: fullName.trim(),
+          fullNameEn: fullNameEn.trim(),
+          phone: phone.trim(),
+          phoneAlt: phoneAlt.trim(),
           nationalId: nationalId.trim(),
+          nationalIdExpiry,
+          socialInsuranceNo: socialInsuranceNo.trim(),
+          drivingLicense,
+          birthDate,
+          gender,
+          maritalStatus,
+          militaryStatus,
           address: address.trim(),
-          emergencyContact: emergencyContact.trim(),
+          emergencyName: emergencyName.trim(),
+          emergencyRelation: emergencyRelation.trim(),
+          emergencyPhone: emergencyPhone.trim(),
+          payoutMethod,
+          payoutAccount: payoutAccount.trim(),
+          bankName: bankName.trim(),
+          educationLevel,
+          educationField: educationField.trim(),
+          graduationYear,
+          profilePhoto,
+          currentPassword: currentPassword ? currentPassword.trim() : null,
           newPassword: newPassword ? newPassword.trim() : null,
         }),
       });
@@ -102,12 +219,14 @@ export default function EmployeeProfilePage() {
 
       setStatusMsg({
         type: 'ok',
-        text: 'تم حفظ استمارة بياناتك بنجاح، وتحديث كلمة المرور بحسابك!',
+        text: 'تم حفظ كافة بيانات استمارة الموارد البشرية وتحديث ملفك الشخصي بنجاح!',
       });
 
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       localStorage.setItem('userName', fullName.trim());
+      localStorage.setItem('userPhone', phone.trim());
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء حفظ البيانات' });
     } finally {
@@ -119,27 +238,80 @@ export default function EmployeeProfilePage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-        <p className="text-xs font-semibold text-slate-400">جاري تحميل بياناتك الشخصية...</p>
+        <p className="text-xs font-semibold text-slate-400">جاري تحميل استمارة ملفك الشخصي...</p>
       </div>
     );
   }
 
+  const initialLetter = fullName ? fullName.trim().charAt(0) : 'م';
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
-      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
-            <FileText size={24} />
+    <div className="max-w-4xl mx-auto space-y-6 pb-16 text-slate-200" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* 1. الترويسة الرئيسية والتقاط/رفع الصورة الشخصية */}
+      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center sm:items-start gap-6">
+        {/* حاوية الصورة الشخصية */}
+        <div className="relative group shrink-0">
+          <div className="h-28 w-28 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-slate-900 shadow-xl flex items-center justify-center">
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Avatar" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-4xl font-black text-white">{initialLetter}</span>
+            )}
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white">الملف الشخصي واستمارة (HR)</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              تحديث بياناتك الشخصية والرقم القومي، وتعيين كلمة المرور الخاصة بحسابك
-            </p>
+
+          {/* أزرار التحكم في الصورة */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute -bottom-2 -left-2 bg-gradient-to-r from-orange-500 to-rose-600 text-white p-2.5 rounded-2xl shadow-lg hover:scale-105 transition-all cursor-pointer"
+            title="تحميل / التقاط صورة شخصية"
+          >
+            <Camera size={16} />
+          </button>
+
+          {profilePhoto && (
+            <button
+              type="button"
+              onClick={() => setProfilePhoto('')}
+              className="absolute -top-2 -left-2 bg-rose-600 text-white p-1.5 rounded-xl shadow hover:bg-rose-700 transition cursor-pointer"
+              title="إزالة الصورة"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoSelect}
+          />
+        </div>
+
+        {/* معلومات سريعة */}
+        <div className="flex-1 text-center sm:text-right">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black text-white">{fullName || 'الملف الشخصي'}</h1>
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
+              <ShieldCheck size={13} /> موظف معتمد
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+            استمارة الموارد البشرية الرسمية (HR Employee Record) - تشمل بيانات الهوية، التأمينات، حساب تحويل الراتب، وأمان الحساب.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs font-mono text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Phone size={13} className="text-orange-500" /> {phone || 'بدون رقم'}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <CreditCard size={13} className="text-emerald-500" /> {nationalId || 'الرقم القومي غير مسجل'}
+            </span>
           </div>
         </div>
       </div>
 
+      {/* رسائل التنبيه والنجاح */}
       {statusMsg && (
         <div
           className={`p-4 rounded-2xl flex items-center gap-3 border text-xs font-bold ${
@@ -154,28 +326,169 @@ export default function EmployeeProfilePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* القسم الأول: البيانات الشخصية والمدنية */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <User size={16} className="text-orange-500" /> البيانات الشخصية والرقم القومي
-            </h2>
+          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
+            <User size={18} className="text-orange-500" />
+            <h2 className="text-sm font-bold text-white">1. البيانات الشخصية والمدنية الأساسية</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                الاسم بالكامل (رباعي) <span className="text-rose-500">*</span>
+                الاسم بالكامل (رباعي بالعربية) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="أدخل اسمك رباعي"
+                placeholder="أدخل اسمك رباعي طبقاً للبطاقة"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                الاسم بالإنجليزية (Full Name)
+              </label>
+              <input
+                type="text"
+                value={fullNameEn}
+                onChange={(e) => setFullNameEn(e.target.value)}
+                placeholder="Full Name as in Passport"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs text-left focus:outline-none focus:border-orange-500"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تاريخ الميلاد</label>
+              <input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">النوع / الجنس</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value as any)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              >
+                <option value="MALE">ذكر</option>
+                <option value="FEMALE">أنثى</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الحالة الاجتماعية</label>
+              <select
+                value={maritalStatus}
+                onChange={(e) => setMaritalStatus(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              >
+                <option value="">-- اختر الحالة --</option>
+                <option value="أعزب">أعزب</option>
+                <option value="متزوج">متزوج</option>
+                <option value="متزوج ويعول">متزوج ويعول</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الموقف التجنيدي</label>
+              <select
+                value={militaryStatus}
+                onChange={(e) => setMilitaryStatus(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              >
+                <option value="">-- اختر الموقف --</option>
+                <option value="أدى الخدمة العسكرية">أدى الخدمة العسكرية</option>
+                <option value="إعفاء نهائي">إعفاء نهائي</option>
+                <option value="إعفاء مؤقت">إعفاء مؤقت</option>
+                <option value="تأجيل دراسي">تأجيل دراسي</option>
+                <option value="غير مطلوب (إناث)">غير مطلوب (إناث)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* القسم الثاني: بيانات الهوية والتأمينات القانونية */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
+            <CreditCard size={18} className="text-orange-500" />
+            <h2 className="text-sm font-bold text-white">2. بيانات بطاقة الرقم القومي والتأمينات الاجتماعية</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                الرقم القومي (14 رقماً) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                maxLength={14}
+                required
+                value={nationalId}
+                onChange={(e) => setNationalId(e.target.value)}
+                placeholder="299xxxxxxxxxxx"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تاريخ سريان/انتهاء البطاقة</label>
+              <input
+                type="date"
+                value={nationalIdExpiry}
+                onChange={(e) => setNationalIdExpiry(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الرقم التأميني (إن وجد)</label>
+              <input
+                type="text"
+                value={socialInsuranceNo}
+                onChange={(e) => setSocialInsuranceNo(e.target.value)}
+                placeholder="مثال: 12345678"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رخصة القيادة (إن وجدت)</label>
+              <select
+                value={drivingLicense}
+                onChange={(e) => setDrivingLicense(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              >
+                <option value="">لا يوجد رخصة قيادة</option>
+                <option value="رخصة خاصة">رخصة خاصة</option>
+                <option value="درجة ثالثة مهنية">درجة ثالثة مهنية</option>
+                <option value="درجة ثانية مهنية">درجة ثانية مهنية</option>
+                <option value="درجة أولى مهنية">درجة أولى مهنية</option>
+                <option value="رخصة دراجة نارية (موتوسيكل)">رخصة دراجة نارية (موتوسيكل)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* القسم الثالث: أرقام التواصل والعنوان وجهة الطوارئ */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
+            <Phone size={18} className="text-orange-500" />
+            <h2 className="text-sm font-bold text-white">3. بيانات الاتصال والإقامة وجهة الطوارئ المعتمدة</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                 رقم التليفون الأساسي <span className="text-rose-500">*</span>
@@ -192,81 +505,237 @@ export default function EmployeeProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                الرقم القومي بالبطاقة (14 رقماً) <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  maxLength={14}
-                  required
-                  value={nationalId}
-                  onChange={(e) => setNationalId(e.target.value)}
-                  placeholder="299xxxxxxxxxxx"
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500 pl-10"
-                  dir="ltr"
-                />
-                <CreditCard size={15} className="absolute left-3 top-3 text-slate-500" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                رقم هاتف للطوارئ
-              </label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رقم تليفون إضافي / واتساب</label>
               <input
                 type="tel"
-                value={emergencyContact}
-                onChange={(e) => setEmergencyContact(e.target.value)}
+                value={phoneAlt}
+                onChange={(e) => setPhoneAlt(e.target.value)}
                 placeholder="01xxxxxxxxx"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                العنوان التفصيلي ومحل الإقامة
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="المدينة، اسم الشارع، رقم العقار..."
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pr-10"
-                />
-                <MapPin size={15} className="absolute right-3.5 top-3 text-slate-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Lock size={16} className="text-orange-500" /> أمان الحساب وتغيير كلمة المرور
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                كلمة المرور الجديدة
-              </label>
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">العنوان ومحل الإقامة بالتفصيل</label>
               <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="أدخل كلمة مرور جديدة"
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="المدينة، اسم الشارع، رقم العقار..."
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                تأكيد كلمة المرور الجديدة
+                جهة اتصال للطوارئ (الاسم بالكامل)
               </label>
+              <input
+                type="text"
+                value={emergencyName}
+                onChange={(e) => setEmergencyName(e.target.value)}
+                placeholder="اسم الشخص للرجوع إليه"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">صلة القرابة</label>
+              <input
+                type="text"
+                value={emergencyRelation}
+                onChange={(e) => setEmergencyRelation(e.target.value)}
+                placeholder="مثال: الوالد، الزوجة، الأخ..."
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رقم هاتف الطوارئ</label>
+              <input
+                type="tel"
+                value={emergencyPhone}
+                onChange={(e) => setEmergencyPhone(e.target.value)}
+                placeholder="01xxxxxxxxx"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                dir="ltr"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* القسم الرابع: بيانات صرف المستحقات والرواتب */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
+            <DollarSign size={18} className="text-emerald-500" />
+            <h2 className="text-sm font-bold text-white">4. بيانات تحويل الرواتب وصرف المستحقات</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">طريقة التحويل المفضلة</label>
+              <select
+                value={payoutMethod}
+                onChange={(e) => setPayoutMethod(e.target.value as any)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 font-bold"
+              >
+                <option value="INSTAPAY">إنستاباي (InstaPay)</option>
+                <option value="WALLET">محفظة إلكترونية (فودافون كاش / أورنج / إتصالات / وي)</option>
+                <option value="BANK">تحويل بنكي مباشر (IBAN / حساب بنكي)</option>
+                <option value="CASH">استلام نقدي بالفرع (Cash)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                {payoutMethod === 'INSTAPAY'
+                  ? 'عنوان الدفع اللحظي (IPA) أو رقم الهاتف'
+                  : payoutMethod === 'WALLET'
+                  ? 'رقم محفظة كاش المعتمدة'
+                  : payoutMethod === 'BANK'
+                  ? 'رقم الحساب البنكي أو الـ IBAN'
+                  : 'ملاحظة الصرف'}
+              </label>
+              <input
+                type="text"
+                value={payoutAccount}
+                onChange={(e) => setPayoutAccount(e.target.value)}
+                placeholder={
+                  payoutMethod === 'INSTAPAY'
+                    ? 'username@instapay أو 01xxxxxxxxx'
+                    : payoutMethod === 'WALLET'
+                    ? '01xxxxxxxxx'
+                    : 'EGxxxxxxxxxxxxxxxxxxxx'
+                }
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-emerald-500"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                اسم البنك أو شبكة المحفظة
+              </label>
+              <input
+                type="text"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="مثال: بنك مصر / فودافون / الأهلي"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* القسم الخامس: المؤهل الدراسي والخبرات */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
+            <GraduationCap size={18} className="text-orange-500" />
+            <h2 className="text-sm font-bold text-white">5. المؤهل الدراسي وسنة التخرج</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">المستوى التعليمي</label>
+              <select
+                value={educationLevel}
+                onChange={(e) => setEducationLevel(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              >
+                <option value="">-- اختر المؤهل --</option>
+                <option value="مؤهل عالي (جامعي / بكالوريوس)">مؤهل عالي (جامعي / بكالوريوس)</option>
+                <option value="مؤهل فوق متوسط">مؤهل فوق متوسط</option>
+                <option value="مؤهل متوسط (دبلوم / ثانوية)">مؤهل متوسط (دبلوم / ثانوية)</option>
+                <option value="طالب مقيد بالجامعة">طالب مقيد بالجامعة</option>
+                <option value="بدون مؤهل">بدون مؤهل</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الكلية / التخصص</label>
+              <input
+                type="text"
+                value={educationField}
+                onChange={(e) => setEducationField(e.target.value)}
+                placeholder="مثال: تجارة / سياحة وفنادق / نظم معلومات"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">سنة التخرج</label>
+              <input
+                type="number"
+                value={graduationYear}
+                onChange={(e) => setGraduationYear(e.target.value)}
+                placeholder="مثال: 2022"
+                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                dir="ltr"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* القسم السادس: أمان الحساب وتغيير كلمة المرور (مع كلمة المرور الحالية الإلزامية) */}
+        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
+          <div className="border-b border-white/5 pb-3">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Lock size={18} className="text-rose-500" /> 6. أمان الحساب وتغيير كلمة المرور
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              لحماية حسابك، يجب إدخال كلمة المرور الحالية لتتمكن من تغييرها. اترك هذه الحقول فارغة إذا لم تكن ترغب في التغيير.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {/* كلمة المرور الحالية */}
+            <div>
+              <label className="block text-xs font-semibold text-rose-400 mb-1.5">
+                كلمة المرور الحالية <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="أدخل كلمة المرور الحالية"
+                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-rose-500 pl-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute left-3 top-2.5 text-slate-500 hover:text-slate-300"
+                >
+                  {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* كلمة المرور الجديدة */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">كلمة المرور الجديدة</label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="6 أحرف أو أرقام على الأقل"
+                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pl-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute left-3 top-2.5 text-slate-500 hover:text-slate-300"
+                >
+                  {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* تأكيد كلمة المرور الجديدة */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تأكيد كلمة المرور الجديدة</label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -278,14 +747,15 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        <div className="flex justify-end">
+        {/* زر الحفظ النهائي */}
+        <div className="flex justify-end pt-2">
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 px-8 py-3.5 text-xs font-bold text-white shadow-lg shadow-orange-500/20 hover:opacity-95 transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 px-10 py-4 text-xs font-bold text-white shadow-xl shadow-orange-500/25 hover:opacity-95 transition cursor-pointer disabled:opacity-50"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>{saving ? 'جاري الحفظ والتحديث...' : 'حفظ استمارة البيانات وتحديث الحساب'}</span>
+            <span>{saving ? 'جاري حفظ واعتماد البيانات...' : 'حفظ استمارة البيانات وتحديث الحساب'}</span>
           </button>
         </div>
       </form>
