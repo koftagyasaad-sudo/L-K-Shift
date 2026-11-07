@@ -131,6 +131,42 @@ export async function updateBranchAction(
   }
 }
 
+export async function toggleBranchStatusAction(
+  id: string | number,
+  currentStatus?: boolean
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+    if (isNaN(numericId)) return { success: false, message: 'معرف الفرع غير صالح' };
+
+    let newStatus = !currentStatus;
+    if (currentStatus === undefined) {
+      const rows = await db
+        .select({ isActive: branches.isActive })
+        .from(branches)
+        .where(eq(branches.id, numericId))
+        .limit(1);
+      if (rows.length > 0) {
+        newStatus = !rows[0].isActive;
+      }
+    }
+
+    await db
+      .update(branches)
+      .set({
+        isActive: newStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(branches.id, numericId));
+
+    revalidatePath('/[locale]/admin/branches', 'page');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error toggling branch status:', error);
+    return { success: false, message: error?.message || 'فشل تغيير حالة الفرع' };
+  }
+}
+
 export async function deleteBranchAction(id: string | number): Promise<{ success: boolean; message?: string }> {
   try {
     const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
