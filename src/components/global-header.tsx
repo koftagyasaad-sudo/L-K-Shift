@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { LogOut, Moon, Sun, ChevronRight } from 'lucide-react';
+import { LogOut, Moon, Sun, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface GlobalHeaderProps {
   onToggleSidebar?: () => void;
@@ -20,14 +20,43 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const [userRole, setUserRole] = useState('مدير النظام');
   const [isDark, setIsDark] = useState(true);
 
+  // تفعيل الثيم وقراءة القيمة المحفوظة مسبقاً
   useEffect(() => {
     try {
       const storedName = localStorage.getItem('userName');
       const storedRole = localStorage.getItem('userRole');
       if (storedName) setUserName(storedName);
       if (storedRole) setUserRole(storedRole);
-    } catch (e) {}
+
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'light') {
+        setIsDark(false);
+        document.documentElement.classList.remove('dark');
+      } else {
+        setIsDark(true);
+        document.documentElement.classList.add('dark');
+      }
+    } catch {
+      document.documentElement.classList.add('dark');
+    }
   }, []);
+
+  // دالة تبديل الثيم مع تطبيق التغيير فوراً وحفظه
+  const handleToggleTheme = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      try {
+        localStorage.setItem('theme', 'dark');
+      } catch {}
+    } else {
+      document.documentElement.classList.remove('dark');
+      try {
+        localStorage.setItem('theme', 'light');
+      } catch {}
+    }
+  };
 
   const handleLogout = () => {
     try {
@@ -42,31 +71,24 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/90 px-4 sm:px-6 backdrop-blur-md dark:border-white/5 dark:bg-[#0c0e18]/90">
-      {/* الجانب الأيمن: زر طي القائمة + الضغط على الاسم والدائرة يفتح صفحة البروفايل */}
+      {/* الجانب الأيمن: زر طي القائمة + اسم الموظف ودائرته مربوطان بصفحة البروفايل */}
       <div className="flex items-center gap-3">
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 transition cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition cursor-pointer"
             title="طي / فتح القائمة الجانبية"
           >
-            <ChevronRight
-              size={18}
-              className={`transition-transform duration-200 ${
-                isRtl
-                  ? sidebarCollapsed
-                    ? ''
-                    : 'rotate-180'
-                  : sidebarCollapsed
-                  ? 'rotate-180'
-                  : ''
-              }`}
-            />
+            {isRtl ? (
+              sidebarCollapsed ? <ChevronLeft size={17} /> : <ChevronRight size={17} />
+            ) : (
+              sidebarCollapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />
+            )}
           </button>
         )}
 
-        {/* كارت المستخدم كـ Link مستقل ينقلك لصفحة البروفايل فوراً */}
+        {/* الضغط على الاسم أو الدائرة يفتح صفحة البروفايل فوراً */}
         <Link
           href={`/${locale}/profile`}
           className="flex items-center gap-3 rounded-2xl p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer group"
@@ -86,15 +108,20 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
         </Link>
       </div>
 
-      {/* الجانب الأيسر: زر الثيم وزر الخروج */}
+      {/* الجانب الأيسر: زر الثيم الهادئ البسيط وزر الخروج */}
       <div className="flex items-center gap-2.5">
         <button
           type="button"
-          onClick={() => setIsDark(!isDark)}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-amber-500 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 transition cursor-pointer"
-          title="تبديل المظهر"
+          onClick={handleToggleTheme}
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition cursor-pointer"
+          title={isDark ? 'تفعيل المظهر النهاري' : 'تفعيل المظهر الليلي'}
+          aria-label="تبديل المظهر"
         >
-          {isDark ? <Moon size={16} /> : <Sun size={16} />}
+          {isDark ? (
+            <Sun size={16} strokeWidth={1.75} />
+          ) : (
+            <Moon size={16} strokeWidth={1.75} />
+          )}
         </button>
 
         <button
