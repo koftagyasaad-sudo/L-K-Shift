@@ -55,27 +55,27 @@ export default function AttendanceReviewPage() {
   const [toDate, setToDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // جلب البيانات من السيرفر
+  // جلب البيانات من المسار المطابق لمجلد [id]
   const fetchRecords = async () => {
     try {
       setLoading(true);
       setErrorMsg('');
 
-      let url = '/api/attendance/review?';
+      let url = '/api/attendance/review/all?';
       if (selectedEmployee !== 'ALL') url += `userId=${selectedEmployee}&`;
       if (fromDate) url += `from=${fromDate}&`;
       if (toDate) url += `to=${toDate}&`;
 
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
-        throw new Error(`خطأ في السيرفر (${res.status})`);
+        throw new Error(`خطأ في استجابة السيرفر (${res.status})`);
       }
 
       const data = await res.json();
       setRecords(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error('Failed to load review records:', err);
-      setErrorMsg('تعذر تحميل بيانات البصمة من السيرفر');
+      setErrorMsg('تعذر تحميل سجلات البصمة، تأكد من استقرار الاتصال');
       setRecords([]);
     } finally {
       setLoading(false);
@@ -86,12 +86,12 @@ export default function AttendanceReviewPage() {
     fetchRecords();
   }, [selectedEmployee, fromDate, toDate]);
 
-  // استخراج قائمة الموظفين للفلترة
+  // قائمة الموظفين الفريدين للفلترة
   const uniqueEmployees = Array.from(
     new Map(records.map((r) => [r.userId, { id: r.userId, name: r.userName }])).values()
   );
 
-  // تصفية السجلات حسب البحث السريع
+  // تصفية السجلات حسب البحث
   const filteredRecords = records.filter((r) => {
     const q = searchTerm.toLowerCase().trim();
     if (!q) return true;
@@ -122,7 +122,7 @@ export default function AttendanceReviewPage() {
     }
   };
 
-  // تصدير الشيت إلى Excel / CSV مع دعم الحروف العربية
+  // تصدير الشيت إلى ملف Excel / CSV
   const handleExportCSV = () => {
     const headers = [
       'الكود',
