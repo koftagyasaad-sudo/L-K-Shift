@@ -1,9 +1,9 @@
 import { 
   pgTable, serial, text, integer, boolean, 
-  timestamp, doublePrecision, numeric, pgEnum 
+  timestamp, doublePrecision, numeric, pgEnum, jsonb 
 } from 'drizzle-orm/pg-core';
 
-// 1. تحديد الـ Enums
+// 1. تعريف الـ Enums
 export const userRoleEnum = pgEnum('user_role', ['SUPER_ADMIN', 'EMPLOYEE']);
 export const verificationModeEnum = pgEnum('verification_mode', ['QR_GPS', 'GPS_ONLY', 'GPS_WIFI', 'MANUAL']);
 export const attendanceStatusEnum = pgEnum('attendance_status', [
@@ -37,7 +37,7 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// 3. جدول الفروع (branches)
+// 3. جدول الفروع (branches) - مدمج به حقول مفتاح الـ QR
 export const branches = pgTable('branches', {
   id: serial('id').primaryKey(),
   nameAr: text('name_ar').notNull(),
@@ -46,12 +46,15 @@ export const branches = pgTable('branches', {
   latitude: doublePrecision('latitude').notNull(),
   longitude: doublePrecision('longitude').notNull(),
   geofenceRadius: integer('geofence_radius').default(100).notNull(),
+  qrSecretKey: text('qr_secret_key'),
+  qrRefreshSec: integer('qr_refresh_sec').default(60),
   shiftSchedule: text('shift_schedule'),
   shiftStartTime: text('shift_start_time'),
   shiftEndTime: text('shift_end_time'),
   shiftName: text('shift_name'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // 4. جدول سجلات الحضور والانصراف (attendance_logs)
@@ -88,7 +91,30 @@ export const leaveRequests = pgTable('leave_requests', {
   durationDays: integer('duration_days').default(1),
   advanceAmount: numeric('advance_amount').default('0'),
   reason: text('reason'),
+  rejectionReason: text('rejection_reason'),
+  rejectionNotes: text('rejection_notes'),
   status: leaveStatusEnum('status').default('PENDING').notNull(),
   finalStatus: text('final_status').default('PENDING'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// 6. جدول الأدوار المخصصة (custom_roles)
+export const customRoles = pgTable('custom_roles', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  nameAr: text('name_ar').notNull(),
+  permissions: jsonb('permissions').notNull(),
+  isSystem: boolean('is_system').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// 7. جدول الإشعارات (notifications)
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  isRead: boolean('is_read').default(false).notNull(),
+  link: text('link'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
