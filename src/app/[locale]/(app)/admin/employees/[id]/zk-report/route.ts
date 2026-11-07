@@ -18,7 +18,7 @@ export async function GET(
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
-    // 1. استرجاع بيانات الموظف والوردية المحددة لفرعه
+    // 1. استرجاع بيانات الموظف الأساسية
     const empRaw = await db.execute(sql`
       SELECT 
         u.id, 
@@ -51,11 +51,15 @@ export async function GET(
     }
     const employee = empRows[0];
     const empCode = String(employee.employeeCode || '').trim();
+    const empPhone = String(employee.phone || '').trim();
+    const workHours = Number(employee.workingHoursPerDay) || 8;
 
-    // 2. استرجاع سجلات الحضور بدون دمج الأنواع المسبب للخطأ
+    // 2. استرجاع سجلات الحضور بدون دوال استخراج حساسة للنوع لتفادي أخطاء SQL
     const logsRaw = await db.execute(sql`
       SELECT 
-        TO_CHAR(work_date, 'YYYY-MM-DD') as "workDate",
+        id,
+        user_id,
+        work_date::text as "workDate",
         check_in_time,
         check_out_time,
         COALESCE(check_in_distance, 0) as "gpsDistance",
@@ -69,77 +73,110 @@ export async function GET(
         user_id::text = ${id}
         OR CAST(user_id AS TEXT) = ${id}
         OR user_id::text = ${empCode}
+        OR user_id::text = ${empPhone}
       )
-      AND EXTRACT(MONTH FROM work_date) = ${month}
-      AND EXTRACT(YEAR FROM work_date) = ${year}
-      ORDER BY work_date ASC;
+      ORDER BY id ASC;
     `);
-    const logs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
+    const allLogs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
 
-    // 3. استرجاع السلف والإجازات المعتمدة
+    // 3. استرجاع الإجازات والسلف المعتمدة
     const leavesRaw = await db.execute(sql`
       SELECT 
         COALESCE(leave_type, request_type, 'ANNUAL') as "requestType", 
-        TO_CHAR(start_date, 'YYYY-MM-DD') as "startDate", 
-        TO_CHAR(end_date, 'YYYY-MM-DD') as "endDate", 
+        start_date::text as "startDate", 
+        end_date::text as "endDate", 
         COALESCE(duration_days, total_days, 1) as "durationDays",
-        COALESCE(advance_amount, 0) as "advanceAmount"
+        COALESCE(advance_amount, 0) as "advanceAmount",
+        final_status
       FROM leave_requests
-      WHERE (user_id::text = ${id} OR CAST(user_id AS TEXT) = ${id} OR user_id::text = ${empCode})
-        AND (final_status = 'APPROVED' OR status::text = 'APPROVED')
-        AND EXTRACT(MONTH FROM start_date) = ${month}
-        AND EXTRACT(YEAR FROM start_date) = ${year};
+      WHERE (
+        user_id::text = ${id} 
+        OR CAST(user_id AS TEXT) = ${id}
+        OR user_id::text = ${empCode}
+      )
+      AND (final_status = 'APPROVED' OR status::text = 'APPROVED');
     `);
-    const leaves = Array.isArray(leavesRaw) ? leavesRaw : (leavesRaw as any)?.rows || [];
+    const allLeaves = Array.isArray(leavesRaw) ? leavesRaw : (leavesRaw as any)?.rows || [];
 
-    const approvedAdvancesTotal = leaves.reduce((sum: number, item: any) => {
+    // استخراج تاريخ السجل بدقة بتوقيت مصر
+    const extractLogDate = (log: any): string | null => {
+      if (log.workDate) {
+        const str = String(log.workDate).trim();
+        const match = str.match(/\d{4}-\d{2}-\d{2}/);
+        if (match) return match[0];
+      }
+      if (log.check_in_time) {
+        try {
+          const d = new Date(log.check_in_time);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+          }
+        } catch {}
+      }
+      if (log.check_out_time) {
+        try {
+          const d = new Date(log.check_out_time);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+          }
+        } catch {}
+      }
+      return null;
+    };
+
+    // حساب إجمالي السلف للشهر الحالي
+    const currentMonthLeaves = allLeaves.filter((lv: any) => {
+      const s = String(lv.startDate || '');
+      return s.includes(`${year}-${String(month).padStart(2, '0')}`);
+    });
+
+    const approvedAdvancesTotal = currentMonthLeaves.reduce((sum: number, item: any) => {
       return sum + (parseFloat(item.advanceAmount) || 0);
     }, 0);
 
-    // 4. بناء تفريغ أيام الشهر ومطابقة يومي 6 و 7
+    // 4. بناء تفريغ أيام الشهر ومطابقة الحضور الفعلي
     const daysInMonth = new Date(year, month, 0).getDate();
     const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const monthNamesAr = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-    const workHours = Number(employee.workingHoursPerDay) || 8;
 
     const records = [];
+
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dObj = new Date(year, month - 1, day);
       const dayName = dayNamesAr[dObj.getDay()];
 
-      // مطابقة اليوم
-      const dayLog = logs.find((l: any) => {
-        const raw = l.workDate || l.workdate || l.work_date;
-        return raw && String(raw).slice(0, 10) === dateStr;
-      });
+      // البحث عن سجل اليوم
+      const dayLog = allLogs.find((l: any) => extractLogDate(l) === dateStr);
 
-      const checkInTimeRaw = dayLog?.check_in_time || dayLog?.checkInTime;
-      const checkOutTimeRaw = dayLog?.check_out_time || dayLog?.checkOutTime;
-      const distance = Number(dayLog?.gpsDistance || dayLog?.check_in_distance || 0);
-      const photoUrl = dayLog?.photoUrl || dayLog?.check_in_photo_url || null;
-      let workedMinutes = Number(dayLog?.workedMinutes || dayLog?.actual_worked_minutes || 0);
+      const checkInRaw = dayLog?.check_in_time || null;
+      const checkOutRaw = dayLog?.check_out_time || null;
+      const distance = Number(dayLog?.gpsDistance || 0);
+      const photoUrl = dayLog?.photoUrl || null;
+      let workedMinutes = Number(dayLog?.workedMinutes || 0);
       let lateMinutes = Number(dayLog?.lateMinutes || 0);
       let overtimeMinutes = Number(dayLog?.overtimeMinutes || 0);
 
-      // احتساب ساعات العمل إذا وُجد وقت الحضور
-      if (workedMinutes === 0 && checkInTimeRaw) {
-        if (checkOutTimeRaw) {
-          const diffMs = new Date(checkOutTimeRaw).getTime() - new Date(checkInTimeRaw).getTime();
+      // احتساب مدة العمل إن لم تكن مسجلة مسبقاً
+      if (workedMinutes === 0 && checkInRaw) {
+        if (checkOutRaw) {
+          const diffMs = new Date(checkOutRaw).getTime() - new Date(checkInRaw).getTime();
           if (diffMs > 0) workedMinutes = Math.round(diffMs / 60000);
         } else {
           workedMinutes = workHours * 60;
         }
       }
 
-      const isLeave = leaves.some((lv: any) => {
+      // فحص الإجازة المعتمدة
+      const isLeave = allLeaves.some((lv: any) => {
         const start = String(lv.startDate || '').slice(0, 10);
         const end = String(lv.endDate || start).slice(0, 10);
         return dateStr >= start && dateStr <= end && lv.requestType !== 'ADVANCE';
       });
 
+      // تحديد الحالة: الحضور الفعلي يلغي أي عطلة أسبوعية
       let status: 'PRESENT' | 'APPROVED_LEAVE' | 'ABSENT' | 'WEEKLY_OFF' = 'ABSENT';
-      if (checkInTimeRaw || workedMinutes > 0) {
+      if (checkInRaw || workedMinutes > 0) {
         status = 'PRESENT';
       } else if (isLeave) {
         status = 'APPROVED_LEAVE';
@@ -151,9 +188,14 @@ export async function GET(
         if (!ts) return null;
         try {
           const d = new Date(ts);
-          return isNaN(d.getTime()) ? null : d.toLocaleTimeString('ar-EG', {
-            hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Cairo'
-          });
+          return isNaN(d.getTime())
+            ? null
+            : d.toLocaleTimeString('ar-EG', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'Africa/Cairo',
+              });
         } catch {
           return null;
         }
@@ -163,8 +205,8 @@ export async function GET(
         date: dateStr,
         dayName,
         shiftSchedule: employee.branchShift,
-        checkInTime: formatTime(checkInTimeRaw),
-        checkOutTime: formatTime(checkOutTimeRaw),
+        checkInTime: formatTime(checkInRaw),
+        checkOutTime: formatTime(checkOutRaw),
         gpsVerified: distance <= 150,
         gpsDistance: Math.round(distance),
         photoUrl,
@@ -176,21 +218,24 @@ export async function GET(
       });
     }
 
-    return NextResponse.json({
-      employee: {
-        name: employee.name,
-        employeeCode: employee.employeeCode,
-        phone: employee.phone,
-        role: employee.role,
-        branchName: employee.branchName,
-        basicSalary: parseFloat(employee.basicSalary) || 0,
-        workingHoursPerDay: workHours,
+    return NextResponse.json(
+      {
+        employee: {
+          name: employee.name,
+          employeeCode: employee.employeeCode,
+          phone: employee.phone,
+          role: employee.role,
+          branchName: employee.branchName,
+          basicSalary: parseFloat(employee.basicSalary) || 0,
+          workingHoursPerDay: workHours,
+        },
+        monthName: monthNamesAr[month],
+        year,
+        records,
+        approvedAdvancesTotal,
       },
-      monthName: monthNamesAr[month],
-      year,
-      records,
-      approvedAdvancesTotal,
-    }, { status: 200 });
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error('ZK Report API Error:', error);
     return NextResponse.json({ message: 'فشل استخراج تقرير ZK', error: error?.message }, { status: 500 });
