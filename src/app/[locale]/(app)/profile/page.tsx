@@ -13,16 +13,13 @@ import {
   Save,
   Loader2,
   Camera,
-  Upload,
+  Trash2,
   Briefcase,
   GraduationCap,
   ShieldCheck,
-  HeartHandshake,
   DollarSign,
-  Calendar,
   Eye,
   EyeOff,
-  Trash2,
 } from 'lucide-react';
 
 export default function EmployeeProfilePage() {
@@ -42,7 +39,7 @@ export default function EmployeeProfilePage() {
   const [fullName, setFullName] = useState('');
   const [fullNameEn, setFullNameEn] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [gender, setGender] = useState<'MALE' | 'FEMALE' | ''>('MALE');
+  const [gender, setGender] = useState<'MALE' | 'FEMALE'>('MALE');
   const [maritalStatus, setMaritalStatus] = useState('');
   const [militaryStatus, setMilitaryStatus] = useState('');
 
@@ -70,7 +67,7 @@ export default function EmployeeProfilePage() {
   const [educationField, setEducationField] = useState('');
   const [graduationYear, setGraduationYear] = useState('');
 
-  // 7. تغيير كلمة المرور (مع اشتراط كلمة المرور الحالية)
+  // 7. كلمة المرور الحالية والجديدة
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -79,6 +76,7 @@ export default function EmployeeProfilePage() {
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
+  // استرجاع بيانات الموظف الحالي فور الدخول
   useEffect(() => {
     const storedId = localStorage.getItem('userId') || '';
     const storedPhone = localStorage.getItem('userPhone') || '';
@@ -91,16 +89,15 @@ export default function EmployeeProfilePage() {
     async function fetchUserData() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/employees?id=${storedId}`, { cache: 'no-store' });
+        const res = await fetch(`/api/profile?id=${storedId}`, { cache: 'no-store' });
         if (res.ok) {
-          const data = await res.json();
-          const user = Array.isArray(data) ? data.find((u: any) => String(u.id) === storedId) : data;
+          const user = await res.json();
           if (user) {
-            setFullName(user.fullName || user.fullNameAr || user.name || '');
+            setFullName(user.fullName || user.name || '');
             setFullNameEn(user.fullNameEn || '');
             setPhone(user.phone || '');
             setPhoneAlt(user.phoneAlt || '');
-            setNationalId(user.nationalId || user.national_id || '');
+            setNationalId(user.nationalId || '');
             setNationalIdExpiry(user.nationalIdExpiry ? String(user.nationalIdExpiry).slice(0, 10) : '');
             setSocialInsuranceNo(user.socialInsuranceNo || '');
             setDrivingLicense(user.drivingLicense || '');
@@ -111,14 +108,14 @@ export default function EmployeeProfilePage() {
             setAddress(user.address || '');
             setEmergencyName(user.emergencyName || '');
             setEmergencyRelation(user.emergencyRelation || '');
-            setEmergencyPhone(user.emergencyPhone || user.emergencyContact || '');
+            setEmergencyPhone(user.emergencyPhone || '');
             setPayoutMethod(user.payoutMethod || 'INSTAPAY');
             setPayoutAccount(user.payoutAccount || '');
             setBankName(user.bankName || '');
             setEducationLevel(user.educationLevel || '');
             setEducationField(user.educationField || '');
             setGraduationYear(user.graduationYear ? String(user.graduationYear) : '');
-            setProfilePhoto(user.avatarUrl || user.photoUrl || '');
+            setProfilePhoto(user.avatarUrl || '');
           }
         }
       } catch (err) {
@@ -135,7 +132,7 @@ export default function EmployeeProfilePage() {
     }
   }, []);
 
-  // معالجة رفع الصورة الشخصية
+  // رفع وتغيير الصورة الشخصية
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -157,7 +154,6 @@ export default function EmployeeProfilePage() {
     e.preventDefault();
     setStatusMsg(null);
 
-    // التحقق من كلمة المرور
     if (newPassword) {
       if (!currentPassword) {
         setStatusMsg({ type: 'err', text: 'يرجى إدخال كلمة المرور الحالية لتأكيد تغيير كلمة المرور' });
@@ -181,7 +177,7 @@ export default function EmployeeProfilePage() {
     setSaving(true);
 
     try {
-      const res = await fetch('/api/profile/update', {
+      const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,9 +243,8 @@ export default function EmployeeProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16 text-slate-200" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* 1. الترويسة الرئيسية والتقاط/رفع الصورة الشخصية */}
+      {/* 1. الترويسة الرئيسية والصورة الشخصية */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        {/* حاوية الصورة الشخصية */}
         <div className="relative group shrink-0">
           <div className="h-28 w-28 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-slate-900 shadow-xl flex items-center justify-center">
             {profilePhoto ? (
@@ -259,12 +254,11 @@ export default function EmployeeProfilePage() {
             )}
           </div>
 
-          {/* أزرار التحكم في الصورة */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="absolute -bottom-2 -left-2 bg-gradient-to-r from-orange-500 to-rose-600 text-white p-2.5 rounded-2xl shadow-lg hover:scale-105 transition-all cursor-pointer"
-            title="تحميل / التقاط صورة شخصية"
+            title="تحميل صورة شخصية"
           >
             <Camera size={16} />
           </button>
@@ -289,7 +283,6 @@ export default function EmployeeProfilePage() {
           />
         </div>
 
-        {/* معلومات سريعة */}
         <div className="flex-1 text-center sm:text-right">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
             <h1 className="text-xl sm:text-2xl font-black text-white">{fullName || 'الملف الشخصي'}</h1>
@@ -311,7 +304,6 @@ export default function EmployeeProfilePage() {
         </div>
       </div>
 
-      {/* رسائل التنبيه والنجاح */}
       {statusMsg && (
         <div
           className={`p-4 rounded-2xl flex items-center gap-3 border text-xs font-bold ${
@@ -442,7 +434,7 @@ export default function EmployeeProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تاريخ سريان/انتهاء البطاقة</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تاريخ سريان البطاقة</label>
               <input
                 type="date"
                 value={nationalIdExpiry}
@@ -481,7 +473,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم الثالث: أرقام التواصل والعنوان وجهة الطوارئ */}
+        {/* القسم الثالث: الاتصال والعنوان وجهة الطوارئ */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <Phone size={18} className="text-orange-500" />
@@ -581,8 +573,8 @@ export default function EmployeeProfilePage() {
                 className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 font-bold"
               >
                 <option value="INSTAPAY">إنستاباي (InstaPay)</option>
-                <option value="WALLET">محفظة إلكترونية (فودافون كاش / أورنج / إتصالات / وي)</option>
-                <option value="BANK">تحويل بنكي مباشر (IBAN / حساب بنكي)</option>
+                <option value="WALLET">محفظة كاش (فودافون / أورنج / إتصالات / وي)</option>
+                <option value="BANK">تحويل بنكي مباشر (حساب بنكي / IBAN)</option>
                 <option value="CASH">استلام نقدي بالفرع (Cash)</option>
               </select>
             </div>
@@ -590,12 +582,12 @@ export default function EmployeeProfilePage() {
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                 {payoutMethod === 'INSTAPAY'
-                  ? 'عنوان الدفع اللحظي (IPA) أو رقم الهاتف'
+                  ? 'عنوان الدفع اللحظي (IPA) أو رقم الموبايل'
                   : payoutMethod === 'WALLET'
-                  ? 'رقم محفظة كاش المعتمدة'
+                  ? 'رقم محفظة كاش'
                   : payoutMethod === 'BANK'
-                  ? 'رقم الحساب البنكي أو الـ IBAN'
-                  : 'ملاحظة الصرف'}
+                  ? 'رقم الحساب أو الـ IBAN'
+                  : 'ملاحظة الاستلام'}
               </label>
               <input
                 type="text"
@@ -658,7 +650,7 @@ export default function EmployeeProfilePage() {
                 type="text"
                 value={educationField}
                 onChange={(e) => setEducationField(e.target.value)}
-                placeholder="مثال: تجارة / سياحة وفنادق / نظم معلومات"
+                placeholder="مثال: تجارة / نظم ومعلومات / سياحة وفنادق"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
@@ -677,19 +669,18 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم السادس: أمان الحساب وتغيير كلمة المرور (مع كلمة المرور الحالية الإلزامية) */}
+        {/* القسم السادس: أمان الحساب وتغيير كلمة المرور */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Lock size={18} className="text-rose-500" /> 6. أمان الحساب وتغيير كلمة المرور
             </h2>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              لحماية حسابك، يجب إدخال كلمة المرور الحالية لتتمكن من تغييرها. اترك هذه الحقول فارغة إذا لم تكن ترغب في التغيير.
+              لحماية حسابك، يجب إدخال كلمة المرور الحالية لتأكيد التغيير. اترك الحقول فارغة إذا لم تكن ترغب في التغيير.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            {/* كلمة المرور الحالية */}
             <div>
               <label className="block text-xs font-semibold text-rose-400 mb-1.5">
                 كلمة المرور الحالية <span className="text-rose-500">*</span>
@@ -712,7 +703,6 @@ export default function EmployeeProfilePage() {
               </div>
             </div>
 
-            {/* كلمة المرور الجديدة */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">كلمة المرور الجديدة</label>
               <div className="relative">
@@ -733,7 +723,6 @@ export default function EmployeeProfilePage() {
               </div>
             </div>
 
-            {/* تأكيد كلمة المرور الجديدة */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">تأكيد كلمة المرور الجديدة</label>
               <input
@@ -747,7 +736,6 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* زر الحفظ النهائي */}
         <div className="flex justify-end pt-2">
           <button
             type="submit"
