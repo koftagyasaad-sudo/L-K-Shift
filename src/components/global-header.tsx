@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { LogOut, Moon, Sun, Menu, ChevronRight } from 'lucide-react';
+import { LogOut, Moon, Sun, ChevronRight } from 'lucide-react';
 
 interface GlobalHeaderProps {
   onToggleSidebar?: () => void;
+  sidebarCollapsed?: boolean;
 }
 
-export default function GlobalHeader({ onToggleSidebar }: GlobalHeaderProps) {
+export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: GlobalHeaderProps) {
   const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
@@ -40,25 +41,36 @@ export default function GlobalHeader({ onToggleSidebar }: GlobalHeaderProps) {
   const firstLetter = userName ? userName.trim().charAt(0) : 'ع';
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/80 px-4 sm:px-6 backdrop-blur-md dark:border-white/5 dark:bg-[#0c0e18]/80">
-      {/* الجانب الأيمن: زر طي القائمة + بيانات الموظف قابلة للضغط كـ Link مستقل */}
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/90 px-4 sm:px-6 backdrop-blur-md dark:border-white/5 dark:bg-[#0c0e18]/90">
+      {/* الجانب الأيمن: زر طي القائمة + الضغط على الاسم والدائرة يفتح صفحة البروفايل */}
       <div className="flex items-center gap-3">
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 transition cursor-pointer"
-            title="طي / فتح القائمة"
+            title="طي / فتح القائمة الجانبية"
           >
-            <ChevronRight size={18} className={isRtl ? 'rotate-180' : ''} />
+            <ChevronRight
+              size={18}
+              className={`transition-transform duration-200 ${
+                isRtl
+                  ? sidebarCollapsed
+                    ? ''
+                    : 'rotate-180'
+                  : sidebarCollapsed
+                  ? 'rotate-180'
+                  : ''
+              }`}
+            />
           </button>
         )}
 
-        {/* الضغط على الاسم والدائرة يفتح صفحة البروفايل المستقلة فوراً */}
+        {/* كارت المستخدم كـ Link مستقل ينقلك لصفحة البروفايل فوراً */}
         <Link
           href={`/${locale}/profile`}
           className="flex items-center gap-3 rounded-2xl p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer group"
-          title="فتح الملف الشخصي وتغيير كلمة المرور واستمارة الـ HR"
+          title="اضغط هنا لفتح الملف الشخصي وتغيير الباسورد واستمارة HR"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-rose-600 text-white font-bold text-sm shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
             {firstLetter}
@@ -88,7 +100,7 @@ export default function GlobalHeader({ onToggleSidebar }: GlobalHeaderProps) {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
+          className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
         >
           <LogOut size={13} />
           <span>خروج</span>
