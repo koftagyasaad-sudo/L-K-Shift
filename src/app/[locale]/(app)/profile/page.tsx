@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   User,
   Phone,
@@ -14,16 +14,16 @@ import {
   Loader2,
   Camera,
   Trash2,
-  Briefcase,
   GraduationCap,
-  ShieldCheck,
   DollarSign,
   Eye,
   EyeOff,
+  ArrowRight,
 } from 'lucide-react';
 
-export default function EmployeeProfilePage() {
+export default function PersonalProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,10 +32,7 @@ export default function EmployeeProfilePage() {
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string>('');
 
-  // 1. الصورة الشخصية
   const [profilePhoto, setProfilePhoto] = useState<string>('');
-
-  // 2. البيانات الشخصية والمدنية
   const [fullName, setFullName] = useState('');
   const [fullNameEn, setFullNameEn] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -43,13 +40,11 @@ export default function EmployeeProfilePage() {
   const [maritalStatus, setMaritalStatus] = useState('');
   const [militaryStatus, setMilitaryStatus] = useState('');
 
-  // 3. الهوية والتأمينات
   const [nationalId, setNationalId] = useState('');
   const [nationalIdExpiry, setNationalIdExpiry] = useState('');
   const [socialInsuranceNo, setSocialInsuranceNo] = useState('');
   const [drivingLicense, setDrivingLicense] = useState('');
 
-  // 4. الاتصال والإقامة والطوارئ
   const [phone, setPhone] = useState('');
   const [phoneAlt, setPhoneAlt] = useState('');
   const [address, setAddress] = useState('');
@@ -57,17 +52,14 @@ export default function EmployeeProfilePage() {
   const [emergencyRelation, setEmergencyRelation] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
 
-  // 5. بيانات صرف المستحقات والرواتب
   const [payoutMethod, setPayoutMethod] = useState<'INSTAPAY' | 'WALLET' | 'BANK' | 'CASH'>('INSTAPAY');
   const [payoutAccount, setPayoutAccount] = useState('');
   const [bankName, setBankName] = useState('');
 
-  // 6. المؤهلات والخبرات
   const [educationLevel, setEducationLevel] = useState('');
   const [educationField, setEducationField] = useState('');
   const [graduationYear, setGraduationYear] = useState('');
 
-  // 7. كلمة المرور الحالية والجديدة
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -76,7 +68,6 @@ export default function EmployeeProfilePage() {
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // استرجاع بيانات الموظف من مسار update الموحد
   useEffect(() => {
     const storedId = localStorage.getItem('userId') || '';
     const storedPhone = localStorage.getItem('userPhone') || '';
@@ -108,7 +99,7 @@ export default function EmployeeProfilePage() {
             setAddress(user.address || '');
             setEmergencyName(user.emergencyName || '');
             setEmergencyRelation(user.emergencyRelation || '');
-            setEmergencyPhone(user.emergencyPhone || '');
+            setEmergencyPhone(user.emergencyPhone || user.emergencyContact || '');
             setPayoutMethod(user.payoutMethod || 'INSTAPAY');
             setPayoutAccount(user.payoutAccount || '');
             setBankName(user.bankName || '');
@@ -132,20 +123,42 @@ export default function EmployeeProfilePage() {
     }
   }, []);
 
-  // رفع الصورة الشخصية
+  // ضغط الصورة برمجياً لحجم خفيف يمنع أي تعليق للتطبيق
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 4 * 1024 * 1024) {
-      setStatusMsg({ type: 'err', text: 'حجم الصورة يجب ألا يتجاوز 4 ميجابايت' });
-      return;
-    }
-
+    const img = new Image();
     const reader = new FileReader();
+
     reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setProfilePhoto(base64);
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        setProfilePhoto(compressedBase64);
+      };
     };
     reader.readAsDataURL(file);
   };
@@ -156,7 +169,7 @@ export default function EmployeeProfilePage() {
 
     if (newPassword) {
       if (!currentPassword) {
-        setStatusMsg({ type: 'err', text: 'يرجى إدخال كلمة المرور الحالية لتأكيد تغيير كلمة المرور' });
+        setStatusMsg({ type: 'err', text: 'يرجى إدخال كلمة المرور الحالية لتأكيد التغيير' });
         return;
       }
       if (newPassword.length < 6) {
@@ -215,7 +228,7 @@ export default function EmployeeProfilePage() {
 
       setStatusMsg({
         type: 'ok',
-        text: 'تم حفظ كافة بيانات استمارة الموارد البشرية وتحديث ملفك الشخصي بنجاح!',
+        text: 'تم حفظ وتحديث بياناتك الشخصية بنجاح!',
       });
 
       setCurrentPassword('');
@@ -234,7 +247,7 @@ export default function EmployeeProfilePage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-        <p className="text-xs font-semibold text-slate-400">جاري تحميل استمارة ملفك الشخصي...</p>
+        <p className="text-xs font-semibold text-slate-400">جاري تحميل بياناتك الشخصية...</p>
       </div>
     );
   }
@@ -243,65 +256,71 @@ export default function EmployeeProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16 text-slate-200" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* 1. الترويسة والصورة الشخصية */}
-      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <div className="relative group shrink-0">
-          <div className="h-28 w-28 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-slate-900 shadow-xl flex items-center justify-center">
-            {profilePhoto ? (
-              <img src={profilePhoto} alt="Avatar" className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-4xl font-black text-white">{initialLetter}</span>
-            )}
-          </div>
+      {/* الترويسة الرئيسية وزر الرجوع لتفادي التعليق */}
+      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
+        <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-right">
+          {/* الصورة الشخصية */}
+          <div className="relative group shrink-0">
+            <div className="h-24 w-24 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-slate-900 shadow-xl flex items-center justify-center">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-3xl font-black text-white">{initialLetter}</span>
+              )}
+            </div>
 
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="absolute -bottom-2 -left-2 bg-gradient-to-r from-orange-500 to-rose-600 text-white p-2.5 rounded-2xl shadow-lg hover:scale-105 transition-all cursor-pointer"
-            title="تحميل صورة شخصية"
-          >
-            <Camera size={16} />
-          </button>
-
-          {profilePhoto && (
             <button
               type="button"
-              onClick={() => setProfilePhoto('')}
-              className="absolute -top-2 -left-2 bg-rose-600 text-white p-1.5 rounded-xl shadow hover:bg-rose-700 transition cursor-pointer"
-              title="إزالة الصورة"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute -bottom-2 -left-2 bg-gradient-to-r from-orange-500 to-rose-600 text-white p-2 rounded-xl shadow-lg hover:scale-105 transition-all cursor-pointer"
+              title="تحميل صورة شخصية"
             >
-              <Trash2 size={13} />
+              <Camera size={14} />
             </button>
-          )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handlePhotoSelect}
-          />
+            {profilePhoto && (
+              <button
+                type="button"
+                onClick={() => setProfilePhoto('')}
+                className="absolute -top-2 -left-2 bg-rose-600 text-white p-1 rounded-lg shadow hover:bg-rose-700 transition cursor-pointer"
+                title="إزالة الصورة"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoSelect}
+            />
+          </div>
+
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white">{fullName || 'البيانات الشخصية'}</h1>
+            <p className="text-xs text-slate-400 mt-1">تحديث واستعراض بياناتك الشخصية المسجلة في النظام</p>
+            <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs font-mono text-slate-400">
+              <span className="flex items-center gap-1">
+                <Phone size={12} className="text-orange-500" /> {phone || 'بدون رقم'}
+              </span>
+              <span className="flex items-center gap-1">
+                <CreditCard size={12} className="text-emerald-500" /> {nationalId || 'الرقم القومي غير مسجل'}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex-1 text-center sm:text-right">
-          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-black text-white">{fullName || 'الملف الشخصي'}</h1>
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
-              <ShieldCheck size={13} /> موظف معتمد
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-            استمارة الموارد البشرية الرسمية (HR Employee Record) - تشمل بيانات الهوية، التأمينات، حساب تحويل الراتب، وأمان الحساب.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs font-mono text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <Phone size={13} className="text-orange-500" /> {phone || 'بدون رقم'}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CreditCard size={13} className="text-emerald-500" /> {nationalId || 'الرقم القومي غير مسجل'}
-            </span>
-          </div>
-        </div>
+        {/* زر الخروج والرجوع المباشر للصفحة السابقة */}
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 px-4 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer"
+        >
+          <ArrowRight size={15} className={isRtl ? '' : 'rotate-180'} />
+          <span>رجوع للخلف</span>
+        </button>
       </div>
 
       {statusMsg && (
@@ -322,20 +341,20 @@ export default function EmployeeProfilePage() {
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <User size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">1. البيانات الشخصية والمدنية الأساسية</h2>
+            <h2 className="text-sm font-bold text-white">البيانات الشخصية الأساسية</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                الاسم بالكامل (رباعي بالعربية) <span className="text-rose-500">*</span>
+                الاسم بالكامل (رباعي) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="أدخل اسمك رباعي طبقاً للبطاقة"
+                placeholder="أدخل اسمك رباعي"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
@@ -348,7 +367,7 @@ export default function EmployeeProfilePage() {
                 type="text"
                 value={fullNameEn}
                 onChange={(e) => setFullNameEn(e.target.value)}
-                placeholder="Full Name as in Passport"
+                placeholder="Full Name"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
@@ -409,11 +428,11 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* 2. الهوية والتأمينات */}
+        {/* 2. الرقم القومي والتأمينات */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <CreditCard size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">2. بيانات بطاقة الرقم القومي والتأمينات الاجتماعية</h2>
+            <h2 className="text-sm font-bold text-white">بيانات الهوية والتأمينات</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -444,31 +463,15 @@ export default function EmployeeProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الرقم التأميني (إن وجد)</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الرقم التأميني</label>
               <input
                 type="text"
                 value={socialInsuranceNo}
                 onChange={(e) => setSocialInsuranceNo(e.target.value)}
-                placeholder="مثال: 12345678"
+                placeholder="12345678"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رخصة القيادة (إن وجدت)</label>
-              <select
-                value={drivingLicense}
-                onChange={(e) => setDrivingLicense(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
-              >
-                <option value="">لا يوجد رخصة قيادة</option>
-                <option value="رخصة خاصة">رخصة خاصة</option>
-                <option value="درجة ثالثة مهنية">درجة ثالثة مهنية</option>
-                <option value="درجة ثانية مهنية">درجة ثانية مهنية</option>
-                <option value="درجة أولى مهنية">درجة أولى مهنية</option>
-                <option value="رخصة دراجة نارية (موتوسيكل)">رخصة دراجة نارية (موتوسيكل)</option>
-              </select>
             </div>
           </div>
         </div>
@@ -477,7 +480,7 @@ export default function EmployeeProfilePage() {
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <Phone size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">3. بيانات الاتصال والإقامة وجهة الطوارئ المعتمدة</h2>
+            <h2 className="text-sm font-bold text-white">بيانات الاتصال والعنوان</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -497,7 +500,7 @@ export default function EmployeeProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رقم تليفون إضافي / واتساب</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رقم تليفون بديل / واتساب</label>
               <input
                 type="tel"
                 value={phoneAlt}
@@ -509,20 +512,18 @@ export default function EmployeeProfilePage() {
             </div>
 
             <div className="sm:col-span-2 lg:col-span-1">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">العنوان ومحل الإقامة بالتفصيل</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">العنوان ومحل الإقامة</label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="المدينة، اسم الشارع، رقم العقار..."
+                placeholder="المدينة، اسم الشارع..."
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                جهة اتصال للطوارئ (الاسم بالكامل)
-              </label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">جهة اتصال للطوارئ (الاسم)</label>
               <input
                 type="text"
                 value={emergencyName}
@@ -538,7 +539,7 @@ export default function EmployeeProfilePage() {
                 type="text"
                 value={emergencyRelation}
                 onChange={(e) => setEmergencyRelation(e.target.value)}
-                placeholder="مثال: الوالد، الزوجة، الأخ..."
+                placeholder="مثال: الوالد، الأخ..."
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
@@ -561,7 +562,7 @@ export default function EmployeeProfilePage() {
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <DollarSign size={18} className="text-emerald-500" />
-            <h2 className="text-sm font-bold text-white">4. بيانات تحويل الرواتب وصرف المستحقات</h2>
+            <h2 className="text-sm font-bold text-white">بيانات تحويل الراتب</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -573,7 +574,7 @@ export default function EmployeeProfilePage() {
                 className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 font-bold"
               >
                 <option value="INSTAPAY">إنستاباي (InstaPay)</option>
-                <option value="WALLET">محفظة كاش (فودافون / أورنج / إتصالات / وي)</option>
+                <option value="WALLET">محفظة كاش (فودافون / أورنج / اتصالات / وي)</option>
                 <option value="BANK">تحويل بنكي مباشر (حساب بنكي / IBAN)</option>
                 <option value="CASH">استلام نقدي بالفرع (Cash)</option>
               </select>
@@ -582,7 +583,7 @@ export default function EmployeeProfilePage() {
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                 {payoutMethod === 'INSTAPAY'
-                  ? 'عنوان الدفع اللحظي (IPA) أو رقم الموبايل'
+                  ? 'عنوان الدفع (IPA) أو رقم الموبايل'
                   : payoutMethod === 'WALLET'
                   ? 'رقم محفظة كاش'
                   : payoutMethod === 'BANK'
@@ -593,90 +594,33 @@ export default function EmployeeProfilePage() {
                 type="text"
                 value={payoutAccount}
                 onChange={(e) => setPayoutAccount(e.target.value)}
-                placeholder={
-                  payoutMethod === 'INSTAPAY'
-                    ? 'username@instapay أو 01xxxxxxxxx'
-                    : payoutMethod === 'WALLET'
-                    ? '01xxxxxxxxx'
-                    : 'EGxxxxxxxxxxxxxxxxxxxx'
-                }
+                placeholder={payoutMethod === 'INSTAPAY' ? '01xxxxxxxxx أو username@instapay' : 'رقم الحساب / المحفظة'}
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-emerald-500"
                 dir="ltr"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                اسم البنك أو شبكة المحفظة
-              </label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">اسم البنك أو شبكة المحفظة</label>
               <input
                 type="text"
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
-                placeholder="مثال: بنك مصر / فودافون / الأهلي"
+                placeholder="مثال: فودافون / بنك مصر"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
         </div>
 
-        {/* 5. المؤهل الدراسي والخبرات */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
-            <GraduationCap size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">5. المؤهل الدراسي وسنة التخرج</h2>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">المستوى التعليمي</label>
-              <select
-                value={educationLevel}
-                onChange={(e) => setEducationLevel(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
-              >
-                <option value="">-- اختر المؤهل --</option>
-                <option value="مؤهل عالي (جامعي / بكالوريوس)">مؤهل عالي (جامعي / بكالوريوس)</option>
-                <option value="مؤهل فوق متوسط">مؤهل فوق متوسط</option>
-                <option value="مؤهل متوسط (دبلوم / ثانوية)">مؤهل متوسط (دبلوم / ثانوية)</option>
-                <option value="طالب مقيد بالجامعة">طالب مقيد بالجامعة</option>
-                <option value="بدون مؤهل">بدون مؤهل</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الكلية / التخصص</label>
-              <input
-                type="text"
-                value={educationField}
-                onChange={(e) => setEducationField(e.target.value)}
-                placeholder="مثال: تجارة / نظم ومعلومات / سياحة وفنادق"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">سنة التخرج</label>
-              <input
-                type="number"
-                value={graduationYear}
-                onChange={(e) => setGraduationYear(e.target.value)}
-                placeholder="مثال: 2022"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
-                dir="ltr"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 6. أمان الحساب وتغيير كلمة المرور */}
+        {/* 5. تغيير كلمة المرور */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Lock size={18} className="text-rose-500" /> 6. أمان الحساب وتغيير كلمة المرور
+              <Lock size={18} className="text-rose-500" /> تغيير كلمة المرور
             </h2>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              لحماية حسابك، يجب إدخال كلمة المرور الحالية لتأكيد التغيير. اترك الحقول فارغة إذا لم تكن ترغب في التغيير.
+              لحماية الحساب، أدخل كلمة المرور الحالية لتأكيد التغيير. اترك الحقول فارغة إذا كنت لا ترغب في التغيير.
             </p>
           </div>
 
@@ -690,7 +634,7 @@ export default function EmployeeProfilePage() {
                   type={showCurrentPassword ? 'text' : 'password'}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="أدخل كلمة المرور الحالية"
+                  placeholder="كلمة المرور الحالية"
                   className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-rose-500 pl-10"
                 />
                 <button
@@ -710,7 +654,7 @@ export default function EmployeeProfilePage() {
                   type={showNewPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="6 أحرف أو أرقام على الأقل"
+                  placeholder="6 أحرف على الأقل"
                   className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pl-10"
                 />
                 <button
@@ -724,12 +668,12 @@ export default function EmployeeProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تأكيد كلمة المرور الجديدة</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تأكيد كلمة المرور</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="أعد إدخال كلمة المرور"
+                placeholder="تأكيد كلمة المرور"
                 className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
@@ -743,7 +687,7 @@ export default function EmployeeProfilePage() {
             className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 px-10 py-4 text-xs font-bold text-white shadow-xl shadow-orange-500/25 hover:opacity-95 transition cursor-pointer disabled:opacity-50"
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            <span>{saving ? 'جاري حفظ واعتماد البيانات...' : 'حفظ استمارة البيانات وتحديث الحساب'}</span>
+            <span>{saving ? 'جاري الحفظ والتحديث...' : 'حفظ البيانات الشخصية'}</span>
           </button>
         </div>
       </form>
