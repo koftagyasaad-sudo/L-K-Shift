@@ -2,14 +2,19 @@ import { neon, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
-// تحسين أداء الاتصال في بيئة Vercel Edge/Serverless
-neonConfig.fetchConnectionCache = true;
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is not defined in environment variables');
+// منع استدعاء قاعدة البيانات من طرف المتصفح لحماية الأمان
+if (typeof window !== 'undefined') {
+  throw new Error('Security Alert: Database cannot be accessed from the client-side.');
 }
 
-// استخدام HTTP لضمان عدم استنفاد اتصالات قاعدة البيانات (Connection Exhaustion)
-const sql = neon(process.env.DATABASE_URL);
+const connectionString = process.env.DATABASE_URL;
 
-export const db = drizzle(sql, { schema });
+if (!connectionString) {
+  throw new Error('DATABASE_URL is not defined in environment variables.');
+}
+
+// إنشاء اتصال آمن وسريع عبر HTTP متوافق مع خوادم Vercel Edge و Serverless
+const sqlClient = neon(connectionString);
+
+export const db = drizzle(sqlClient, { schema });
+export default db;
