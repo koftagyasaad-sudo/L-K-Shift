@@ -1,403 +1,122 @@
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import { Plus, Edit, Trash2, MapPin, Building2, CheckCircle, XCircle, X, AlertCircle, CheckCircle2 } from "lucide-react";
-import { saveBranchAction, deleteBranchAction, toggleBranchStatusAction, type BranchData } from "@/actions/branchActions";
-import { useRouter } from "next/navigation";
+import React, { useState } from 'react';
+import { 
+  Building2, Calendar, DollarSign, Download, Filter, 
+  MapPin, CheckCircle2, XCircle, Clock, AlertCircle, RefreshCw 
+} from 'lucide-react';
 
-interface Props {
-  initialBranches?: BranchData[];
+interface EmployeeSalaryRow {
+  userId: number | string;
+  name: string;
+  role: string;
+  branchName: string;
+  workingHoursPerDay: number;
+  basicSalary: number;
+  workedDays: number;
+  workedHours: number;
+  approvedLeaveDays: number;
+  overtimeHours: number;
+  lateMinutes: number;
+  advanceDeductions: number;
 }
 
-export function BranchEmployeeManager({ initialBranches = [] }: Props) {
-  const router = useRouter();
-  const [branches, setBranches] = useState<BranchData[]>(initialBranches);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export function AttendanceReviewList({ initialData = [] }: { initialData?: any[] }) {
+  const [selectedMonth, setSelectedMonth] = useState('2026-11');
   const [loading, setLoading] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<BranchData | null>(null);
 
-  // Toast Feedback State
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const showToast = (text: string, type: "success" | "error" = "success") => {
-    setFeedback({ type, text });
-    setTimeout(() => setFeedback(null), 4000);
-  };
+  // حساب الأجر وصافي الراتب الدقيق لكل موظف
+  const calculateRow = (emp: any) => {
+    const basic = Number(emp.basicSalary) || 0;
+    const hoursPerDay = Number(emp.workingHoursPerDay) || 8;
+    const scheduledMonthlyHours = hoursPerDay * 26; // 26 يوم عمل شهرياً
+    const hourlyRate = scheduledMonthlyHours > 0 ? basic / scheduledMonthlyHours : 0;
+    const minuteRate = hourlyRate / 60;
 
-  // Form State
-  const [mapLink, setMapLink] = useState("");
-  const [formData, setFormData] = useState<BranchData>({
-    id: "",
-    name: "",
-    nameAr: "",
-    nameEn: "",
-    address: "",
-    latitude: "30.0444",
-    longitude: "31.2357",
-    radiusMeters: 100,
-    geofenceRadius: 100,
-    isActive: true,
-  });
+    const workedHours = Number(emp.workedHours) || 0;
+    const approvedLeaveHours = (Number(emp.approvedLeaveDays) || 0) * hoursPerDay; // الإجازات المعتمدة مدفوعة بالكامل
+    const overtimeHours = Number(emp.overtimeHours) || 0;
+    const lateMinutes = Number(emp.lateMinutes) || 0;
+    const advanceDeductions = Number(emp.advanceDeductions) || 0;
 
-  const openAddModal = () => {
-    setEditingBranch(null);
-    setMapLink("");
-    setFormData({
-      id: "",
-      name: "",
-      nameAr: "",
-      nameEn: "",
-      address: "",
-      latitude: "30.0444",
-      longitude: "31.2357",
-      radiusMeters: 100,
-      geofenceRadius: 100,
-      isActive: true,
-    });
-    setIsModalOpen(true);
-  };
+    // استحقاق ساعات العمل الفعلية + الإجازات المدفوعة
+    const earnedBasePay = (workedHours + approvedLeaveHours) * hourlyRate;
+    const overtimePay = overtimeHours * (hourlyRate * 1.5);
+    const lateDeduction = lateMinutes * minuteRate;
 
-  const openEditModal = (branch: BranchData) => {
-    setEditingBranch(branch);
-    setMapLink("");
-    setFormData({
-      id: branch.id,
-      name: branch.name || branch.nameAr || "",
-      nameAr: branch.nameAr || "",
-      nameEn: branch.nameEn || "",
-      address: branch.address || "",
-      latitude: branch.latitude || "30.0444",
-      longitude: branch.longitude || "31.2357",
-      radiusMeters: branch.geofenceRadius || branch.radiusMeters || 100,
-      geofenceRadius: branch.geofenceRadius || branch.radiusMeters || 100,
-      isActive: branch.isActive ?? true,
-    });
-    setIsModalOpen(true);
-  };
+    // صافي الراتب المستحق الفعلي
+    let netSalary = earnedBasePay + overtimePay - lateDeduction - advanceDeductions;
+    if (netSalary < 0) netSalary = 0;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-      ...(name === "nameAr" ? { name: value } : {}),
-    }));
-  };
-
-  const handleMapLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const url = e.target.value;
-    setMapLink(url);
-    const atRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
-    const qRegex = /q=(-?\d+\.\d+),(-?\d+\.\d+)/;
-    const placeRegex = /search\/(-?\d+\.\d+),(-?\d+\.\d+)/;
-    const match = url.match(atRegex) || url.match(qRegex) || url.match(placeRegex);
-    if (match) {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: match[1],
-        longitude: match[2],
-      }));
-      showToast("تم استخراج الإحداثيات بنجاح!", "success");
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await saveBranchAction({
-        ...formData,
-        name: formData.name || formData.nameAr || "فرع",
-      });
-      if (res.success) {
-        showToast(formData.id ? "تم تعديل الفرع بنجاح" : "تم إضافة الفرع بنجاح", "success");
-        setIsModalOpen(false);
-        router.refresh();
-      } else {
-        showToast(res.error || "حدث خطأ أثناء الحفظ", "error");
-      }
-    } catch (err) {
-      showToast("حدث خطأ غير متوقع", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا الفرع؟")) return;
-    try {
-      const res = await deleteBranchAction(id);
-      if (res.success) {
-        showToast("تم حذف الفرع", "success");
-        setBranches((prev) => prev.filter((b) => b.id !== id));
-        router.refresh();
-      } else {
-        showToast(res.error || "فشل الحذف", "error");
-      }
-    } catch (err) {
-      showToast("حدث خطأ أثناء الحذف", "error");
-    }
-  };
-
-  const handleToggleStatus = async (id: string, currentStatus?: boolean) => {
-    try {
-      const res = await toggleBranchStatusAction(id, currentStatus);
-      if (res.success) {
-        showToast("تم تغيير حالة الفرع", "success");
-        setBranches((prev) =>
-          prev.map((b) => (b.id === id ? { ...b, isActive: !b.isActive } : b))
-        );
-        router.refresh();
-      }
-    } catch (err) {
-      showToast("فشل تغيير الحالة", "error");
-    }
+    return {
+      hourlyRate: hourlyRate.toFixed(2),
+      earnedBasePay: earnedBasePay.toFixed(2),
+      overtimePay: overtimePay.toFixed(2),
+      lateDeduction: lateDeduction.toFixed(2),
+      netSalary: Math.round(netSalary),
+    };
   };
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Toast Feedback */}
-      {feedback && (
-        <div
-          className={`p-4 rounded-xl flex items-center gap-3 border transition-all ${
-            feedback.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-              : "bg-rose-500/10 border-rose-500/30 text-rose-400"
-          }`}
-        >
-          {feedback.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-          <span className="font-medium text-sm">{feedback.text}</span>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Building2 className="text-blue-500" /> إدارة الفروع والنطاق الجغرافي
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            إضافة وتعديل الفروع وتحديد نطاق بصمة الحضور والانصراف (GPS Geofence)
-          </p>
-        </div>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-600/20"
-        >
-          <Plus size={18} /> إضافة فرع جديد
-        </button>
+      {/* التنبيه الإرشادي */}
+      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-2xl text-xs flex items-center justify-between">
+        <span>* يتم احتساب الراتب آلياً: (ساعات العمل الفعلية + الإجازات المعتمدة) × أجر الساعة + الإضافي - التأخير - السلف.</span>
       </div>
 
-      {/* Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {branches.map((branch) => (
-          <div
-            key={branch.id}
-            className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-6 transition-all space-y-4 relative overflow-hidden group"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-bold text-white">
-                  {branch.nameAr || branch.name || branch.nameEn || "فرع بدون اسم"}
-                </h3>
-                {branch.nameEn && <p className="text-xs text-slate-400">{branch.nameEn}</p>}
-              </div>
-              <button
-                onClick={() => handleToggleStatus(branch.id, branch.isActive ?? true)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
-                  branch.isActive
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                }`}
-              >
-                {branch.isActive ? (
-                  <>
-                    <CheckCircle size={12} /> نشط
-                  </>
-                ) : (
-                  <>
-                    <XCircle size={12} /> غير نشط
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="text-sm text-slate-300 space-y-2 bg-slate-800/50 p-3 rounded-xl">
-              <p className="flex items-center gap-2 text-slate-400">
-                <MapPin size={14} className="text-blue-400" /> {branch.address || "لا يوجد عنوان محدد"}
-              </p>
-              <div className="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-700/50">
-                <span>الإحداثيات: {branch.latitude}, {branch.longitude}</span>
-                <span className="text-blue-400 font-medium">
-                  نطاق البصمة: {branch.geofenceRadius || branch.radiusMeters || 100} متر
-                </span>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => openEditModal(branch)}
-                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                title="تعديل"
-              >
-                <Edit size={16} />
-              </button>
-              <button
-                onClick={() => handleDelete(branch.id)}
-                className="p-2 text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
-                title="حذف"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
+      {/* جدول المسير المالي الدقيق */}
+      <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+        <table className="w-full text-right text-xs">
+          <thead className="bg-slate-800/60 text-slate-400 font-bold border-b border-slate-800">
+            <tr>
+              <th className="p-4">الموظف والفرع</th>
+              <th className="p-4 text-center">الوردية المقررة</th>
+              <th className="p-4 text-center">الراتب الأساسي</th>
+              <th className="p-4 text-center">أجر الساعة</th>
+              <th className="p-4 text-center">أيام وساعات العمل</th>
+              <th className="p-4 text-center">الإجازات المعتمدة</th>
+              <th className="p-4 text-center">الإضافي</th>
+              <th className="p-4 text-center">خصم السلف</th>
+              <th className="p-4 text-center font-black text-white">صافي الراتب المستحق</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800 text-slate-300">
+            {initialData.map((emp: any, idx: number) => {
+              const calc = calculateRow(emp);
+              return (
+                <tr key={idx} className="hover:bg-slate-800/40 transition">
+                  <td className="p-4 font-bold text-white">
+                    <div>{emp.name}</div>
+                    <div className="text-[11px] text-slate-400">{emp.role} - {emp.branchName}</div>
+                  </td>
+                  <td className="p-4 text-center">{emp.workingHoursPerDay} س / يوم</td>
+                  <td className="p-4 text-center font-mono font-bold">{emp.basicSalary} ج.م</td>
+                  <td className="p-4 text-center font-mono text-slate-400">{calc.hourlyRate} ج.م</td>
+                  <td className="p-4 text-center font-mono font-bold text-blue-400">
+                    {emp.workedDays || 0} يوم ({emp.workedHours || 0} س)
+                  </td>
+                  <td className="p-4 text-center text-emerald-400 font-bold">
+                    {emp.approvedLeaveDays > 0 ? `${emp.approvedLeaveDays} يوم (مدفوع)` : '—'}
+                  </td>
+                  <td className="p-4 text-center text-emerald-400 font-mono">
+                    {emp.overtimeHours > 0 ? `+${calc.overtimePay} ج.م` : '—'}
+                  </td>
+                  <td className="p-4 text-center text-amber-500 font-mono font-bold">
+                    {emp.advanceDeductions > 0 ? `-${emp.advanceDeductions} ج.م` : '—'}
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className="inline-block bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono font-black text-sm px-3 py-1.5 rounded-xl">
+                      {calc.netSalary} ج.م
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700/50 bg-slate-800/50">
-              <h2 className="text-2xl font-bold text-white">
-                {editingBranch ? "تعديل الفرع" : "إضافة فرع جديد"}
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">الاسم بالعربية *</label>
-                  <input
-                    type="text"
-                    name="nameAr"
-                    required
-                    value={formData.nameAr || ""}
-                    onChange={handleChange}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="الاسد"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">الاسم بالإنجليزية</label>
-                  <input
-                    type="text"
-                    name="nameEn"
-                    value={formData.nameEn || ""}
-                    onChange={handleChange}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Lion"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">العنوان</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address || ""}
-                  onChange={handleChange}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="دسوق - ش الجيش"
-                />
-              </div>
-
-              <div className="space-y-2 bg-blue-900/20 p-4 rounded-xl border border-blue-500/20">
-                <label className="text-sm font-medium text-blue-300 flex items-center gap-2">
-                  <MapPin size={16} /> رابط خرائط جوجل (سحب الإحداثيات تلقائياً)
-                </label>
-                <input
-                  type="text"
-                  value={mapLink}
-                  onChange={handleMapLinkChange}
-                  className="w-full bg-slate-800/80 border border-blue-500/30 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left placeholder:text-slate-500"
-                  dir="ltr"
-                  placeholder="https://maps.google.com/..."
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">خط العرض (Latitude)</label>
-                  <input
-                    type="text"
-                    name="latitude"
-                    required
-                    value={formData.latitude || ""}
-                    onChange={handleChange}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">خط الطول (Longitude)</label>
-                  <input
-                    type="text"
-                    name="longitude"
-                    required
-                    value={formData.longitude || ""}
-                    onChange={handleChange}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-300">نصف قطر نطاق البصمة (بالمتر)</label>
-                  <input
-                    type="number"
-                    name="radiusMeters"
-                    required
-                    min="10"
-                    value={formData.radiusMeters || 100}
-                    onChange={handleChange}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none text-left"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                <input
-                  type="checkbox"
-                  id="isActiveBranchManager"
-                  name="isActive"
-                  checked={formData.isActive ?? true}
-                  onChange={handleChange}
-                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-blue-500"
-                />
-                <label htmlFor="isActiveBranchManager" className="text-sm font-medium text-slate-300 cursor-pointer">
-                  الفرع نشط ومتاح للبصمة
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-700 transition-colors"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all disabled:opacity-50"
-                >
-                  {loading ? "جاري الحفظ..." : "حفظ"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export default BranchEmployeeManager;
+export default AttendanceReviewList;
