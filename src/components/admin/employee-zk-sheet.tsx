@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useRef } from 'react';
-import { Printer, Download, MapPin, Camera, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { 
+  Printer, Download, Camera, CheckCircle2, 
+  AlertTriangle, ShieldCheck, FileSpreadsheet 
+} from 'lucide-react';
 
 interface ZkSheetProps {
   employee: {
@@ -31,7 +34,7 @@ interface ZkSheetProps {
     status: 'PRESENT' | 'APPROVED_LEAVE' | 'ABSENT' | 'WEEKLY_OFF';
     leaveReason?: string;
   }>;
-  approvedAdvancesTotal: number; // إجمالي السلف المسحوبة والمعتمدة
+  approvedAdvancesTotal: number;
 }
 
 export default function EmployeeZkSheet({
@@ -43,7 +46,7 @@ export default function EmployeeZkSheet({
 }: ZkSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  // العمليات الحسابية للمسير المالي
+  // 1. العمليات الحسابية للمسير المالي
   const scheduledDays = 26;
   const dailyWage = employee.basicSalary / scheduledDays;
   const hourlyWage = dailyWage / employee.workingHoursPerDay;
@@ -63,7 +66,7 @@ export default function EmployeeZkSheet({
 
   const approvedLeaveDays = records.filter((r) => r.status === 'APPROVED_LEAVE').length;
 
-  // صافي الراتب النهائي
+  // صافي الراتب المستحق
   const netSalary = (
     employee.basicSalary +
     parseFloat(overtimePay) -
@@ -72,24 +75,103 @@ export default function EmployeeZkSheet({
     approvedAdvancesTotal
   ).toFixed(2);
 
+  // 2. أمر الطباعة المباشرة
   const handlePrint = () => {
     window.print();
   };
 
+  // 3. استخراج وتنزيل ملف Excel / CSV باللغة العربية
+  const handleExportCSV = () => {
+    const headers = [
+      'اليوم',
+      'التاريخ',
+      'الوردية',
+      'الحضور',
+      'الانصراف',
+      'إثبات الموقع (GPS)',
+      'إثبات الصورة',
+      'ساعات العمل الفعلية',
+      'دقائق التأخير',
+      'ساعات الإضافي',
+      'الحالة والاعتماد',
+    ];
+
+    const rows = records.map((r) => [
+      r.dayName,
+      r.date,
+      `"${r.shiftSchedule}"`,
+      r.checkInTime || '—',
+      r.checkOutTime || '—',
+      r.checkInTime
+        ? r.gpsVerified
+          ? `مطابق (${r.gpsDistance}م)`
+          : `خارج النطاق (${r.gpsDistance}م)`
+        : '—',
+      r.photoUrl ? 'موثقة' : '—',
+      `"${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د"`,
+      r.lateMinutes,
+      (r.overtimeMinutes / 60).toFixed(1),
+      r.status === 'PRESENT'
+        ? 'حاضر'
+        : r.status === 'APPROVED_LEAVE'
+        ? 'إجازة معتمدة (مدفوعة)'
+        : r.status === 'WEEKLY_OFF'
+        ? 'عطلة أسبوعية'
+        : 'غياب غير مسجل',
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [
+        `"تقرير دوام وحضور: ${employee.name} (كود: #${employee.employeeCode})"`,
+        `"الفرع: ${employee.branchName} - الفترة: ${monthName} لسنة ${year}"`,
+        `"الراتب الأساسي: ${employee.basicSalary} ج.م - صافي الراتب المستحق: ${netSalary} ج.م"`,
+        '',
+        headers.join(','),
+        ...rows.map((row) => row.join(',')),
+      ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download',
+      `شيت_حضور_${employee.name.replace(/\s+/g, '_')}_${monthName}_${year}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6" dir="rtl">
-      {/* شريط الإجراءات */}
-      <div className="flex items-center justify-between no-print bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+      {/* شريط الإجراءات: يحتوي على زري الطباعة والاستخراج */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
         <div>
           <h2 className="text-lg font-bold text-white">تقرير الحضور التفصيلي ومسير الرواتب (ZK-Standard)</h2>
-          <p className="text-xs text-slate-400">تفريغ ساعات العمل، إثباتات الـ GPS والكاميرا، والتصفية المالية</p>
+          <p className="text-xs text-slate-400 mt-0.5">تفريغ ساعات العمل، إثباتات الـ GPS والكاميرا، والتصفية المالية</p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex items-center gap-3">
+          {/* زر 1: طباعة الشيت */}
           <button
+            type="button"
             onClick={handlePrint}
-            className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-90 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg transition cursor-pointer"
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-700 transition cursor-pointer shadow-md"
           >
-            <Printer size={16} /> طباعة الشيت / استخراج PDF
+            <Printer size={16} className="text-orange-400" />
+            <span>طباعة الشيت</span>
+          </button>
+
+          {/* زر 2: استخراج أو حفظ ملف Excel */}
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-orange-500/20 transition cursor-pointer"
+          >
+            <Download size={16} />
+            <span>استخراج وحفظ الملف (Excel)</span>
           </button>
         </div>
       </div>
@@ -116,7 +198,7 @@ export default function EmployeeZkSheet({
         </div>
 
         {/* كارت بيانات الموظف والتعاقد */}
-        <div className="grid grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 text-xs">
           <div>
             <span className="text-slate-500 block">اسم الموظف:</span>
             <span className="font-bold text-sm text-slate-900">{employee.name}</span>
@@ -161,17 +243,14 @@ export default function EmployeeZkSheet({
                   </td>
                   <td className="p-2 border border-slate-200 whitespace-nowrap text-slate-600">{r.shiftSchedule}</td>
                   
-                  {/* وقت الحضور */}
                   <td className="p-2 border border-slate-200 text-center font-mono font-bold">
                     {r.checkInTime || '—'}
                   </td>
 
-                  {/* وقت الانصراف */}
                   <td className="p-2 border border-slate-200 text-center font-mono font-bold">
                     {r.checkOutTime || '—'}
                   </td>
 
-                  {/* توثيق الـ GPS */}
                   <td className="p-2 border border-slate-200 text-center">
                     {r.checkInTime ? (
                       r.gpsVerified ? (
@@ -186,7 +265,6 @@ export default function EmployeeZkSheet({
                     ) : '—'}
                   </td>
 
-                  {/* توثيق الكاميرا */}
                   <td className="p-2 border border-slate-200 text-center">
                     {r.photoUrl ? (
                       <span className="text-[10px] text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded font-bold flex items-center justify-center gap-1">
@@ -195,22 +273,18 @@ export default function EmployeeZkSheet({
                     ) : '—'}
                   </td>
 
-                  {/* ساعات العمل */}
                   <td className="p-2 border border-slate-200 text-center font-mono font-bold">
                     {r.workedMinutes > 0 ? `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د` : '—'}
                   </td>
 
-                  {/* التأخير */}
                   <td className="p-2 border border-slate-200 text-center font-mono text-rose-600 font-bold">
                     {r.lateMinutes > 0 ? `${r.lateMinutes} د` : '—'}
                   </td>
 
-                  {/* الإضافي */}
                   <td className="p-2 border border-slate-200 text-center font-mono text-emerald-600 font-bold">
                     {r.overtimeMinutes > 0 ? `${(r.overtimeMinutes / 60).toFixed(1)} س` : '—'}
                   </td>
 
-                  {/* الحالة النهائية */}
                   <td className="p-2 border border-slate-200 text-xs">
                     {r.status === 'PRESENT' && <span className="text-emerald-700 font-bold">حاضر</span>}
                     {r.status === 'APPROVED_LEAVE' && (
@@ -225,7 +299,7 @@ export default function EmployeeZkSheet({
           </table>
         </div>
 
-        {/* شريط الإجماليات والمستحقات المالية (Financial Summary) */}
+        {/* شريط الإجماليات والمستحقات المالية */}
         <div className="mt-6 border-t-2 border-slate-900 pt-4">
           <h4 className="font-black text-sm text-slate-900 mb-3">الملخص المالي ومسير الراتب النهائي</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-4">
@@ -266,7 +340,7 @@ export default function EmployeeZkSheet({
             </div>
           </div>
 
-          {/* التوقيعات الرسمية للإدارة */}
+          {/* التوقيعات الرسمية */}
           <div className="grid grid-cols-3 gap-6 pt-6 border-t border-slate-200 text-center text-xs text-slate-600">
             <div>
               <p className="font-bold mb-8">إعداد ومراجعة مدير الفرع</p>
