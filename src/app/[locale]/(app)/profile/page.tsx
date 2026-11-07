@@ -76,7 +76,7 @@ export default function EmployeeProfilePage() {
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // استرجاع بيانات الموظف الحالي فور الدخول
+  // استرجاع بيانات الموظف من مسار update الموحد
   useEffect(() => {
     const storedId = localStorage.getItem('userId') || '';
     const storedPhone = localStorage.getItem('userPhone') || '';
@@ -89,7 +89,7 @@ export default function EmployeeProfilePage() {
     async function fetchUserData() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/profile?id=${storedId}`, { cache: 'no-store' });
+        const res = await fetch(`/api/profile/update?id=${storedId}`, { cache: 'no-store' });
         if (res.ok) {
           const user = await res.json();
           if (user) {
@@ -132,7 +132,7 @@ export default function EmployeeProfilePage() {
     }
   }, []);
 
-  // رفع وتغيير الصورة الشخصية
+  // رفع الصورة الشخصية
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -177,7 +177,7 @@ export default function EmployeeProfilePage() {
     setSaving(true);
 
     try {
-      const res = await fetch('/api/profile', {
+      const res = await fetch('/api/profile/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +243,7 @@ export default function EmployeeProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16 text-slate-200" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* 1. الترويسة الرئيسية والصورة الشخصية */}
+      {/* 1. الترويسة والصورة الشخصية */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center sm:items-start gap-6">
         <div className="relative group shrink-0">
           <div className="h-28 w-28 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-slate-900 shadow-xl flex items-center justify-center">
@@ -318,7 +318,7 @@ export default function EmployeeProfilePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* القسم الأول: البيانات الشخصية والمدنية */}
+        {/* 1. البيانات الشخصية والمدنية */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <User size={18} className="text-orange-500" />
@@ -409,7 +409,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم الثاني: بيانات الهوية والتأمينات القانونية */}
+        {/* 2. الهوية والتأمينات */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <CreditCard size={18} className="text-orange-500" />
@@ -473,7 +473,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم الثالث: الاتصال والعنوان وجهة الطوارئ */}
+        {/* 3. الاتصال والعنوان والطوارئ */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <Phone size={18} className="text-orange-500" />
@@ -557,7 +557,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم الرابع: بيانات صرف المستحقات والرواتب */}
+        {/* 4. صرف المستحقات والرواتب */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <DollarSign size={18} className="text-emerald-500" />
@@ -620,7 +620,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم الخامس: المؤهل الدراسي والخبرات */}
+        {/* 5. المؤهل الدراسي والخبرات */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3 flex items-center gap-2">
             <GraduationCap size={18} className="text-orange-500" />
@@ -669,7 +669,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* القسم السادس: أمان الحساب وتغيير كلمة المرور */}
+        {/* 6. أمان الحساب وتغيير كلمة المرور */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
