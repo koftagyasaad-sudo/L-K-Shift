@@ -11,10 +11,9 @@ import {
   Clock,
   Filter,
   FileText,
-  User,
-  Phone,
-  Building2,
-  GraduationCap,
+  ExternalLink,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 export default function RecruitmentManagementPage() {
@@ -25,8 +24,9 @@ export default function RecruitmentManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('ALL');
   const [selectedApplication, setSelectedApplication] = useState<any | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // سجل المتقدمين الفعلي
+  // استمارات المتقدمين الأصلية
   const [applications] = useState<any[]>([
     {
       id: 1,
@@ -60,6 +60,19 @@ export default function RecruitmentManagementPage() {
     },
   ]);
 
+  // نسخ رابط استمارة التقديم العامة
+  const handleCopyLink = () => {
+    const applyUrl = `${window.location.origin}/${locale}/apply`;
+    navigator.clipboard.writeText(applyUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  // فتح استمارة التقديم في تبويب مستقل
+  const handleOpenApplyPage = () => {
+    window.open(`/${locale}/apply`, '_blank');
+  };
+
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
       app.fullName?.includes(searchTerm) ||
@@ -70,8 +83,8 @@ export default function RecruitmentManagementPage() {
   });
 
   return (
-    <div className="space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية - الثيم الداكن الأصلي */}
+    <div className="space-y-6 pb-12 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* الترويسة الرئيسية - الثيم الداكن الأصلي مع زري فتح ونسخ الرابط */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 border border-orange-500/20">
@@ -85,7 +98,27 @@ export default function RecruitmentManagementPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* زر نسخ رابط الاستمارة */}
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+          >
+            {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+            <span>{copied ? 'تم نسخ الرابط!' : 'نسخ رابط الاستمارة'}</span>
+          </button>
+
+          {/* زر فتح الاستمارة */}
+          <button
+            type="button"
+            onClick={handleOpenApplyPage}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer"
+          >
+            <ExternalLink size={14} />
+            <span>فتح الاستمارة</span>
+          </button>
+
           <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
             <FileText size={14} /> إجمالي الاستمارات: {applications.length}
           </span>
@@ -120,7 +153,7 @@ export default function RecruitmentManagementPage() {
         </div>
       </div>
 
-      {/* جدول استمارات المتقدمين بالثيم الأصلي */}
+      {/* جدول استمارات المتقدمين بالثيم الداكن */}
       <div className="bg-[#0c0e18] border border-white/5 rounded-3xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
@@ -177,9 +210,9 @@ export default function RecruitmentManagementPage() {
         </div>
       </div>
 
-      {/* نافذة استعراض وطباعة الاستمارة (White Theme مخصص للطباعة الرسمية) */}
+      {/* نافذة استعراض وطباعة الاستمارة (White Theme مخصص للطباعة الورقية) */}
       {selectedApplication && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6 text-slate-900">
             <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
               <div>
