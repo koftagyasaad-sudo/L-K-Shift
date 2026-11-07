@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { verifyPassword, hashPassword } from '@/lib/auth-security';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,103 +10,100 @@ export async function POST(request: NextRequest) {
     const password = (body.password || '').toString().trim();
 
     if (!phone || !password) {
-      return NextResponse.json({ message: 'يرجى إدخال رقم الهاتف وكلمة المرور' }, { status: 400 });
-    }
-
-    // 1. حساب مدير النظام الرئيسي
-    if ((phone === '010' || phone === '01068390982') && password === '123456') {
       return NextResponse.json(
-        {
-          success: true,
-          user: {
-            id: 1,
-            name: 'Omar Abd Elhalim',
-            phone: '01068390982',
-            role: 'مدير النظام',
-            branchId: null,
-            branchName: 'المركز الرئيسي',
-            isOnboarded: true,
-            permissions: ['*'], // صلاحية كاملة غير مشروطة
-          },
-        },
-        { status: 200 }
+        { success: false, message: 'يرجى إدخال رقم الهاتف وكلمة المرور' },
+        { status: 400 }
       );
     }
 
-    // 2. التحقق من جدول users ومطابقة الصلاحيات من جدول custom_roles
-    const raw = await db.execute(sql`
+    // استرجاع المستخدم من قاعدة البيانات
+    const userRaw = await db.execute(sql`
       SELECT 
         u.id,
-        COALESCE(u.full_name_ar, u.name, 'موظف') as name,
         u.phone,
-        COALESCE(u.job_role, u.role, 'موظف') as role,
-        COALESCE(u.primary_branch_id, u.branch_id) as "branchId",
-        u.password,
-        u.password_hash,
-        u.is_active as "isActive",
-        u.is_onboarded as "isOnboarded",
-        b.name_ar as "branchName",
-        b.latitude::text as "branchLat",
-        b.longitude::text as "branchLng",
-        b.geofence_radius as "branchRadius",
-        cr.permissions as "rolePermissions"
+        COALESCE(u.full_name_ar, u.name, 'مستخدم') as name,
+        COALESCE(u.password_hash, '') as password_hash,
+        COALESCE(u.system_role, 'EMPLOYEE') as system_role,
+        COALESCE(u.job_role, 'موظف') as job_role,
+        u.primary_branch_id,
+        b.name_ar as branch_name,
+        u.is_active
       FROM users u
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
-      LEFT JOIN custom_roles cr ON (u.job_role = cr.name_ar OR u.job_role = cr.name OR u.role = cr.name)
+      LEFT JOIN branches b ON u.primary_branch_id = b.id
       WHERE u.phone = ${phone}
       LIMIT 1;
     `);
 
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-
+    const rows = Array.isArray(userRaw) ? userRaw : (userRaw as any)?.rows || [];
     if (!rows.length) {
-      return NextResponse.json({ message: 'رقم الهاتف غير مسجل في المنظومة' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: 'رقم الهاتف أو كلمة المرور غير صحيحة' },
+        { status: 401 }
+      );
     }
 
     const user = rows[0];
 
-    if (user.isActive === false) {
-      return NextResponse.json({ message: 'الحساب معطل، يرجى مراجعة إدارة المنظومة' }, { status: 403 });
+    // التحقق من أن الحساب نشط
+    if (user.is_active === false) {
+      return NextResponse.json(
+        { success: false, message: 'تم إيقاف هذا الحساب، يرجى مراجعة إدارة الموارد البشرية' },
+        { status: 403 }
+      );
     }
 
-    const isValidPassword =
-      password === user.password ||
-      password === user.password_hash ||
-      password === '123456';
+    // التحقق من كلمة المرور عبر محرك التشفير
+    const { isValid, needsRehash } = verifyPassword(password, user.password_hash);
 
-    if (!isValidPassword) {
-      return NextResponse.json({ message: 'كلمة المرور غير صحيحة' }, { status: 401 });
+    if (!isValid) {
+      return NextResponse.json(
+        { success: false, message: 'رقم الهاتف أو كلمة المرور غير صحيحة' },
+        { status: 401 }
+      );
     }
 
-    // استخراج الصلاحيات الفعلية للدور
-    let userPermissions: string[] = ['attendance.check_in', 'branch.view_own'];
-    if (user.role === 'مدير النظام' || user.role === 'SUPER_ADMIN') {
-      userPermissions = ['*'];
-    } else if (Array.isArray(user.rolePermissions)) {
-      userPermissions = user.rolePermissions;
+    // إذا كان الحساب مسجلاً بكلمة مرور قديمة غير مشفرة، يتم تشفيرها وحفظها تلقائياً الآن
+    if (needsRehash) {
+      const secureHash = hashPassword(password);
+      await db.execute(sql`
+        UPDATE users 
+        SET password_hash = ${secureHash}, updated_at = NOW() 
+        WHERE id = ${user.id};
+      `);
     }
+
+    // تحديث تاريخ آخر ظهور للمستخدم
+    await db.execute(sql`
+      UPDATE users 
+      SET last_login_at = NOW() 
+      WHERE id = ${user.id};
+    `);
+
+    const userRole = user.system_role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (user.job_role || 'موظف');
+    const permissions = user.system_role === 'SUPER_ADMIN' ? ['*'] : ['attendance.submit', 'profile.edit'];
 
     return NextResponse.json(
       {
         success: true,
+        message: 'تم تسجيل الدخول بنجاح',
         user: {
           id: user.id,
           name: user.name,
           phone: user.phone,
-          role: user.role,
-          branchId: user.branchId,
-          branchName: user.branchName || (user.isOnboarded ? 'فرع رئيسي' : 'بانتظار إسناد الفرع'),
-          branchLat: user.branchLat,
-          branchLng: user.branchLng,
-          branchRadius: user.branchRadius || 100,
-          isOnboarded: user.isOnboarded ?? Boolean(user.branchId),
-          permissions: userPermissions,
+          role: userRole,
+          branchId: user.primary_branch_id,
+          branchName: user.branch_name || 'الفرع الرئيسي',
+          permissions,
+          isOnboarded: true,
         },
       },
       { status: 200 }
     );
   } catch (error: any) {
-    console.error('Login API error:', error);
-    return NextResponse.json({ message: 'فشل تسجيل الدخول', error: error?.message }, { status: 500 });
+    console.error('Login Auth Error:', error);
+    return NextResponse.json(
+      { success: false, message: 'حدث خطأ في الخادم أثناء تسجيل الدخول', error: error?.message },
+      { status: 500 }
+    );
   }
 }
