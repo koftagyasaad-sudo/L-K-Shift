@@ -16,14 +16,14 @@ export default function EmployeeProfilePage() {
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string>('');
 
-  // حقول استمارة الـ HR
+  // استمارة الموظف
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [address, setAddress] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
 
-  // حقول تغيير كلمة المرور
+  // كلمة المرور
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -126,7 +126,6 @@ export default function EmployeeProfilePage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
@@ -155,7 +154,6 @@ export default function EmployeeProfilePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* استمارة بيانات الموارد البشرية */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
@@ -214,7 +212,7 @@ export default function EmployeeProfilePage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                رقم هاتف للطوارئ (المنزل / الأقارب)
+                رقم هاتف للطوارئ
               </label>
               <input
                 type="tel"
@@ -244,15 +242,11 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
 
-        {/* تغيير كلمة المرور */}
         <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
           <div className="border-b border-white/5 pb-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Lock size={16} className="text-orange-500" /> أمان الحساب وتغيير كلمة المرور
             </h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              اترك الحقول فارغة إذا كنت ترغب في الاحتفاظ بكلمة المرور الحالية دون تغيير.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
