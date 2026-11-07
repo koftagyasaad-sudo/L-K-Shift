@@ -18,7 +18,7 @@ export async function GET(
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
-    // 1. استرجاع بيانات الموظف الأساسية
+    // 1. بيانات الموظف
     const empRaw = await db.execute(sql`
       SELECT 
         u.id, 
@@ -54,7 +54,7 @@ export async function GET(
     const empPhone = String(employee.phone || '').trim();
     const workHours = Number(employee.workingHoursPerDay) || 8;
 
-    // 2. استرجاع سجلات الحضور بدون دوال استخراج حساسة للنوع لتفادي أخطاء SQL
+    // 2. استرجاع سجلات الحضور والانصراف بجميع المعرفات
     const logsRaw = await db.execute(sql`
       SELECT 
         id,
@@ -69,17 +69,15 @@ export async function GET(
         COALESCE(overtime_minutes, 0) as "overtimeMinutes",
         status
       FROM attendance_logs
-      WHERE (
-        user_id::text = ${id}
-        OR CAST(user_id AS TEXT) = ${id}
-        OR user_id::text = ${empCode}
-        OR user_id::text = ${empPhone}
-      )
+      WHERE user_id::text = ${id}
+         OR CAST(user_id AS TEXT) = ${id}
+         OR user_id::text = ${empCode}
+         OR user_id::text = ${empPhone}
       ORDER BY id ASC;
     `);
     const allLogs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
 
-    // 3. استرجاع الإجازات والسلف المعتمدة
+    // 3. الإجازات والسلف
     const leavesRaw = await db.execute(sql`
       SELECT 
         COALESCE(leave_type, request_type, 'ANNUAL') as "requestType", 
@@ -89,14 +87,14 @@ export async function GET(
         COALESCE(advance_amount, 0) as "advanceAmount",
         final_status
       FROM leave_requests
-      WHERE (
-        user_id::text = ${id} 
-        OR CAST(user_id AS TEXT) = ${id}
-        OR user_id::text = ${empCode}
-      )
-      AND (final_status = 'APPROVED' OR status::text = 'APPROVED');
+      WHERE (user_id::text = ${id} OR CAST(user_id AS TEXT) = ${id} OR user_id::text = ${empCode})
+        AND (final_status = 'APPROVED' OR status::text = 'APPROVED');
     `);
     const allLeaves = Array.isArray(leavesRaw) ? leavesRaw : (leavesRaw as any)?.rows || [];
+
+    const approvedAdvancesTotal = allLeaves.reduce((sum: number, item: any) => {
+      return sum + (parseFloat(item.advanceAmount) || 0);
+    }, 0);
 
     // استخراج تاريخ السجل بدقة بتوقيت مصر
     const extractLogDate = (log: any): string | null => {
@@ -113,28 +111,10 @@ export async function GET(
           }
         } catch {}
       }
-      if (log.check_out_time) {
-        try {
-          const d = new Date(log.check_out_time);
-          if (!isNaN(d.getTime())) {
-            return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
-          }
-        } catch {}
-      }
       return null;
     };
 
-    // حساب إجمالي السلف للشهر الحالي
-    const currentMonthLeaves = allLeaves.filter((lv: any) => {
-      const s = String(lv.startDate || '');
-      return s.includes(`${year}-${String(month).padStart(2, '0')}`);
-    });
-
-    const approvedAdvancesTotal = currentMonthLeaves.reduce((sum: number, item: any) => {
-      return sum + (parseFloat(item.advanceAmount) || 0);
-    }, 0);
-
-    // 4. بناء تفريغ أيام الشهر ومطابقة الحضور الفعلي
+    // 4. بناء أيام الشهر
     const daysInMonth = new Date(year, month, 0).getDate();
     const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const monthNamesAr = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -146,7 +126,6 @@ export async function GET(
       const dObj = new Date(year, month - 1, day);
       const dayName = dayNamesAr[dObj.getDay()];
 
-      // البحث عن سجل اليوم
       const dayLog = allLogs.find((l: any) => extractLogDate(l) === dateStr);
 
       const checkInRaw = dayLog?.check_in_time || null;
@@ -157,7 +136,6 @@ export async function GET(
       let lateMinutes = Number(dayLog?.lateMinutes || 0);
       let overtimeMinutes = Number(dayLog?.overtimeMinutes || 0);
 
-      // احتساب مدة العمل إن لم تكن مسجلة مسبقاً
       if (workedMinutes === 0 && checkInRaw) {
         if (checkOutRaw) {
           const diffMs = new Date(checkOutRaw).getTime() - new Date(checkInRaw).getTime();
@@ -167,14 +145,12 @@ export async function GET(
         }
       }
 
-      // فحص الإجازة المعتمدة
       const isLeave = allLeaves.some((lv: any) => {
         const start = String(lv.startDate || '').slice(0, 10);
         const end = String(lv.endDate || start).slice(0, 10);
         return dateStr >= start && dateStr <= end && lv.requestType !== 'ADVANCE';
       });
 
-      // تحديد الحالة: الحضور الفعلي يلغي أي عطلة أسبوعية
       let status: 'PRESENT' | 'APPROVED_LEAVE' | 'ABSENT' | 'WEEKLY_OFF' = 'ABSENT';
       if (checkInRaw || workedMinutes > 0) {
         status = 'PRESENT';
