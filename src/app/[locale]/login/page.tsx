@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { UserPlus, ArrowRight, Loader2, Sparkles, Shield } from 'lucide-react';
+import { UserPlus, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const params = useParams();
@@ -133,7 +133,7 @@ export default function LoginPage() {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[100px] animate-pulse delay-1000 pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        {/* الترويسة والشعار مع كتابة الاسم */}
+        {/* الترويسة والشعار */}
         <div className="mb-6 flex flex-col items-center text-center">
           <img
             src="/Logo.png"
@@ -141,12 +141,6 @@ export default function LoginPage() {
             className="h-20 w-auto mb-3 drop-shadow-xl mix-blend-screen object-contain"
           />
           <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
-
-          {/* شارة إبراز الاسم: Omar Abd Elhalim */}
-          <div className="mt-2 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-orange-500/15 to-rose-500/15 border border-orange-500/30 text-orange-400 text-xs font-black tracking-wide shadow-sm shadow-orange-500/10">
-            <Sparkles size={13} className="text-orange-400 animate-spin" style={{ animationDuration: '4s' }} />
-            <span>Omar Abd Elhalim</span>
-          </div>
 
           <p className="text-gray-400 text-xs mt-2 font-medium">
             {isRtl ? 'نظام إدارة الحضور والانصراف والورديات الميدانية' : 'Attendance & Shift Management System'}
@@ -337,10 +331,10 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* التذييل مع حفظ الحقوق واسمك */}
+          {/* التذييل مع Developed by Omar Abd Elhalim */}
           <div className="mt-6 pt-4 border-t border-white/5 text-center text-[11px] text-gray-400 flex flex-col items-center gap-1">
             <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
-            <span className="font-semibold text-orange-400/80">Developed for Omar Abd Elhalim</span>
+            <span className="font-semibold text-orange-400/80">Developed by Omar Abd Elhalim</span>
           </div>
         </div>
       </div>
