@@ -1,98 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { hashPassword } from '@/lib/auth-security';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const fullName = (body.fullName || body.name || '').toString().trim();
+    const fullName = (body.fullName || '').toString().trim();
     const phone = (body.phone || '').toString().trim();
     const password = (body.password || '').toString().trim();
 
     if (!fullName || !phone || !password) {
       return NextResponse.json(
-        { message: 'الاسم الرباعي، رقم الهاتف، وكلمة المرور حقول مطلوبة' },
+        { success: false, message: 'جميع الحقول مطلوبة' },
         { status: 400 }
       );
     }
 
     if (password.length < 6) {
       return NextResponse.json(
-        { message: 'يجب ألا تقل كلمة المرور عن 6 خانات' },
+        { success: false, message: 'كلمة المرور يجب ألا تقل عن 6 أحرف أو أرقام' },
         { status: 400 }
       );
     }
 
-    // 1. التحقق من عدم تسجيل رقم الهاتف مسبقاً
-    const checkUser = await db.execute(sql`
-      SELECT id, full_name_ar as name FROM users WHERE phone = ${phone} LIMIT 1;
+    // التحقق من عدم تكرار رقم الموبايل
+    const existing = await db.execute(sql`
+      SELECT id FROM users WHERE phone = ${phone} LIMIT 1;
     `);
-    const existing = Array.isArray(checkUser) ? checkUser : (checkUser as any)?.rows || [];
-
-    if (existing.length > 0) {
+    const existingRows = Array.isArray(existing) ? existing : (existing as any)?.rows || [];
+    if (existingRows.length > 0) {
       return NextResponse.json(
-        { message: 'رقم الهاتف مسجل مسبقاً في المنظومة، يمكنك تسجيل الدخول مباشرة' },
+        { success: false, message: 'رقم الهاتف مسجل بالفعل مسبقاً' },
         { status: 409 }
       );
     }
 
-    // 2. إنشاء حساب الموظف برتبة مبدئية غير معينة
-    const insertRaw = await db.execute(sql`
+    // تشفير كلمة المرور عبر محرك التشفير
+    const hashedPassword = hashPassword(password);
+
+    // إضافة الموظف الجديد
+    await db.execute(sql`
       INSERT INTO users (
         full_name_ar,
-        full_name_en,
         name,
         phone,
-        password,
         password_hash,
-        job_role,
-        role,
         system_role,
-        primary_branch_id,
+        job_role,
+        verification_mode,
         is_active,
-        is_onboarded,
-        annual_leave_days,
-        used_leave_days,
-        monthly_salary,
         created_at,
         updated_at
       ) VALUES (
         ${fullName},
         ${fullName},
-        ${fullName},
         ${phone},
-        ${password},
-        ${password},
-        'موظف جديد',
-        'موظف جديد',
+        ${hashedPassword},
         'EMPLOYEE',
-        NULL,
-        true,
-        false,
-        21,
-        0,
-        0,
+        'موظف',
+        'QR_GPS',
+        TRUE,
         NOW(),
         NOW()
-      )
-      RETURNING id, full_name_ar as name, phone, job_role as role;
+      );
     `);
 
-    const rows = Array.isArray(insertRaw) ? insertRaw : (insertRaw as any)?.rows || [];
-    const newUser = rows[0];
-
     return NextResponse.json(
-      {
-        success: true,
-        message: 'تم إنشاء حسابك بنجاح! سيتم إسناد الفرع والصلاحيات من قبل الإدارة.',
-        user: newUser,
-      },
+      { success: true, message: 'تم إنشاء الحساب وتشفير بيانات الدخول بنجاح!' },
       { status: 201 }
     );
   } catch (error: any) {
-    console.error('Registration Error:', error);
+    console.error('Register API Error:', error);
     return NextResponse.json(
-      { message: error?.message || 'حدث خطأ أثناء إنشاء الحساب', error: error?.message },
+      { success: false, message: 'فشل إنشاء الحساب', error: error?.message },
       { status: 500 }
     );
   }
