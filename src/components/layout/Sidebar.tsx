@@ -156,7 +156,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
 
   return (
     <>
-      {/* زر القائمة للشاشات الصغيرة والموبايل */}
       <button
         type="button"
         onClick={() => setIsOpenMobile(!isOpenMobile)}
@@ -166,7 +165,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         {isOpenMobile ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {/* خلفية معتمة للموبايل */}
       {isOpenMobile && (
         <div
           onClick={() => setIsOpenMobile(false)}
@@ -174,7 +172,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         />
       )}
 
-      {/* حاوية القائمة الجانبية الكاملة */}
       <aside
         className={`fixed inset-y-0 ${
           isRtl ? 'right-0' : 'left-0'
@@ -189,31 +186,28 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
-        {/* الترويسة وشعار النظام */}
+        {/* الترويسة مع لوجو مفرغ برمجياً وبدون خلفية مربعة */}
         <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-2 shadow-lg shadow-orange-500/20">
+          <Link href={`/${locale}/profile`} className="flex items-center gap-3 group cursor-pointer" title="فتح الملف الشخصي">
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
               <img
                 src="/Logo.png"
                 alt="L-K Shift Logo"
-                className="h-full w-full object-contain"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
+                className="h-full w-full object-contain mix-blend-screen drop-shadow-md"
               />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-wide text-slate-900 dark:text-white">
+              <h2 className="text-lg font-black tracking-wide text-slate-900 dark:text-white group-hover:text-orange-500 transition">
                 L-K Shift
               </h2>
               <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
                 {userRole || 'مدير النظام'}
               </span>
             </div>
-          </div>
+          </Link>
         </div>
 
-        {/* قائمة الروابط الكاملة مع زر الملف الشخصي */}
+        {/* قائمة الروابط وبداخلها رابط الملف الشخصي */}
         <div className="flex-1 overflow-y-auto px-4 py-5 space-y-1.5 custom-scrollbar">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
@@ -246,7 +240,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
           })}
         </div>
 
-        {/* الجزء السفلي: كارت تسجيل الخروج */}
+        {/* زر تسجيل الخروج */}
         <div className="border-t border-slate-100 p-4 dark:border-white/5">
           <button
             type="button"
