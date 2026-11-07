@@ -28,16 +28,16 @@ export default async function EmployeeDashboardPage({ params }: PageProps) {
     redirect(`/${locale}/login`);
   }
 
-  // استعلام آمن ومحصور في الأعمدة الحقيقية فقط لجدول users
+  // استعلام محدد بالأعمدة الصحيحة لجدول users ومطابقة رقم المعرف
   const userResults = await db
     .select({
       id: users.id,
-      name: users.name,
+      name: users.fullNameAr,
       phone: users.phone,
-      role: users.role,
+      role: users.jobRole,
     })
     .from(users)
-    .where(eq(users.id, sessionUserId))
+    .where(eq(users.id, Number(sessionUserId)))
     .limit(1)
     .catch((err) => {
       console.error('Database query error in EmployeeDashboardPage:', err);
@@ -98,7 +98,7 @@ export default async function EmployeeDashboardPage({ params }: PageProps) {
 
         {/* الملف الشخصي */}
         <Link
-          href={`/${locale}/employee/profile`}
+          href={`/${locale}/profile`}
           className="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-emerald-500 hover:shadow-md"
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition">
