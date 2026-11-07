@@ -12,6 +12,10 @@ export interface BranchData {
   nameEn?: string | null;
   type?: 'BRANCH' | 'CENTRAL_KITCHEN' | string;
   address?: string | null;
+  phone?: string | null;
+  managerName?: string | null;
+  managerPhone?: string | null;
+  employeeCount?: number | null;
   latitude: number;
   longitude: number;
   geofenceRadius: number;
@@ -25,6 +29,7 @@ export interface BranchData {
   isActive: boolean;
   createdAt?: string | Date;
   updatedAt?: string | Date | null;
+  [key: string]: any;
 }
 
 export async function getBranchesAction(): Promise<BranchData[]> {
@@ -33,6 +38,8 @@ export async function getBranchesAction(): Promise<BranchData[]> {
     return rows.map((r: any) => ({
       ...r,
       name: r.nameAr || r.nameEn || '',
+      phone: r.phone || '',
+      managerName: r.managerName || r.manager_name || '',
     })) as BranchData[];
   } catch (error) {
     console.error('Error fetching branches:', error);
@@ -57,6 +64,8 @@ export async function getBranchByIdAction(id: string | number): Promise<BranchDa
     return {
       ...b,
       name: b.nameAr || b.nameEn || '',
+      phone: b.phone || '',
+      managerName: b.managerName || b.manager_name || '',
     } as BranchData;
   } catch (error) {
     console.error('Error fetching branch by id:', error);
@@ -75,6 +84,7 @@ export async function createBranchAction(data: {
   shiftStartTime?: string;
   shiftEndTime?: string;
   shiftName?: string;
+  [key: string]: any;
 }): Promise<{ success: boolean; message?: string; branch?: any }> {
   try {
     const inserted = await db
