@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 
 export interface BranchData {
   id: number;
+  name?: string | null;
   nameAr: string;
   nameEn?: string | null;
   type?: 'BRANCH' | 'CENTRAL_KITCHEN' | string;
@@ -29,7 +30,10 @@ export interface BranchData {
 export async function getBranchesAction(): Promise<BranchData[]> {
   try {
     const rows = await db.select().from(branches).orderBy(desc(branches.createdAt));
-    return rows as unknown as BranchData[];
+    return rows.map((r: any) => ({
+      ...r,
+      name: r.nameAr || r.nameEn || '',
+    })) as BranchData[];
   } catch (error) {
     console.error('Error fetching branches:', error);
     return [];
@@ -50,7 +54,10 @@ export async function getBranchByIdAction(id: string | number): Promise<BranchDa
     if (!rows || rows.length === 0) return null;
 
     const b = rows[0] as any;
-    return b as BranchData;
+    return {
+      ...b,
+      name: b.nameAr || b.nameEn || '',
+    } as BranchData;
   } catch (error) {
     console.error('Error fetching branch by id:', error);
     return null;
