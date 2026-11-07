@@ -156,6 +156,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
 
   return (
     <>
+      {/* زر القائمة للشاشات الصغيرة */}
       <button
         type="button"
         onClick={() => setIsOpenMobile(!isOpenMobile)}
@@ -165,6 +166,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         {isOpenMobile ? <X size={20} /> : <Menu size={20} />}
       </button>
 
+      {/* خلفية معتمة للموبايل */}
       {isOpenMobile && (
         <div
           onClick={() => setIsOpenMobile(false)}
@@ -172,6 +174,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         />
       )}
 
+      {/* القائمة الجانبية */}
       <aside
         className={`fixed inset-y-0 ${
           isRtl ? 'right-0' : 'left-0'
