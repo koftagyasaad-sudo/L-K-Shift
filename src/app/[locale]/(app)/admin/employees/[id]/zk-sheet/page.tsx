@@ -3,7 +3,7 @@
 import React, { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import EmployeeZkSheet from '@/components/admin/employee-zk-sheet';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{
@@ -26,36 +26,51 @@ export default function EmployeeZkSheetPage({ params }: PageProps) {
     async function fetchSheetData() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/employees/${employeeId}/zk-report`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('فشل جلب بيانات الشيت للموظف');
+        setError(null);
+
+        // جلب البيانات من مسار الـ route الموجود بجانب الصفحة
+        const endpoint = `/${locale}/admin/employees/${employeeId}/zk-report`;
+        const res = await fetch(endpoint, { cache: 'no-store' });
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.message || 'فشل جلب بيانات الشيت للموظف');
+        }
+
         const json = await res.json();
         setData(json);
       } catch (err: any) {
-        setError(err.message || 'حدث خطأ غير متوقع');
+        setError(err.message || 'حدث خطأ غير متوقع أثناء استخراج الشيت');
       } finally {
         setLoading(false);
       }
     }
-    if (employeeId) fetchSheetData();
-  }, [employeeId]);
+
+    if (employeeId) {
+      fetchSheetData();
+    }
+  }, [employeeId, locale]);
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3" dir="rtl">
         <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-        <p className="text-xs font-semibold text-slate-400">جاري استخراج وتفريغ شيت الحضور والمسير المالي...</p>
+        <p className="text-xs font-semibold text-slate-400">جاري استخراج وتفريغ شيت الحضور والمسير المالي ZK...</p>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="p-8 text-center" dir="rtl">
-        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-6 text-rose-400">
-          <p className="font-bold text-sm">{error || 'لم يتم العثور على بيانات'}</p>
+      <div className="p-8 text-center max-w-lg mx-auto" dir="rtl">
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-6 text-rose-400 space-y-3">
+          <div className="flex items-center justify-center gap-2 font-bold text-sm">
+            <AlertCircle size={18} />
+            <span>{error || 'لم يتم العثور على بيانات الموظف'}</span>
+          </div>
           <button
             onClick={() => router.back()}
-            className="mt-4 rounded-xl bg-slate-800 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+            className="mt-2 rounded-xl bg-slate-800 px-5 py-2 text-xs font-semibold text-white hover:bg-slate-700 transition cursor-pointer"
           >
             العودة لقائمة الموظفين
           </button>
@@ -69,9 +84,9 @@ export default function EmployeeZkSheetPage({ params }: PageProps) {
       <div className="no-print">
         <button
           onClick={() => router.back()}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition"
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
         >
-          <ArrowRight size={14} /> العودة للموظفين
+          <ArrowRight size={14} /> العودة لقائمة الموظفين
         </button>
       </div>
 
