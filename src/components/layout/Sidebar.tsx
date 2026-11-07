@@ -1,197 +1,260 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter, useParams } from 'next/navigation';
 import {
   LayoutDashboard,
+  Clock,
+  ClipboardCheck,
+  Calendar,
   Users,
   Building2,
   Shield,
-  Clock,
-  ClipboardCheck,
+  Briefcase,
+  CheckCircle2,
+  User,
+  LogOut,
+  ChevronRight,
+  Menu,
   X,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
+} from 'lucide-react';
 
-export function Sidebar({
-  isOpen,
-  toggleSidebar,
-  locale,
-  collapsed,
-  toggleCollapsed,
-}: {
-  isOpen: boolean;
-  toggleSidebar: () => void;
-  locale: string;
-  collapsed: boolean;
-  toggleCollapsed: () => void;
-}) {
-  const isRtl = locale === "ar";
-  const pathname = usePathname();
+interface SidebarProps {
+  locale?: string;
+}
 
-  const links = [
-    {
-      href: `/${locale}`,
-      label: isRtl ? "لوحة التحكم" : "Dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      href: `/${locale}/attendance`,
-      label: isRtl ? "الحضور والانصراف" : "Attendance",
-      icon: Clock,
-    },
-    {
-      href: `/${locale}/admin/employees`,
-      label: isRtl ? "الموظفين" : "Employees",
-      icon: Users,
-    },
-    {
-      href: `/${locale}/admin/branches`,
-      label: isRtl ? "الفروع" : "Branches",
-      icon: Building2,
-    },
-    {
-      href: `/${locale}/admin/roles`,
-      label: isRtl ? "الأدوار" : "Roles",
-      icon: Shield,
-    },
-    {
-      href: `/${locale}/admin/attendance-review`,
-      label: isRtl ? "مراجعة الحضور" : "Attendance Review",
-      icon: ClipboardCheck,
-    },
-  ];
+interface NavItem {
+  titleAr: string;
+  titleEn: string;
+  href: string;
+  icon: React.ElementType;
+  adminOnly?: boolean;
+}
 
-  const isActive = (href: string) => {
-    if (href === `/${locale}`) {
-      return pathname === `/${locale}` || pathname === `/${locale}/`;
+const navItems: NavItem[] = [
+  {
+    titleAr: 'لوحة التحكم',
+    titleEn: 'Dashboard',
+    href: '/admin/dashboard',
+    icon: LayoutDashboard,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الحضور والانصراف',
+    titleEn: 'Attendance',
+    href: '/attendance',
+    icon: Clock,
+  },
+  {
+    titleAr: 'مراجعة الحضور والرواتب',
+    titleEn: 'Attendance & Payroll',
+    href: '/admin/attendance-review',
+    icon: ClipboardCheck,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'تقديم إجازة / إذن / سلفة',
+    titleEn: 'Requests',
+    href: '/requests',
+    icon: Calendar,
+  },
+  {
+    titleAr: 'الموظفين',
+    titleEn: 'Employees',
+    href: '/admin/employees',
+    icon: Users,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الفروع والورديات',
+    titleEn: 'Branches & Shifts',
+    href: '/admin/branches',
+    icon: Building2,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الأدوار',
+    titleEn: 'Roles',
+    href: '/admin/roles',
+    icon: Shield,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'التوظيف واستمارات التقديم',
+    titleEn: 'Recruitment',
+    href: '/admin/recruitment',
+    icon: Briefcase,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'اعتماد الإجازات والطلبات',
+    titleEn: 'Leave Approvals',
+    href: '/admin/leave-requests',
+    icon: CheckCircle2,
+    adminOnly: true,
+  },
+  {
+    titleAr: 'الملف الشخصي وبياناتي',
+    titleEn: 'My Profile',
+    href: '/profile',
+    icon: User,
+    adminOnly: false,
+  },
+];
+
+export default function Sidebar({ locale: propLocale }: SidebarProps) {
+  const pathname = usePathname() || '';
+  const router = useRouter();
+  const params = useParams();
+
+  const locale = propLocale || (params?.locale as string) || 'ar';
+  const isRtl = locale === 'ar';
+
+  const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState('موظف');
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [isOpenMobile, setIsOpenMobile] = useState(false);
+
+  useEffect(() => {
+    try {
+      const storedName = localStorage.getItem('userName') || '';
+      const storedRole = localStorage.getItem('userRole') || 'موظف';
+      const permsRaw = localStorage.getItem('userPermissions') || '[]';
+      const perms: string[] = JSON.parse(permsRaw);
+
+      setUserName(storedName);
+      setUserRole(storedRole);
+
+      const hasAdminPrivilege =
+        perms.includes('*') ||
+        storedRole === 'SUPER_ADMIN' ||
+        storedRole === 'مدير النظام' ||
+        storedRole === 'مدير فرع' ||
+        perms.includes('dashboard.view');
+
+      setIsAdmin(hasAdminPrivilege);
+    } catch {
+      setIsAdmin(true);
     }
-    return pathname.startsWith(href);
+  }, []);
+
+  const handleLogout = () => {
+    try {
+      localStorage.clear();
+      router.push(`/${locale}/login`);
+      router.refresh();
+    } catch {
+      window.location.href = `/${locale}/login`;
+    }
   };
 
-  const CollapseIcon = isRtl
-    ? collapsed
-      ? ChevronsLeft
-      : ChevronsRight
-    : collapsed
-      ? ChevronsRight
-      : ChevronsLeft;
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.adminOnly) return true;
+    return isAdmin;
+  });
 
   return (
     <>
-      {/* Mobile overlay */}
-      {isOpen && (
+      {/* زر القائمة للشاشات الصغيرة والموبايل */}
+      <button
+        type="button"
+        onClick={() => setIsOpenMobile(!isOpenMobile)}
+        className="fixed top-4 right-4 z-50 rounded-xl bg-slate-900 border border-slate-800 p-2 text-slate-300 md:hidden shadow-lg cursor-pointer"
+        aria-label="Toggle Menu"
+      >
+        {isOpenMobile ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* خلفية معتمة للموبايل */}
+      {isOpenMobile && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
-          onClick={toggleSidebar}
+          onClick={() => setIsOpenMobile(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
         />
       )}
 
+      {/* حاوية القائمة الجانبية الكاملة */}
       <aside
-        className={`
-          fixed lg:static inset-y-0 z-50 shrink-0
-          bg-gradient-to-b from-orange-500 via-orange-500 to-pink-500
-          text-white shadow-2xl
-          transition-all duration-300 ease-in-out
-          ${isRtl ? "right-0" : "left-0"}
-          ${collapsed ? "lg:w-20" : "lg:w-72"}
-          w-72
-          ${
-            isOpen
-              ? "translate-x-0"
-              : isRtl
-                ? "translate-x-full lg:translate-x-0"
-                : "-translate-x-full lg:translate-x-0"
-          }
-          flex flex-col
-        `}
-        dir={isRtl ? "rtl" : "ltr"}
+        className={`fixed inset-y-0 ${
+          isRtl ? 'right-0' : 'left-0'
+        } z-40 flex w-72 flex-col justify-between border-slate-200 bg-white dark:border-white/5 dark:bg-[#0c0e18] ${
+          isRtl ? 'border-l' : 'border-r'
+        } transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
+          isOpenMobile
+            ? 'translate-x-0'
+            : isRtl
+            ? 'translate-x-full'
+            : '-translate-x-full'
+        }`}
+        dir={isRtl ? 'rtl' : 'ltr'}
       >
-        {/* Brand */}
-        <div className="flex items-center justify-between gap-2 px-3 h-16 border-b border-white/20">
-          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
-            <img
-              src="/Logo.png"
-              alt="L-K Shift"
-              className="h-9 w-9 object-contain bg-white/20 rounded-xl p-1 backdrop-blur-md shrink-0"
-            />
-            {!collapsed && (
-              <div className="min-w-0 hidden lg:block">
-                <p className="font-black text-base leading-tight truncate">L-K Shift</p>
-                <p className="text-[10px] text-white/80 truncate">
-                  {isRtl ? "نظام الحضور والورديات" : "Attendance System"}
-                </p>
-              </div>
-            )}
-            {/* Mobile always show title */}
-            <div className="min-w-0 lg:hidden">
-              <p className="font-black text-base leading-tight truncate">L-K Shift</p>
-              <p className="text-[10px] text-white/80 truncate">
-                {isRtl ? "نظام الحضور والورديات" : "Attendance System"}
-              </p>
+        {/* الترويسة وشعار النظام */}
+        <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-2 shadow-lg shadow-orange-500/20">
+              <img
+                src="/Logo.png"
+                alt="L-K Shift Logo"
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            </div>
+            <div>
+              <h2 className="text-lg font-black tracking-wide text-slate-900 dark:text-white">
+                L-K Shift
+              </h2>
+              <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
+                {userRole || 'مدير النظام'}
+              </span>
             </div>
           </div>
-
-          {/* Mobile close */}
-          <button
-            onClick={toggleSidebar}
-            className="lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0"
-            type="button"
-            aria-label="Close sidebar"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
-          {links.map((link) => {
-            const Icon = link.icon;
-            const active = isActive(link.href);
+        {/* قائمة الروابط الكاملة مع زر الملف الشخصي */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-1.5 custom-scrollbar">
+          {visibleNavItems.map((item) => {
+            const Icon = item.icon;
+            const fullHref = `/${locale}${item.href}`;
+            const isActive =
+              pathname === fullHref ||
+              (item.href !== '/admin/dashboard' &&
+                item.href !== '/attendance' &&
+                pathname.startsWith(fullHref));
+
             return (
               <Link
-                key={link.href}
-                href={link.href}
-                title={collapsed ? link.label : undefined}
-                onClick={() => {
-                  if (typeof window !== "undefined" && window.innerWidth < 1024) {
-                    toggleSidebar();
-                  }
-                }}
-                className={`
-                  flex items-center gap-3 rounded-2xl text-sm font-bold transition-all
-                  ${collapsed ? "lg:justify-center lg:px-0 lg:py-3 px-4 py-3" : "px-4 py-3"}
-                  ${
-                    active
-                      ? "bg-white text-orange-600 shadow-lg shadow-black/10"
-                      : "text-white/90 hover:bg-white/15"
-                  }
-                `}
+                key={item.href}
+                href={fullHref}
+                onClick={() => setIsOpenMobile(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                  isActive
+                    ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-lg shadow-orange-500/20 font-black'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/5'
+                }`}
               >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span className={`truncate ${collapsed ? "lg:hidden" : ""}`}>
-                  {link.label}
-                </span>
+                <Icon
+                  size={18}
+                  className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}
+                />
+                <span className="flex-1">{isRtl ? item.titleAr : item.titleEn}</span>
+                {isActive && <ChevronRight size={14} className={isRtl ? 'rotate-180' : ''} />}
               </Link>
             );
           })}
-        </nav>
+        </div>
 
-        {/* Collapse toggle — desktop only */}
-        <div className="hidden lg:flex p-3 border-t border-white/20">
+        {/* الجزء السفلي: كارت تسجيل الخروج */}
+        <div className="border-t border-slate-100 p-4 dark:border-white/5">
           <button
-            onClick={toggleCollapsed}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl hover:bg-white/15 transition-colors text-white/90"
             type="button"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={handleLogout}
+            className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-500 hover:bg-rose-500/20 transition-all cursor-pointer"
           >
-            <CollapseIcon className="w-5 h-5" />
-            {!collapsed && (
-              <span className="text-xs font-bold">
-                {isRtl ? "طي القائمة" : "Collapse"}
-              </span>
-            )}
+            <LogOut size={16} />
+            <span>{isRtl ? 'تسجيل الخروج' : 'Sign Out'}</span>
           </button>
         </div>
       </aside>
@@ -199,4 +262,4 @@ export function Sidebar({
   );
 }
 
-export default Sidebar;
+export { Sidebar };
