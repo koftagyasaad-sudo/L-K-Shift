@@ -14,8 +14,8 @@ export interface BranchData {
   latitude: number;
   longitude: number;
   geofenceRadius: number;
-  qrSecretKey?: string;
-  qrRefreshSec?: number;
+  qrSecretKey?: string | null;
+  qrRefreshSec?: number | null;
   wifiSsid?: string | null;
   shiftSchedule?: string | null;
   shiftStartTime?: string | null;
@@ -23,7 +23,7 @@ export interface BranchData {
   shiftName?: string | null;
   isActive: boolean;
   createdAt?: string | Date;
-  updatedAt?: string | Date;
+  updatedAt?: string | Date | null;
 }
 
 export async function getBranchesAction(): Promise<BranchData[]> {
@@ -79,12 +79,12 @@ export async function createBranchAction(data: {
         latitude: Number(data.latitude),
         longitude: Number(data.longitude),
         geofenceRadius: data.geofenceRadius ? Number(data.geofenceRadius) : 100,
+        qrSecretKey: `lk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        qrRefreshSec: 60,
         shiftSchedule: data.shiftSchedule || '',
         shiftStartTime: data.shiftStartTime || '',
         shiftEndTime: data.shiftEndTime || '',
         shiftName: data.shiftName || '',
-        qrSecretKey: `lk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        qrRefreshSec: 60,
         isActive: true,
       })
       .returning();
