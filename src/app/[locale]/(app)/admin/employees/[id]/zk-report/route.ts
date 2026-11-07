@@ -136,6 +136,7 @@ export async function GET(
       let lateMinutes = Number(dayLog?.lateMinutes || 0);
       let overtimeMinutes = Number(dayLog?.overtimeMinutes || 0);
 
+      // احتساب دقائق العمل وتفادي الانقطاع
       if (workedMinutes === 0 && checkInRaw) {
         if (checkOutRaw) {
           const diffMs = new Date(checkOutRaw).getTime() - new Date(checkInRaw).getTime();
