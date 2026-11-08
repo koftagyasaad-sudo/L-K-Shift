@@ -16,7 +16,6 @@ import {
   Calendar,
   MessageSquare,
   ShieldAlert,
-  ExternalLink,
 } from 'lucide-react';
 
 interface GlobalHeaderProps {
@@ -46,13 +45,9 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const [userId, setUserId] = useState<string>('');
   const [isDark, setIsDark] = useState(true);
 
-  // حالة الإشعارات
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // منبه الشيفت
-  const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     try {
@@ -76,7 +71,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     }
   }, []);
 
-  // جلب الإشعارات
   const fetchNotifications = async () => {
     const currentUid = localStorage.getItem('userId');
     if (!currentUid) return;
@@ -87,18 +81,15 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
         const data = await res.json();
         setNotifications(Array.isArray(data) ? data : []);
       }
-    } catch (e) {
-      console.error('Error fetching notifications:', e);
-    }
+    } catch {}
   };
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000); // تحديث دوري كل 15 ثانية
+    const interval = setInterval(fetchNotifications, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // إغلاق النافذة المنسدلة عند النقر في الخارج
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -108,47 +99,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // منبه الوردية (قبل الشيفت بساعة، نصف ساعة، و15 دقيقة)
-  useEffect(() => {
-    const checkShiftAlarm = () => {
-      const branchShift = localStorage.getItem('userBranchShift') || '09:00'; // صيغة HH:mm
-      const match = branchShift.match(/(\d{1,2}):(\d{2})/);
-      if (!match) return;
-
-      const shiftHour = parseInt(match[1], 10);
-      const shiftMinute = parseInt(match[2], 10);
-
-      const now = new Date();
-      const shiftDate = new Date();
-      shiftDate.setHours(shiftHour, shiftMinute, 0, 0);
-
-      const diffMinutes = Math.round((shiftDate.getTime() - now.getTime()) / 60000);
-
-      // التنبيه قبل الشيفت بـ 60 أو 30 أو 15 دقيقة
-      [60, 30, 15].forEach((intervalMinutes) => {
-        if (diffMinutes === intervalMinutes && !shiftNotified[`${intervalMinutes}`]) {
-          // إشعار صوتي ونظامي
-          try {
-            const audio = new Audio('/alarm.mp3');
-            audio.play().catch(() => {});
-          } catch {}
-
-          if (Notification.permission === 'granted') {
-            new Notification('منبه بداية الوردية - L-K Shift', {
-              body: `تنبيه: ستبدأ ورديتك خلال ${intervalMinutes} دقيقة! يرجى الاستعداد لتسجيل الحضور.`,
-              icon: '/Logo.png',
-            });
-          }
-
-          setShiftNotified((prev) => ({ ...prev, [`${intervalMinutes}`]: true }));
-        }
-      });
-    };
-
-    const alarmInterval = setInterval(checkShiftAlarm, 30000);
-    return () => clearInterval(alarmInterval);
-  }, [shiftNotified]);
 
   const handleToggleTheme = () => {
     const nextDark = !isDark;
@@ -206,20 +156,17 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     switch (type) {
       case 'ATTENDANCE':
         return <Clock size={16} className="text-emerald-500" />;
-      case 'REQUEST':
-        return <Calendar size={16} className="text-orange-500" />;
+      case 'ADVANCE':
+        return <Clock size={16} className="text-emerald-400" />;
       case 'COMPLAINT':
         return <ShieldAlert size={16} className="text-rose-500" />;
-      case 'SHIFT_REMINDER':
-        return <AlertCircle size={16} className="text-amber-500 animate-bounce" />;
       default:
-        return <MessageSquare size={16} className="text-blue-500" />;
+        return <Calendar size={16} className="text-orange-500" />;
     }
   };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/90 px-4 sm:px-6 backdrop-blur-md dark:border-white/5 dark:bg-[#0c0e18]/90">
-      {/* الجانب الأيمن: زر طي القائمة + البروفايل */}
       <div className="flex items-center gap-3">
         {onToggleSidebar && (
           <button
@@ -255,9 +202,8 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
         </Link>
       </div>
 
-      {/* الجانب الأيسر: الإشعارات التفاعلية + الثيم + الخروج */}
       <div className="flex items-center gap-2.5">
-        {/* زر وقائمة الإشعارات */}
+        {/* زر وقائمة الإشعارات التفاعلية */}
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
@@ -273,7 +219,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
             )}
           </button>
 
-          {/* القائمة المنسدلة للإشعارات */}
           {showDropdown && (
             <div
               className={`absolute top-12 ${
@@ -341,7 +286,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
           )}
         </div>
 
-        {/* زر تبديل الثيم */}
         <button
           type="button"
           onClick={handleToggleTheme}
@@ -351,7 +295,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
           {isDark ? <Sun size={16} strokeWidth={1.75} /> : <Moon size={16} strokeWidth={1.75} />}
         </button>
 
-        {/* زر الخروج */}
         <button
           type="button"
           onClick={handleLogout}
