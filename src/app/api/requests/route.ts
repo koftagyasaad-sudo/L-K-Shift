@@ -5,7 +5,6 @@ import { sql } from 'drizzle-orm';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 1. جلب كافة الطلبات (إجازات، أذونات، سلف، شكاوى)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -42,11 +41,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. تقديم طلب جديد من قبل الموظف
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, requestType, startDate, endDate, durationDays, advanceAmount, reason } = body;
+    const { userId, requestType, startDate, endDate, durationDays, advanceAmount, reason, targetRole, staffCount } = body;
 
     if (!userId || !requestType || !reason) {
       return NextResponse.json({ message: 'البيانات غير مكتملة' }, { status: 400 });
@@ -67,6 +65,8 @@ export async function POST(request: NextRequest) {
         total_days,
         duration_days,
         advance_amount,
+        target_role,
+        staff_count,
         reason,
         status,
         created_at
@@ -79,31 +79,41 @@ export async function POST(request: NextRequest) {
         ${days},
         ${days},
         ${amount},
+        ${targetRole || null},
+        ${staffCount ? parseInt(staffCount, 10) : 1},
         ${reason},
         'PENDING',
         NOW()
       );
     `);
 
-    // إرسال إشعار للمديرين والـ HR
+    // إرسال الإشعار التفاعلي
     try {
-      const notifTitle =
-        requestType === 'COMPLAINT'
-          ? 'شكوى موظف جديدة'
-          : requestType === 'ADVANCE'
-          ? 'طلب سلفة مالية جديدة'
-          : requestType === 'PERMISSION'
-          ? 'طلب إذن جديد'
-          : 'طلب إجازة جديد';
+      const isStaffReq = requestType === 'STAFF_REQUEST';
+      const isComplaint = requestType === 'COMPLAINT';
 
-      const notifMsg = `تم تقديم ${notifTitle}: "${reason.slice(0, 50)}..."`;
+      const notifTitle = isStaffReq
+        ? 'طلب عمالة جديد من مدير فرع'
+        : isComplaint
+        ? 'شكوى موظف جديدة'
+        : requestType === 'ADVANCE'
+        ? 'طلب سلفة مالية جديدة'
+        : requestType === 'PERMISSION'
+        ? 'طلب إذن جديد'
+        : 'طلب إجازة جديد';
+
+      const notifMsg = `تم استلام ${notifTitle}: "${reason.slice(0, 60)}..."`;
+
+      // طلب العمالة والشكوى يصلان لمدير النظام والـ HR فقط
+      const recipientFilter = isStaffReq || isComplaint
+        ? sql`system_role = 'SUPER_ADMIN' OR job_role ILIKE '%مدير النظام%' OR job_role ILIKE '%HR%' OR job_role ILIKE '%موارد بشرية%'`
+        : sql`system_role = 'SUPER_ADMIN' OR job_role ILIKE '%مدير%' OR job_role ILIKE '%HR%'`;
 
       await db.execute(sql`
         INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
         SELECT id, ${parseInt(userId, 10)}, ${notifTitle}, ${notifMsg}, ${requestType}, '/admin/leave-requests', false, NOW()
         FROM users 
-        WHERE (system_role = 'SUPER_ADMIN' OR job_role ILIKE '%مدير%' OR job_role ILIKE '%HR%')
-          AND id != ${parseInt(userId, 10)};
+        WHERE (${recipientFilter}) AND id != ${parseInt(userId, 10)};
       `);
     } catch (notifErr) {
       console.warn('Notification insert skipped:', notifErr);
@@ -116,32 +126,29 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 3. اعتماد أو رفض الطلب من قبل الإدارة (قبول / رفض) وإرسال إشعار للموظف
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
     const { requestId, status: newStatus, rejectionReason, adminId } = body;
 
     if (!requestId || !newStatus || (newStatus !== 'APPROVED' && newStatus !== 'REJECTED')) {
-      return NextResponse.json({ message: 'بيانات اعتماد الطلب غير صحيحة' }, { status: 400 });
+      return NextResponse.json({ message: 'بيانات غير صحيحة' }, { status: 400 });
     }
 
     const reqNumericId = parseInt(requestId, 10);
     const adminNumericId = adminId ? parseInt(adminId, 10) : null;
 
-    // جلب بيانات الطلب لمعرفة الموظف ونوع الطلب
     const targetReq = await db.execute(sql`
       SELECT user_id, request_type, leave_type FROM leave_requests WHERE id = ${reqNumericId} LIMIT 1;
     `);
     const reqRows = Array.isArray(targetReq) ? targetReq : (targetReq as any)?.rows || [];
     if (!reqRows.length) {
-      return NextResponse.json({ message: 'الطلب غير موجود بالنظام' }, { status: 404 });
+      return NextResponse.json({ message: 'الطلب غير موجود' }, { status: 404 });
     }
 
     const employeeUserId = reqRows[0].user_id;
     const rawType = reqRows[0].request_type || reqRows[0].leave_type || 'LEAVE';
 
-    // تحديث حالة الطلب في قاعدة البيانات مع دعم نمط الـ Enum والنص بأمان
     try {
       await db.execute(sql`
         UPDATE leave_requests
@@ -162,20 +169,20 @@ export async function PATCH(request: NextRequest) {
       `);
     }
 
-    // إرسال إشعار فوري للموظف صاحب الطلب بنتيجة القرار
     const typeNamesAr: { [key: string]: string } = {
       LEAVE: 'الإجازة',
       PERMISSION: 'الإذن',
       ADVANCE: 'السلفة المالية',
       COMPLAINT: 'الشكوى',
+      STAFF_REQUEST: 'طلب العمالة',
     };
     const reqTypeAr = typeNamesAr[rawType] || 'الطلب';
 
-    const notifTitle = newStatus === 'APPROVED' ? `تمت الموافقة على طلب ${reqTypeAr} ✅` : `تم رفض طلب ${reqTypeAr} ❌`;
+    const notifTitle = newStatus === 'APPROVED' ? `تمت الموافقة على ${reqTypeAr} ✅` : `تم رفض ${reqTypeAr} ❌`;
     const notifMsg =
       newStatus === 'APPROVED'
-        ? `تمت مراجعة واعتماد طلب ${reqTypeAr} الخاص بك بنجاح.`
-        : `نأسف لإبلاغك بأنه تم رفض طلب ${reqTypeAr}.${rejectionReason ? ` سبب الرفض: ${rejectionReason}` : ''}`;
+        ? `تمت مراجعة واعتماد ${reqTypeAr} الخاص بك بنجاح.`
+        : `تم رفض ${reqTypeAr}.${rejectionReason ? ` سبب الرفض: ${rejectionReason}` : ''}`;
 
     try {
       await db.execute(sql`
@@ -191,16 +198,11 @@ export async function PATCH(request: NextRequest) {
           NOW()
         );
       `);
-    } catch (notifErr) {
-      console.warn('Failed to insert employee notification:', notifErr);
-    }
+    } catch {}
 
-    return NextResponse.json({
-      success: true,
-      message: newStatus === 'APPROVED' ? 'تمت الموافقة على الطلب بنجاح وتم إشعار الموظف' : 'تم رفض الطلب بنجاح وتم إشعار الموظف',
-    });
+    return NextResponse.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' });
   } catch (error: any) {
     console.error('Requests PATCH Error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل تحديث حالة الطلب' }, { status: 500 });
+    return NextResponse.json({ message: error?.message || 'فشل التحديث' }, { status: 500 });
   }
 }
