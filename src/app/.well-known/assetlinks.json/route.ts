@@ -1,0 +1,26 @@
+import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-static';
+
+export async function GET() {
+  const assetlinks = [
+    {
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: {
+        namespace: 'android_app',
+        package_name: 'app.vercel.l_k_shift.twa',
+        sha256_cert_fingerprints: [
+          '8F:5F:4F:07:A1:C8:29:0B:C9:41:33:1D:F7:21:AF:00:6E:AE:8F:1D:57:6A:A8:48:9C:16:31:88:22:F2:81:AB',
+        ],
+      },
+    },
+  ];
+
+  return NextResponse.json(assetlinks, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400, must-revalidate',
+    },
+  });
+}
