@@ -15,7 +15,7 @@ export async function GET(
     const fromDate = searchParams.get('from');
     const toDate = searchParams.get('to');
 
-    // 1. جلب كافة سجلات الحركات
+    // 1. جلب سجلات البصمات من كلا الجدولين لضمان عدم ضياع أي بصمة
     let logsA: any[] = [];
     try {
       const rawA = await db.execute(sql`SELECT * FROM attendance_logs;`);
@@ -30,16 +30,16 @@ export async function GET(
 
     const allLogsMap = new Map();
     logsB.forEach((l) => {
-      const key = `${l.user_id || l.userId}_${l.check_in_time || l.work_date}_${l.id}`;
+      const key = `${l.user_id || l.userId}_${l.work_date || l.check_in_time}_${l.id}`;
       allLogsMap.set(key, l);
     });
     logsA.forEach((l) => {
-      const key = `${l.user_id || l.userId}_${l.check_in_time || l.work_date}_${l.id}`;
+      const key = `${l.user_id || l.userId}_${l.work_date || l.check_in_time}_${l.id}`;
       allLogsMap.set(key, l);
     });
     const combinedLogs = Array.from(allLogsMap.values());
 
-    // 2. جلب بيانات الموظفين، الفروع، والإجازات والسلف
+    // 2. جلب المستخدمين والفروع والطلبات
     let usersList: any[] = [];
     try {
       const rawUsers = await db.execute(sql`SELECT * FROM users;`);
@@ -52,22 +52,13 @@ export async function GET(
       branchesList = Array.isArray(rawBranches) ? rawBranches : (rawBranches as any)?.rows || [];
     } catch {}
 
-    let leavesList: any[] = [];
-    try {
-      const rawLeaves = await db.execute(sql`
-        SELECT * FROM leave_requests 
-        WHERE status = 'APPROVED' OR final_status = 'APPROVED';
-      `);
-      leavesList = Array.isArray(rawLeaves) ? rawLeaves : (rawLeaves as any)?.rows || [];
-    } catch {}
-
     const userMap = new Map();
     usersList.forEach((u) => userMap.set(String(u.id), u));
 
     const branchMap = new Map();
     branchesList.forEach((b) => branchMap.set(String(b.id), b));
 
-    // 3. بناء وتنسيق سجلات الحركات الفردية
+    // 3. تنسيق السجلات وحساب الرواتب والشيفت الليلي
     const formatted = combinedLogs.map((l: any) => {
       const uid = String(l.user_id || l.userId || '');
       const u = userMap.get(uid) || {};
@@ -79,12 +70,18 @@ export async function GET(
         u.employee_number || u.employee_code || (u.id ? String(u.id).padStart(3, '0') : '001');
       const branchName = b.name_ar || b.name || 'الفرع الرئيسي';
 
+      // استخراج تاريخ الوردية مع مراعاة الشيفت الليلي (10 ص إلى 4 ص)
       let workDate = '';
       if (l.work_date) {
         workDate = String(l.work_date).slice(0, 10);
       } else if (l.check_in_time) {
         try {
-          workDate = new Date(l.check_in_time).toISOString().slice(0, 10);
+          const d = new Date(l.check_in_time);
+          const cairoHour = (d.getUTCHours() + 2) % 24;
+          if (cairoHour >= 0 && cairoHour < 6) {
+            d.setDate(d.getDate() - 1);
+          }
+          workDate = d.toISOString().slice(0, 10);
         } catch {
           workDate = new Date().toISOString().slice(0, 10);
         }
@@ -92,22 +89,13 @@ export async function GET(
         workDate = new Date().toISOString().slice(0, 10);
       }
 
-      // القواعد المحاسبية الثابتة (الشهر محسوب ثابتاً على 30 يوماً)
       const basicSalary = Number(u.monthly_salary || 5000);
       const hoursPerDay = Number(u.working_hours_per_day || 8);
-      const FIXED_MONTH_DAYS = 30; // حساب الشهر دائماً على 30 يوماً
-      const dailyRate = basicSalary / FIXED_MONTH_DAYS;
+      const dailyRate = basicSalary / 30; // حساب الشهر ثابتاً على 30 يوماً
       const hourlyRate = dailyRate / hoursPerDay;
-      const minuteRate = hourlyRate / 60;
 
       const workedMinutes = Number(l.actual_worked_minutes || l.worked_minutes || 0);
       const lateMinutes = Number(l.late_minutes || 0);
-      const overtimeMinutes = Number(l.overtime_minutes || 0);
-
-      // السلف الخاصة بالموظف
-      const empAdvances = leavesList
-        .filter((lv: any) => String(lv.user_id) === uid && lv.request_type === 'ADVANCE')
-        .reduce((sum: number, lv: any) => sum + (parseFloat(lv.advance_amount) || 0), 0);
 
       return {
         id: l.id,
@@ -123,15 +111,12 @@ export async function GET(
         photoUrl: l.check_in_photo_url || l.photo_url || '',
         workedMinutes,
         lateMinutes,
-        overtimeMinutes,
+        overtimeMinutes: Number(l.overtime_minutes || 0),
         status: l.status || 'ON_TIME',
         basicSalary,
         workingHoursPerDay: hoursPerDay,
         dailyRate: Number(dailyRate.toFixed(2)),
         hourlyRate: Number(hourlyRate.toFixed(2)),
-        lateDeduction: Number((lateMinutes * minuteRate).toFixed(2)),
-        overtimeBonus: Number((overtimeMinutes * minuteRate * 1.5).toFixed(2)),
-        totalAdvances: empAdvances,
       };
     });
 
