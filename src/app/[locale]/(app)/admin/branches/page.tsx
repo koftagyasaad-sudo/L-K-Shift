@@ -55,10 +55,10 @@ export default function BranchesManagementPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // وضع العرض: 'EDIT' لعرض نفس شاشة الصورة بالضبط، أو 'LIST' لعرض بطاقات الفروع
+  // وضع العرض: 'EDIT' للاستمارة الكاملة، أو 'LIST' لبطاقات الفروع
   const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('EDIT');
 
-  // بيانات الفرع الجاري تعديله أو إضافته
+  // بيانات الفرع الجاري تعديله
   const [editingBranch, setEditingBranch] = useState<Partial<BranchItem>>({
     nameAr: '',
     nameEn: '',
@@ -90,13 +90,13 @@ export default function BranchesManagementPage() {
         const list: BranchItem[] = Array.isArray(dataB) ? dataB : [];
         setBranches(list);
 
-        // عند فتح الصفحة لأول مرة، يتم تحميل بيانات أول فرع تلقائياً في شاشة التعديل
-        if (list.length > 0 && !editingBranch.id) {
+        // تحميل بيانات الفرع الأول تلقائياً في شاشة التعديل إذا كانت الحقول فارغة
+        if (list.length > 0) {
           loadBranchForEdit(list[0]);
         }
       }
 
-      // جلب الموظفين لملء قائمة "مدير الفرع المسؤول" بالأسماء الصريحة
+      // جلب الموظفين لملء قائمة مدير الفرع بالأسماء الصريحة
       const resU = await fetch('/api/employees', { cache: 'no-store' });
       if (resU.ok) {
         const dataU = await resU.json();
@@ -139,7 +139,6 @@ export default function BranchesManagementPage() {
     });
     setStatusMsg(null);
     setViewMode('EDIT');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleAddNewBranch = () => {
@@ -163,13 +162,12 @@ export default function BranchesManagementPage() {
     });
     setStatusMsg(null);
     setViewMode('EDIT');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // دالة زر: "📍 تثبيت موقعي الحالي كإحداثيات للفرع"
+  // تثبيت الموقع الحالي للفرع
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert('خاصية تحديد الموقع غير مدعومة في متصفحك');
+      alert('خاصية تحديد الموقع الجغرافي غير مدعومة في جهازك');
       return;
     }
     setLocatingCurrent(true);
@@ -182,7 +180,7 @@ export default function BranchesManagementPage() {
         }));
         setLocatingCurrent(false);
       },
-      (err) => {
+      () => {
         setLocatingCurrent(false);
         alert('تعذر جلب موقعك الحالي. تأكد من تفعيل الـ GPS والسماح بالوصول للموقع.');
       },
@@ -215,7 +213,6 @@ export default function BranchesManagementPage() {
     }
   };
 
-  // حذف الفرع
   const handleDeleteBranch = async (id: number, nameAr: string) => {
     if (!confirm(`هل أنت متأكد من رغبتك في حذف فرع "${nameAr}" نهائياً من السيستم؟`)) {
       return;
@@ -237,7 +234,7 @@ export default function BranchesManagementPage() {
 
   return (
     <div className="space-y-6 pb-20 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* 1. الترويسة العلوية مع زر العودة للفروع المطابق للصورة */}
+      {/* 1. الترويسة العلوية مع زر العودة للفروع */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -283,7 +280,40 @@ export default function BranchesManagementPage() {
         </div>
       )}
 
-      {/* 2. شاشة التعديل الكاملة بنفس تصميم وحقول الصورة بالضبط */}
+      {/* شريط تبويبات سريع لاختيار الفرع الجاري تعديله بنقرة واحدة */}
+      {viewMode === 'EDIT' && branches.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-2 rounded-2xl border border-slate-200">
+          <span className="text-xs font-bold text-slate-500 px-2">اختر فرعاً للتعديل:</span>
+          {branches.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => loadBranchForEdit(b)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                editingBranch.id === b.id
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              {b.nameAr}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddNewBranch}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              !editingBranch.id
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200'
+            }`}
+          >
+            <Plus size={14} />
+            <span>فرع جديد</span>
+          </button>
+        </div>
+      )}
+
+      {/* 2. شاشة التعديل الكاملة بنفس تصميم وحقول الصورة الأصلية */}
       {viewMode === 'EDIT' ? (
         <form onSubmit={handleSave} className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
@@ -305,7 +335,7 @@ export default function BranchesManagementPage() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
-                  اسم الفرع بالإنجليزي[cite: 15]
+                  اسم الفرع بالإنجليزي
                 </label>
                 <input
                   type="text"
@@ -322,7 +352,7 @@ export default function BranchesManagementPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
-                  مدير الفرع المسؤول[cite: 15]
+                  مدير الفرع المسؤول
                 </label>
                 <select
                   value={editingBranch.managerId || ''}
@@ -334,7 +364,7 @@ export default function BranchesManagementPage() {
                   }
                   className="w-full bg-white border border-slate-300 text-slate-900 font-semibold rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-orange-500 transition cursor-pointer"
                 >
-                  <option value="">-- اختر مدير الفرع --[cite: 15]</option>
+                  <option value="">-- اختر مدير الفرع --</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role})
@@ -345,7 +375,7 @@ export default function BranchesManagementPage() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
-                  رقم هاتف الفرع[cite: 15]
+                  رقم هاتف الفرع
                 </label>
                 <input
                   type="tel"
@@ -362,7 +392,7 @@ export default function BranchesManagementPage() {
             <div className="bg-[#faf5ff] border border-purple-200/80 rounded-3xl p-5 sm:p-7 space-y-5">
               <div className="flex items-center gap-2 text-sm font-black text-slate-900">
                 <span className="text-base">⏰</span>
-                <span>مواعيد ورديات الفرع الثلاث (صباحية، بينية، مسائية)[cite: 15]</span>
+                <span>مواعيد ورديات الفرع الثلاث (صباحية، بينية، مسائية)</span>
               </div>
 
               {/* بطاقات الورديات الثلاث */}
@@ -370,11 +400,11 @@ export default function BranchesManagementPage() {
                 {/* 1. الوردية الصباحية */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="block text-xs font-black text-amber-700">
-                    1. الوردية الصباحية[cite: 15]
+                    1. الوردية الصباحية
                   </span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="block text-[11px] font-bold text-slate-500 mb-1">من[cite: 15]</span>
+                      <span className="block text-[11px] font-bold text-slate-500 mb-1">من</span>
                       <input
                         type="time"
                         value={editingBranch.shift1Start || '09:00'}
@@ -385,7 +415,7 @@ export default function BranchesManagementPage() {
                       />
                     </div>
                     <div>
-                      <span className="block text-[11px] font-bold text-slate-500 mb-1">إلى[cite: 15]</span>
+                      <span className="block text-[11px] font-bold text-slate-500 mb-1">إلى</span>
                       <input
                         type="time"
                         value={editingBranch.shift1End || '17:00'}
@@ -401,11 +431,11 @@ export default function BranchesManagementPage() {
                 {/* 2. الوردية البينية (Between) */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="block text-xs font-black text-blue-700">
-                    2. الوردية البينية (Between)[cite: 15]
+                    2. الوردية البينية (Between)
                   </span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="block text-[11px] font-bold text-slate-500 mb-1">من[cite: 15]</span>
+                      <span className="block text-[11px] font-bold text-slate-500 mb-1">من</span>
                       <input
                         type="time"
                         value={editingBranch.shift2Start || '13:00'}
@@ -416,7 +446,7 @@ export default function BranchesManagementPage() {
                       />
                     </div>
                     <div>
-                      <span className="block text-[11px] font-bold text-slate-500 mb-1">إلى[cite: 15]</span>
+                      <span className="block text-[11px] font-bold text-slate-500 mb-1">إلى</span>
                       <input
                         type="time"
                         value={editingBranch.shift2End || '21:00'}
@@ -432,11 +462,11 @@ export default function BranchesManagementPage() {
                 {/* 3. الوردية المسائية */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="block text-xs font-black text-purple-700">
-                    3. الوردية المسائية[cite: 15]
+                    3. الوردية المسائية
                   </span>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="block text-[11px] font-bold text-slate-500 mb-1">من[cite: 15]</span>
+                      <span className="block text-[11px] font-bold text-slate-500 mb-1">من</span>
                       <input
                         type="time"
                         value={editingBranch.shift3Start || '17:00'}
@@ -447,7 +477,7 @@ export default function BranchesManagementPage() {
                       />
                     </div>
                     <div>
-                      <span className="block text-[11px] font-bold text-slate-500 mb-1">إلى[cite: 15]</span>
+                      <span className="block text-[11px] font-bold text-slate-500 mb-1">إلى</span>
                       <input
                         type="time"
                         value={editingBranch.shift3End || '01:00'}
@@ -463,7 +493,7 @@ export default function BranchesManagementPage() {
 
               {/* فترة السماح قبل احتساب تأخير */}
               <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-700 pt-2">
-                <span>فترة السماح قبل احتساب تأخير:[cite: 15]</span>
+                <span>فترة السماح قبل احتساب تأخير:</span>
                 <input
                   type="number"
                   min="0"
@@ -477,7 +507,7 @@ export default function BranchesManagementPage() {
                   }
                   className="w-16 bg-white border border-slate-300 text-slate-900 font-mono font-bold text-center rounded-xl py-1.5 focus:outline-none focus:border-orange-500"
                 />
-                <span>دقيقة[cite: 15]</span>
+                <span>دقيقة</span>
               </div>
             </div>
 
@@ -485,7 +515,7 @@ export default function BranchesManagementPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
-                  خط العرض (Latitude) *[cite: 15]
+                  خط العرض (Latitude) *
                 </label>
                 <input
                   type="number"
@@ -502,7 +532,7 @@ export default function BranchesManagementPage() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
-                  خط الطول (Longitude) *[cite: 15]
+                  خط الطول (Longitude) *
                 </label>
                 <input
                   type="number"
@@ -521,7 +551,7 @@ export default function BranchesManagementPage() {
             {/* الصف الخامس: نصف قطر نطاق البصمة الجغرافي */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                نصف قطر نطاق البصمة الجغرافي (بالمتر) *[cite: 15]
+                نصف قطر نطاق البصمة الجغرافي (بالمتر) *
               </label>
               <input
                 type="number"
@@ -536,7 +566,7 @@ export default function BranchesManagementPage() {
                 className="w-full bg-white border border-slate-300 text-slate-900 font-mono font-bold rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-orange-500 transition"
               />
               <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
-                المدى المسموح للموظف لتسجيل الحضور حول الفرع (مستحسن 50 - 150م لمراعاة ضعف الشبكة داخل المقرات).[cite: 15]
+                المدى المسموح للموظف لتسجيل الحضور حول الفرع (مستحسن 50 - 150م لمراعاة ضعف الشبكة داخل المقرات).
               </p>
             </div>
 
@@ -553,14 +583,14 @@ export default function BranchesManagementPage() {
                 ) : (
                   <MapPin size={15} />
                 )}
-                <span>📍 تثبيت موقعي الحالي كإحداثيات للفرع[cite: 15]</span>
+                <span>📍 تثبيت موقعي الحالي كإحداثيات للفرع</span>
               </button>
             </div>
 
             {/* العنوان النصي للفرع */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
-                العنوان النصي للفرع[cite: 15]
+                العنوان النصي للفرع
               </label>
               <input
                 type="text"
