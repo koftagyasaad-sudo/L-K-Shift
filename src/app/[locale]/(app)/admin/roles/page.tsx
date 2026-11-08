@@ -18,8 +18,8 @@ import {
 
 interface CustomRole {
   id: number;
-  name: string;      // المعرف البرمجي (Role Code)
-  nameAr: string;    // اسم الدور بالعربية
+  name: string;
+  nameAr: string;
   permissions: string[];
   isSystem: boolean;
 }
@@ -44,7 +44,27 @@ const SYSTEM_PERMISSIONS = [
   { id: 'staff_requests.manage', label: 'تقديم واعتماد طلبات احتياج العمالة', group: 'الطلبات' },
 ];
 
-// دالة التوليد التلقائي للكود البرمجي القديم
+// دالة أمان صارمة تمنع أي خطأ برمي في الرندر وتضمن تحويل الصلاحيات لمصفوفة صريحة دائماً
+function parsePermissions(perms: any): string[] {
+  if (!perms) return [];
+  if (Array.isArray(perms)) return perms;
+  if (typeof perms === 'string') {
+    try {
+      const parsed = JSON.parse(perms);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'object' && parsed !== null) {
+        return Object.keys(parsed).filter((k) => (parsed as any)[k]);
+      }
+    } catch {
+      return perms ? [perms] : [];
+    }
+  }
+  if (typeof perms === 'object' && perms !== null) {
+    return Object.keys(perms).filter((k) => (perms as any)[k]);
+  }
+  return [];
+}
+
 const autoGenerateRoleCode = (arabicName: string): string => {
   const clean = arabicName.trim().toLowerCase();
   if (!clean) return '';
@@ -100,7 +120,6 @@ export default function RolesManagementPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // حالة المودال
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
   const [nameAr, setNameAr] = useState('');
@@ -116,10 +135,22 @@ export default function RolesManagementPage() {
       const res = await fetch('/api/roles', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setRoles(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) {
+          const sanitized: CustomRole[] = data.map((r: any) => ({
+            id: Number(r.id) || Math.random(),
+            name: String(r.name || ''),
+            nameAr: String(r.nameAr || r.name_ar || r.name || ''),
+            permissions: parsePermissions(r.permissions),
+            isSystem: Boolean(r.isSystem ?? r.is_system),
+          }));
+          setRoles(sanitized);
+        } else {
+          setRoles([]);
+        }
       }
     } catch (err) {
       console.error('Failed to load roles:', err);
+      setRoles([]);
     } finally {
       setLoading(false);
     }
@@ -144,7 +175,7 @@ export default function RolesManagementPage() {
       setNameAr(role.nameAr || '');
       setCode(role.name || '');
       setIsCodeManuallyEdited(true);
-      setSelectedPermissions(Array.isArray(role.permissions) ? role.permissions : []);
+      setSelectedPermissions(parsePermissions(role.permissions));
     } else {
       setEditingRoleId(null);
       setNameAr('');
@@ -222,17 +253,17 @@ export default function RolesManagementPage() {
   );
 
   return (
-    <div className="space-y-6 pb-16 text-slate-800 dark:text-white" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة وأزرار الإضافة */}
-      <div className="bg-slate-100 dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-6 sm:p-8 rounded-3xl shadow-sm dark:shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* الترويسة الرئيسية */}
+      <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 rounded-2xl">
+            <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-600 rounded-2xl">
               <Shield size={22} />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">إدارة الأدوار والصلاحيات</h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة الأدوار والصلاحيات</h1>
+              <p className="text-xs text-slate-500 mt-1">
                 تحديد الصلاحيات التفصيلية لكل دور وظيفي مع إمكانية التعديل والإضافة
               </p>
             </div>
@@ -250,35 +281,35 @@ export default function RolesManagementPage() {
       </div>
 
       {/* البحث السريع */}
-      <div className="bg-slate-100 dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-4 rounded-2xl shadow-sm dark:shadow-xl flex items-center">
+      <div className="bg-slate-100 border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center">
         <div className="relative w-full max-w-md">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="بحث بالاسم العربي أو المعرف البرمجي (Code)..."
-            className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs pl-8 focus:outline-none focus:border-orange-500"
+            className="w-full bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-2.5 text-xs pl-8 focus:outline-none focus:border-orange-500"
           />
           <Search size={14} className="absolute left-3 top-3 text-slate-400" />
         </div>
       </div>
 
-      {/* جدول الأدوار بنفس شكل وترتيب صورتك تماماً */}
+      {/* جدول الأدوار المطابق للصورة مع عداد الصلاحيات بالأخضر الفسفوري */}
       {loading ? (
-        <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-slate-100 dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl p-12">
+        <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-slate-100 border border-slate-200 rounded-3xl p-12">
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">جاري تحميل الأدوار...</p>
+          <p className="text-xs font-semibold text-slate-500">جاري تحميل الأدوار...</p>
         </div>
       ) : filteredRoles.length === 0 ? (
-        <div className="bg-slate-100 dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl p-16 text-center text-slate-500 dark:text-slate-400">
+        <div className="bg-slate-100 border border-slate-200 rounded-3xl p-16 text-center text-slate-500">
           <Shield size={36} className="mx-auto text-slate-400 mb-3" />
           <p className="text-xs font-bold">لا توجد أدوار مسجلة مطابقة للبحث</p>
         </div>
       ) : (
-        <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm dark:shadow-xl">
+        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-100 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 font-bold">
+              <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold">
                 <tr>
                   <th className="p-4">اسم الدور</th>
                   <th className="p-4">المعرف البرمجي</th>
@@ -287,34 +318,34 @@ export default function RolesManagementPage() {
                   <th className="p-4 text-center">الإجراءات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-slate-700 dark:text-slate-300">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredRoles.map((role) => {
-                  const permCount = role.permissions?.includes('*')
-                    ? 1
-                    : role.permissions?.length || 0;
+                  const perms = parsePermissions(role.permissions);
+                  const hasAll = perms.includes('*');
+                  const permCount = hasAll ? 1 : perms.length;
 
                   return (
-                    <tr key={role.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition">
+                    <tr key={role.id} className="hover:bg-slate-50 transition">
                       <td className="p-4">
-                        <div className="font-bold text-slate-900 dark:text-white text-sm">{role.nameAr}</div>
+                        <div className="font-bold text-slate-900 text-sm">{role.nameAr}</div>
                       </td>
                       <td className="p-4">
-                        <span className="font-mono text-orange-600 dark:text-orange-400 font-bold px-3 py-1 rounded-xl bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20">
+                        <span className="font-mono text-orange-600 font-bold px-3 py-1 rounded-xl bg-orange-50 border border-orange-200">
                           {role.name}
                         </span>
                       </td>
-                      {/* عدد الصلاحيات بالأخضر الفسفوري كما بالصورة الثانية */}
-                      <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
-                        {permCount} صلاحيات
+                      {/* عدد الصلاحيات بالأخضر الفسفوري الصريح المطابق لـ image_a5ddff.png */}
+                      <td className="p-4 text-center font-black text-emerald-600 font-mono text-sm">
+                        {permCount} صلاحيات[cite: 14]
                       </td>
                       <td className="p-4 text-center">
                         {role.isSystem ? (
-                          <span className="inline-block px-3 py-1 rounded-xl text-[11px] font-bold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
-                            نظامي أساسي
+                          <span className="inline-block px-3 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
+                            نظامي أساسي[cite: 14]
                           </span>
                         ) : (
-                          <span className="inline-block px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                            مخصص
+                          <span className="inline-block px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            مخصص[cite: 14]
                           </span>
                         )}
                       </td>
@@ -323,7 +354,7 @@ export default function RolesManagementPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenModal(role)}
-                            className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition cursor-pointer"
+                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer"
                             title="تعديل الدور والصلاحيات"
                           >
                             <Edit2 size={14} />
@@ -332,7 +363,7 @@ export default function RolesManagementPage() {
                             <button
                               type="button"
                               onClick={() => handleDeleteRole(role.id)}
-                              className="p-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl transition cursor-pointer"
+                              className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition cursor-pointer"
                               title="حذف الدور"
                             >
                               <Trash2 size={14} />
@@ -349,19 +380,19 @@ export default function RolesManagementPage() {
         </div>
       )}
 
-      {/* مودال تعديل الدور والصلاحيات بكافة الصلاحيات الـ 16 التفصيلية */}
+      {/* نافذة تعديل الدور والصلاحيات الـ 16 التفصيلية */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 custom-scrollbar text-slate-800 dark:text-white">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
-              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 custom-scrollbar text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Shield size={18} className="text-orange-500" />
                 <span>{editingRoleId ? 'تعديل الدور والصلاحيات' : 'إضافة دور وظيفي جديد'}</span>
               </h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-900 cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -371,8 +402,8 @@ export default function RolesManagementPage() {
               <div
                 className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
                   statusMsg.type === 'ok'
-                    ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                    : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
                 }`}
               >
                 {statusMsg.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
@@ -383,8 +414,8 @@ export default function RolesManagementPage() {
             <form onSubmit={handleSaveRole} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                    اسم الدور (بالعربية) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    اسم الدور (بالعربية) <span className="text-rose-500">*</span>[cite: 13]
                   </label>
                   <input
                     type="text"
@@ -392,14 +423,14 @@ export default function RolesManagementPage() {
                     value={nameAr}
                     onChange={handleNameArChange}
                     placeholder="مثال: مدير فرع، كاشير، كول سنتر..."
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-                    <span>المعرف البرمجي (Role Code) <span className="text-rose-500">*</span></span>
-                    <span className="text-[10px] text-orange-600 dark:text-orange-400 font-bold">⚡ توليد تلقائي</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>المعرف البرمجي (Role Code) <span className="text-rose-500">*</span>[cite: 13]</span>
+                    <span className="text-[10px] text-orange-600 font-bold">⚡ توليد تلقائي[cite: 13]</span>
                   </label>
                   <input
                     type="text"
@@ -410,24 +441,24 @@ export default function RolesManagementPage() {
                       setCode(e.target.value);
                     }}
                     placeholder="admin"
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-orange-600 dark:text-orange-400 font-mono font-bold rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                    className="w-full bg-slate-50 border border-slate-300 text-orange-600 font-mono font-bold rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
                     dir="ltr"
                   />
                 </div>
               </div>
 
-              {/* اختيار الصلاحيات التفصيلية */}
+              {/* الصلاحيات التفصيلية الـ 16 */}
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    الصلاحيات الممنوحة لهذا الدور ({selectedPermissions.length}):
+                  <label className="text-xs font-bold text-slate-800">
+                    الصلاحيات الممنوحة لهذا الدور ({selectedPermissions.length}):[cite: 13]
                   </label>
                   <button
                     type="button"
                     onClick={handleSelectAllPerms}
-                    className="text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
                   >
-                    {selectedPermissions.length === SYSTEM_PERMISSIONS.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                    {selectedPermissions.length === SYSTEM_PERMISSIONS.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}[cite: 13]
                   </button>
                 </div>
 
@@ -440,8 +471,8 @@ export default function RolesManagementPage() {
                         onClick={() => togglePermission(perm.id)}
                         className={`flex items-center justify-between p-3 rounded-2xl border text-xs cursor-pointer transition ${
                           isChecked
-                            ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-400 dark:border-orange-500/40 text-slate-900 dark:text-white font-bold shadow-xs'
-                            : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            ? 'bg-orange-50 border-orange-400 text-slate-900 font-bold shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
                         }`}
                       >
                         <span className="leading-snug">{perm.label}</span>
@@ -449,7 +480,7 @@ export default function RolesManagementPage() {
                           className={`w-5 h-5 rounded-lg flex items-center justify-center border shrink-0 mr-2 transition ${
                             isChecked
                               ? 'bg-orange-500 border-orange-500 text-white'
-                              : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'
+                              : 'border-slate-300 bg-white'
                           }`}
                         >
                           {isChecked && <Check size={13} strokeWidth={3} />}
@@ -460,13 +491,13 @@ export default function RolesManagementPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-xs font-bold cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-600 hover:text-slate-900 text-xs font-bold cursor-pointer"
                 >
-                  إلغاء
+                  إلغاء[cite: 13]
                 </button>
                 <button
                   type="submit"
@@ -474,7 +505,7 @@ export default function RolesManagementPage() {
                   className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-                  <span>حفظ الدور والصلاحيات</span>
+                  <span>حفظ الدور والصلاحيات</span>[cite: 13]
                 </button>
               </div>
             </form>
