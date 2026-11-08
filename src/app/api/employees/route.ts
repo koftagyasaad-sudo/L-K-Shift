@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
       SELECT 
         u.id,
         COALESCE(u.full_name_ar, u.name, 'موظف') as "fullNameAr",
+        COALESCE(u.full_name_ar, u.name, 'موظف') as "name",
+        COALESCE(u.full_name_ar, u.name, 'موظف') as "fullName",
         COALESCE(u.full_name_en, '') as "fullNameEn",
         COALESCE(u.phone, '') as "phone",
         COALESCE(u.phone_alt, '') as "phoneAlt",
@@ -89,11 +91,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (id) {
-      // 1. تعديل موظف حالي (بما في ذلك كوده ومسلسله الوظيفي)
       await db.execute(sql`
         UPDATE users
         SET 
           full_name_ar = ${fullNameAr},
+          name = ${fullNameAr},
           phone = ${phone},
           employee_number = COALESCE(NULLIF(TRIM(${employeeCode || ''}), ''), employee_number),
           primary_branch_id = ${branchId ? parseInt(branchId, 10) : 1},
@@ -107,9 +109,8 @@ export async function POST(request: NextRequest) {
           updated_at = NOW()
         WHERE id = ${parseInt(id, 10)};
       `);
-      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الموظف والمسلسل الوظيفي بنجاح' });
+      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح' });
     } else {
-      // 2. إضافة موظف جديد مع توليد مسلسل تلقائي ذكي إذا لم يحدد يدوياً
       let finalCode = employeeCode ? employeeCode.trim() : '';
       if (!finalCode) {
         const codeQuery = await db.execute(sql`
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest) {
       await db.execute(sql`
         INSERT INTO users (
           full_name_ar,
+          name,
           phone,
           employee_number,
           password_hash,
@@ -138,6 +140,7 @@ export async function POST(request: NextRequest) {
           created_at,
           updated_at
         ) VALUES (
+          ${fullNameAr},
           ${fullNameAr},
           ${phone},
           ${finalCode},
