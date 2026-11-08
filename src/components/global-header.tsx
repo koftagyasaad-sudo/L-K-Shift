@@ -16,6 +16,7 @@ import {
   Calendar,
   MessageSquare,
   ShieldAlert,
+  CheckCheck,
 } from 'lucide-react';
 
 interface GlobalHeaderProps {
@@ -48,6 +49,9 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // منبه الشيفت الصوتي
+  const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     try {
@@ -99,6 +103,45 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // فحص منبه بداية الشيفت (ساعة، نصف ساعة، و15 دقيقة)
+  useEffect(() => {
+    const checkShiftAlarm = () => {
+      const branchShift = localStorage.getItem('userBranchShift') || '10:00';
+      const match = branchShift.match(/(\d{1,2}):(\d{2})/);
+      if (!match) return;
+
+      const shiftHour = parseInt(match[1], 10);
+      const shiftMinute = parseInt(match[2], 10);
+
+      const now = new Date();
+      const shiftDate = new Date();
+      shiftDate.setHours(shiftHour, shiftMinute, 0, 0);
+
+      const diffMinutes = Math.round((shiftDate.getTime() - now.getTime()) / 60000);
+
+      [60, 30, 15].forEach((intervalMinutes) => {
+        if (diffMinutes === intervalMinutes && !shiftNotified[`${intervalMinutes}`]) {
+          try {
+            const audio = new Audio('/alarm.mp3');
+            audio.play().catch(() => {});
+          } catch {}
+
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('منبه بداية الشيفت - L-K Shift', {
+              body: `تنبيه: ستبدأ ورديتك خلال ${intervalMinutes} دقيقة! يرجى الاستعداد لتسجيل البصمة.`,
+              icon: '/Logo.png',
+            });
+          }
+
+          setShiftNotified((prev) => ({ ...prev, [`${intervalMinutes}`]: true }));
+        }
+      });
+    };
+
+    const alarmInterval = setInterval(checkShiftAlarm, 30000);
+    return () => clearInterval(alarmInterval);
+  }, [shiftNotified]);
 
   const handleToggleTheme = () => {
     const nextDark = !isDark;
@@ -158,6 +201,8 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
         return <Clock size={16} className="text-emerald-500" />;
       case 'ADVANCE':
         return <Clock size={16} className="text-emerald-400" />;
+      case 'PERMISSION':
+        return <Clock size={16} className="text-amber-500" />;
       case 'COMPLAINT':
         return <ShieldAlert size={16} className="text-rose-500" />;
       default:
@@ -167,6 +212,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/90 px-4 sm:px-6 backdrop-blur-md dark:border-white/5 dark:bg-[#0c0e18]/90">
+      {/* الجانب الأيمن */}
       <div className="flex items-center gap-3">
         {onToggleSidebar && (
           <button
@@ -202,8 +248,8 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
         </Link>
       </div>
 
+      {/* الجانب الأيسر: جرس الإشعارات التفاعلي + المظهر + الخروج */}
       <div className="flex items-center gap-2.5">
-        {/* زر وقائمة الإشعارات التفاعلية */}
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
@@ -219,18 +265,18 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
             )}
           </button>
 
+          {/* القائمة الرأسية المنسدلة بدقة */}
           {showDropdown && (
             <div
-              className={`absolute top-12 ${
-                isRtl ? 'left-0' : 'right-0'
-              } w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#121422] z-50`}
+              dir={isRtl ? 'rtl' : 'ltr'}
+              className="absolute top-full mt-2 left-0 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#121422] z-50 flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 px-2 dark:border-white/5">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">الإشعارات</span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">قائمة الإشعارات</span>
                   {unreadCount > 0 && (
                     <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-500">
-                      {unreadCount} جديد
+                      {unreadCount} غير مقروء
                     </span>
                   )}
                 </div>
@@ -238,14 +284,16 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
                   <button
                     type="button"
                     onClick={handleMarkAllAsRead}
-                    className="text-[11px] font-semibold text-orange-500 hover:underline cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] font-bold text-orange-500 hover:text-orange-400 cursor-pointer"
                   >
-                    تحديد الكل كمقروء
+                    <CheckCheck size={13} />
+                    <span>تحديد الكل كمقروء</span>
                   </button>
                 )}
               </div>
 
-              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5 custom-scrollbar">
+              {/* القائمة الرأسية الصرفة */}
+              <div className="flex flex-col max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5 custom-scrollbar mt-1">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-xs text-slate-400">لا توجد إشعارات حالياً</div>
                 ) : (
@@ -253,28 +301,28 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
                     <div
                       key={item.id}
                       onClick={() => handleNotificationClick(item)}
-                      className={`flex items-start gap-3 p-3 transition cursor-pointer rounded-xl ${
+                      className={`flex flex-row items-start gap-3 p-3 transition cursor-pointer rounded-xl text-right w-full ${
                         item.isRead
                           ? 'opacity-70 hover:bg-slate-50 dark:hover:bg-white/5'
-                          : 'bg-orange-500/5 hover:bg-orange-500/10'
+                          : 'bg-orange-500/5 hover:bg-orange-500/10 border-r-2 border-orange-500'
                       }`}
                     >
                       <div className="mt-0.5 shrink-0 p-1.5 rounded-lg bg-slate-100 dark:bg-white/5">
                         {getNotificationIcon(item.type)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
                             {item.title}
                           </h4>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
                             {new Date(item.createdAt).toLocaleTimeString('ar-EG', {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed break-words">
                           {item.message}
                         </p>
                       </div>
