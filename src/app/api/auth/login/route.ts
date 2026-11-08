@@ -34,20 +34,50 @@ function createSignedJwt(payload: object): string {
 
 function verifyPassword(inputPass: string, storedHash: string): boolean {
   if (!storedHash) return false;
+  // 1. مطابقة مباشرة للحسابات القديمة المسجلة بنص عادي
   if (storedHash === inputPass) return true;
 
+  // 2. مطابقة تشفير PBKDF2
   const salt = 'LK_SHIFT_SECURE_SALT_2026';
   const hashedInput = crypto.pbkdf2Sync(inputPass, salt, 1000, 64, 'sha512').toString('hex');
-  return storedHash === hashedInput;
+  if (storedHash === hashedInput) return true;
+
+  // 3. مطابقة تشفير bcrypt في حال وُجدت هاشات قديمة تبدأ بـ $2
+  if (storedHash.startsWith('$2')) {
+    try {
+      const bcrypt = require('bcryptjs');
+      if (bcrypt.compareSync(inputPass, storedHash)) return true;
+    } catch {
+      try {
+        const bcrypt = require('bcrypt');
+        if (bcrypt.compareSync(inputPass, storedHash)) return true;
+      } catch {}
+    }
+  }
+
+  return false;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, password } = body;
 
-    const trimmedUser = (username || '').trim();
-    const trimmedPass = (password || '').trim();
+    // التقاط اسم المستخدم أو رقم الهاتف بجميع التسميات الممكنة التي ترسلها شاشات الدخول
+    const trimmedUser = String(
+      body.phone ?? 
+      body.username ?? 
+      body.identifier ?? 
+      body.login ?? 
+      body.code ?? 
+      body.employeeNumber ?? 
+      ''
+    ).trim();
+
+    const trimmedPass = String(
+      body.password ?? 
+      body.pass ?? 
+      ''
+    ).trim();
 
     if (!trimmedUser || !trimmedPass) {
       return NextResponse.json(
@@ -103,7 +133,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // جلب الصلاحيات ونطاق الفروع المخصص من جدول custom_roles
     let userPermissions: string[] = [];
     let branchScope = 'ALL';
     let allowedBranchIds: number[] = [];
@@ -130,7 +159,6 @@ export async function POST(request: NextRequest) {
       branchScope = 'ALL';
     }
 
-    // إنشاء توكن JWT مشفر للجلسة
     const tokenPayload = {
       sub: String(user.id),
       userId: user.id,
@@ -140,18 +168,18 @@ export async function POST(request: NextRequest) {
       branchScope,
       permissions: userPermissions,
       iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // صالح لمدة 30 يوماً
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
     };
 
     const token = createSignedJwt(tokenPayload);
 
-    // تجهيز الرد وضبط الـ HttpOnly Cookie
     const response = NextResponse.json({
       success: true,
       message: 'تم تسجيل الدخول بنجاح',
       user: {
         id: user.id,
         name: user.fullNameAr,
+        fullName: user.fullNameAr,
         phone: user.phone,
         code: user.employeeCode,
         role: user.role,
