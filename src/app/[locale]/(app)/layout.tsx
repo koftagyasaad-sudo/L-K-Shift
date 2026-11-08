@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import GlobalHeader from '@/components/global-header';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import SplashScreen from '@/components/SplashScreen';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -15,20 +16,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
-  // حالة طي السايدبار (تجعله شريط مصغر بالأيقونات بدلاً من إخفائه)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div
-      className="min-h-screen bg-slate-50 text-slate-900 flex flex-row"
+      className="min-h-screen bg-slate-50 text-slate-900 flex flex-row relative"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      {/* 1. شاشة البداية الاحترافية والأنيميشن الدائري */}
+      <SplashScreen />
+
+      {/* 2. تسجيل مشغل الخدمة للعمل أوفلاين 100% والإشعارات الخارجية */}
       <ServiceWorkerRegister />
 
-      {/* 1. السايدبار (يعرض الأيقونات فقط عند الطي) */}
+      {/* 3. السايدبار المتكيف (يعرض الأيقونات فقط عند الطي) */}
       <Sidebar locale={locale} collapsed={sidebarCollapsed} />
 
-      {/* 2. منطقة العمل والمحتوى */}
+      {/* 4. منطقة العمل والمحتوى */}
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         <GlobalHeader
           sidebarCollapsed={sidebarCollapsed}
