@@ -34,7 +34,7 @@ interface NotificationItem {
   createdAt: string;
 }
 
-// محرك صوت دائم واحد فقط لتفادي حد المتصفح (AudioContext Singleton)
+// محرك صوت وحيد دائم لتجنب قيود المتصفح
 let sharedAudioCtx: AudioContext | null = null;
 
 function getSharedAudioContext(): AudioContext | null {
@@ -94,7 +94,8 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const prevUnreadCountRef = useRef<number>(0);
+  // تم تصحيح القيمة الأولية إلى -1 ليعمل الصوت دائماً في كل مرة يصل إشعار جديد
+  const prevUnreadCountRef = useRef<number>(-1);
   const [hasAudioUnlocked, setHasAudioUnlocked] = useState<boolean>(true);
   const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
 
@@ -114,7 +115,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     } catch {}
   }, []);
 
-  // فك قفل الصوت وطلب إذن الإشعارات من النظام بضغطة واحدة
   const handleUnlockAudioAndPush = async () => {
     try {
       const ctx = getSharedAudioContext();
@@ -151,7 +151,9 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
         setNotifications(items);
 
         const currentUnread = items.filter((n) => !n.isRead).length;
-        if (currentUnread > prevUnreadCountRef.current && prevUnreadCountRef.current !== 0) {
+
+        // تشغيل صوت الإشعار مع الاهتزاز في كل مرة يزيد فيها عدد الإشعارات غير المقروءة
+        if (prevUnreadCountRef.current !== -1 && currentUnread > prevUnreadCountRef.current) {
           playPermanentChime();
 
           const newest = items.find((n) => !n.isRead);
@@ -183,7 +185,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // منبه الشيفت الصوتي
+  // منبه الوردية
   useEffect(() => {
     const checkShiftAlarm = () => {
       const branchShift = localStorage.getItem('userBranchShift') || '10:00';
