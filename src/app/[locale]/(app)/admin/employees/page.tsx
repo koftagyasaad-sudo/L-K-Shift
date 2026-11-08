@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Timer,
+  Hash,
 } from 'lucide-react';
 
 interface EmployeeItem {
@@ -84,7 +85,7 @@ export default function EmployeesManagementPage() {
   const [zkRecords, setZkRecords] = useState<any[]>([]);
   const [zkLoading, setZkLoading] = useState(false);
 
-  // مودال التعديل وإضافة الموظف والشيفت
+  // مودال التعديل
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Partial<EmployeeItem>>({});
   const [savingEmp, setSavingEmp] = useState(false);
@@ -109,6 +110,7 @@ export default function EmployeesManagementPage() {
     fetchEmployees();
   }, []);
 
+  // فتح شيت ZK وسحب كافة حركات الموظف
   const handleOpenZkSheet = async (emp: EmployeeItem) => {
     setSelectedZkEmployee(emp);
     setZkLoading(true);
@@ -125,7 +127,6 @@ export default function EmployeesManagementPage() {
     }
   };
 
-  // فتح مودال التعديل
   const handleOpenEditModal = (emp?: EmployeeItem) => {
     setModalStatusMsg(null);
     if (emp) {
@@ -133,13 +134,13 @@ export default function EmployeesManagementPage() {
         id: emp.id,
         fullNameAr: emp.fullNameAr,
         phone: emp.phone,
-        employeeCode: emp.employeeCode,
+        employeeCode: emp.employeeCode || '',
         role: emp.role,
         branchId: emp.branchId || 1,
         monthlySalary: emp.monthlySalary || 5000,
         workingHoursPerDay: emp.workingHoursPerDay || 8,
         isActive: emp.isActive !== false,
-        shiftName: emp.shiftName || 'الشيفت الصباحي (10 ص - 6 م)',
+        shiftName: emp.shiftName || 'الشيفت الصباحي',
         shiftStartTime: emp.shiftStartTime || '10:00',
         shiftEndTime: emp.shiftEndTime || '18:00',
       });
@@ -154,7 +155,7 @@ export default function EmployeesManagementPage() {
         monthlySalary: 5000,
         workingHoursPerDay: 8,
         isActive: true,
-        shiftName: 'الشيفت الصباحي (10 ص - 6 م)',
+        shiftName: 'الشيفت الصباحي',
         shiftStartTime: '10:00',
         shiftEndTime: '18:00',
       });
@@ -162,7 +163,6 @@ export default function EmployeesManagementPage() {
     setIsEditModalOpen(true);
   };
 
-  // حفظ التعديلات والشيفت المخصص
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingEmp(true);
@@ -176,13 +176,13 @@ export default function EmployeesManagementPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'فشل حفظ بيانات الموظف والشيفت');
+      if (!res.ok) throw new Error(data.message || 'فشل حفظ بيانات الموظف والمسلسل');
 
-      setModalStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الموظف والشيفت بنجاح!' });
+      setModalStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الموظف والمسلسل الوظيفي بنجاح!' });
       setTimeout(() => {
         setIsEditModalOpen(false);
         fetchEmployees();
-      }, 1000);
+      }, 800);
     } catch (err: any) {
       setModalStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
     } finally {
@@ -216,7 +216,7 @@ export default function EmployeesManagementPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة شؤون الموظفين والورديات</h1>
             <p className="text-xs text-slate-500 mt-1">
-              تحديد شيفت كل موظف، تفعيل التنبيهات المسبقة، تفريغ شيتات ZK، وطباعة ملفات HR
+              مسلسل تلقائي للموظفين (001)، تفريغ شيتات الحضور ZK، وطباعة ملفات HR
             </p>
           </div>
         </div>
@@ -237,7 +237,7 @@ export default function EmployeesManagementPage() {
         </div>
       </div>
 
-      {/* شريط البحث وفلتر الفرع */}
+      {/* البحث وفلتر الفرع */}
       <div className="bg-slate-100 border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row gap-3 items-center">
         <div className="w-full sm:w-60">
           <select
@@ -259,7 +259,7 @@ export default function EmployeesManagementPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="البحث بالاسم، رقم التليفون، أو الكود الوظيفي..."
+            placeholder="البحث بالاسم، رقم التليفون، أو المسلسل الوظيفي..."
             className="w-full bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-2.5 text-xs pl-8 focus:outline-none focus:border-orange-500"
           />
           <Search size={14} className="absolute left-3 top-3 text-slate-400" />
@@ -278,7 +278,7 @@ export default function EmployeesManagementPage() {
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold">
                 <tr>
-                  <th className="p-4">الموظف والكود</th>
+                  <th className="p-4">الموظف والمسلسل</th>
                   <th className="p-4">رقم الهاتف</th>
                   <th className="p-4">الفرع</th>
                   <th className="p-4">وردية الشيفت المحددة</th>
@@ -314,18 +314,16 @@ export default function EmployeesManagementPage() {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {/* زر التعديل الأصلي المعتمد */}
                         <button
                           type="button"
                           onClick={() => handleOpenEditModal(emp)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer"
-                          title="تعديل بيانات الموظف والفرع والشيفت"
+                          title="تعديل بيانات الموظف والمسلسل"
                         >
                           <Edit2 size={13} />
                           <span>تعديل</span>
                         </button>
 
-                        {/* زر شيت ZK */}
                         <button
                           type="button"
                           onClick={() => handleOpenZkSheet(emp)}
@@ -336,7 +334,6 @@ export default function EmployeesManagementPage() {
                           <span>شيت ZK</span>
                         </button>
 
-                        {/* زر ملف HR */}
                         <button
                           type="button"
                           onClick={() => setSelectedHrEmployee(emp)}
@@ -356,7 +353,7 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* مودال تعديل بيانات الموظف والشيفت */}
+      {/* 1. مودال تعديل بيانات الموظف مع إتاحة تعديل المسلسل الوظيفي */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
@@ -389,6 +386,22 @@ export default function EmployeesManagementPage() {
 
             <form onSubmit={handleSaveEmployee} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* خانة المسلسل الوظيفي القابلة للتعديل */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Hash size={13} className="text-orange-500" />
+                    <span>المسلسل / كود الموظف (001)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editingEmp.employeeCode || ''}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, employeeCode: e.target.value })}
+                    placeholder="مثال: 001"
+                    className="w-full bg-slate-50 border border-slate-300 text-orange-600 font-mono font-bold rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                    dir="ltr"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">الاسم بالكامل (رباعي) *</label>
                   <input
@@ -427,7 +440,7 @@ export default function EmployeesManagementPage() {
                   </select>
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">الدور الوظيفي</label>
                   <input
                     type="text"
@@ -438,7 +451,7 @@ export default function EmployeesManagementPage() {
                 </div>
               </div>
 
-              {/* اختيار وتحديد الشيفت المخصص للموظف */}
+              {/* مواعيد الوردية المخصصة */}
               <div className="bg-orange-50/70 border border-orange-200 p-4 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-xs font-black text-orange-700">
                   <Timer size={16} />
@@ -504,7 +517,7 @@ export default function EmployeesManagementPage() {
                   className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer disabled:opacity-50"
                 >
                   {savingEmp ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  <span>حفظ البيانات والشيفت</span>
+                  <span>حفظ البيانات والمسلسل</span>
                 </button>
               </div>
             </form>
@@ -512,95 +525,181 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* مودال شيت ZK */}
+      {/* 2. مودال شيت ZK بالشكل القديم والرسمي الكامل للمطاعم والشركات */}
       {selectedZkEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 custom-scrollbar text-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <FileText size={18} className="text-blue-600" />
-                  <span>تفريغ شيت حضور ZK - {selectedZkEmployee.fullNameAr}</span>
-                </h3>
-                <span className="text-xs text-slate-500 font-mono mt-0.5 block">
-                  #{selectedZkEmployee.employeeCode} | {selectedZkEmployee.branchName}
-                </span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto bg-white border border-slate-300 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 custom-scrollbar text-slate-900 print:m-0 print:p-0 print:border-none print:shadow-none">
+            {/* الترويسة الرسمية لشيت ZK القديم */}
+            <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-white font-black text-lg shadow-md">
+                  ZK
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                    تقرير تفريغ حركات الحضور والانصراف ومسير الرواتب (ZK-Teco Core)
+                  </h2>
+                  <p className="text-xs text-slate-600 font-semibold mt-0.5">
+                    الفرع: {selectedZkEmployee.branchName} | الشهر المالي المحتسب (ثابت 30 يوماً)
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print:hidden">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer"
                 >
-                  <Printer size={13} />
-                  <span>طباعة الشيت</span>
+                  <Printer size={14} />
+                  <span>طباعة شيت ZK</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedZkEmployee(null)}
-                  className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-900 cursor-pointer"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
-              <div><span className="text-slate-500 block">الراتب الأساسي:</span><span className="font-mono font-bold text-emerald-600 text-sm">{selectedZkEmployee.monthlySalary} ج.م</span></div>
-              <div><span className="text-slate-500 block">أجر اليوم (30 يوم):</span><span className="font-mono font-bold text-slate-800 text-sm">{(selectedZkEmployee.monthlySalary / 30).toFixed(2)} ج.م</span></div>
-              <div><span className="text-slate-500 block">إجمالي البصمات:</span><span className="font-mono font-bold text-slate-900 text-sm">{zkRecords.length} وردية</span></div>
-              <div><span className="text-slate-500 block">إجمالي الساعات:</span><span className="font-mono font-bold text-orange-600 text-sm">{(zkRecords.reduce((acc, r) => acc + (r.workedMinutes || 0), 0) / 60).toFixed(1)} ساعة</span></div>
+            {/* بيانات الموظف والتعاقد الأساسية */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-100 p-4 rounded-2xl border border-slate-300 text-xs">
+              <div>
+                <span className="text-slate-500 block font-semibold">الموظف والكود:</span>
+                <span className="font-bold text-slate-900 text-sm">
+                  {selectedZkEmployee.fullNameAr} (#{selectedZkEmployee.employeeCode})
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block font-semibold">الوظيفة والفرع:</span>
+                <span className="font-bold text-slate-800 text-sm">
+                  {selectedZkEmployee.role} - {selectedZkEmployee.branchName}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block font-semibold">الراتب وأجر اليوم:</span>
+                <span className="font-mono font-bold text-emerald-700 text-sm">
+                  {selectedZkEmployee.monthlySalary} ج.م (اليوم: {(selectedZkEmployee.monthlySalary / 30).toFixed(2)} ج.م)
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block font-semibold">وردية العمل المحددة:</span>
+                <span className="font-mono font-bold text-orange-700 text-sm">
+                  {selectedZkEmployee.shiftStartTime || '10:00'} إلى {selectedZkEmployee.shiftEndTime || '18:00'} ({selectedZkEmployee.workingHoursPerDay}س)
+                </span>
+              </div>
             </div>
 
+            {/* جدول حركات البصمة التفصيلي */}
             {zkLoading ? (
-              <div className="py-12 text-center text-xs text-slate-500">
-                <Loader2 size={24} className="animate-spin mx-auto text-blue-600 mb-2" />
-                جاري سحب حركات الـ ZK...
+              <div className="py-16 text-center text-xs text-slate-500">
+                <Loader2 size={26} className="animate-spin mx-auto text-blue-600 mb-2" />
+                جاري سحب وتفريغ سجلات ماكينة البصمة ZK...
               </div>
             ) : zkRecords.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-500">لا توجد حركات بصمة مسجلة لهذا الموظف</div>
+              <div className="py-16 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                لا توجد حركات بصمة مسجلة لهذا الموظف
+              </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-100 text-slate-700 font-bold">
+              <div className="overflow-x-auto rounded-2xl border-2 border-slate-300">
+                <table className="w-full text-right text-xs border-collapse">
+                  <thead className="bg-slate-200 border-b-2 border-slate-300 text-slate-800 font-bold">
                     <tr>
-                      <th className="p-3">تاريخ الوردية</th>
-                      <th className="p-3 text-center">وقت الحضور</th>
-                      <th className="p-3 text-center">وقت الانصراف (الأخير)</th>
-                      <th className="p-3 text-center">ساعات العمل</th>
-                      <th className="p-3 text-center">التأخير</th>
-                      <th className="p-3 text-center">المسافة</th>
+                      <th className="p-3 border-l border-slate-300 text-center">م</th>
+                      <th className="p-3 border-l border-slate-300">تاريخ الوردية</th>
+                      <th className="p-3 border-l border-slate-300 text-center">حضور 1 (Check In)</th>
+                      <th className="p-3 border-l border-slate-300 text-center">انصراف 1 (Check Out)</th>
+                      <th className="p-3 border-l border-slate-300 text-center">ساعات العمل الفعلية</th>
+                      <th className="p-3 border-l border-slate-300 text-center">التأخير (دقيقة)</th>
+                      <th className="p-3 border-l border-slate-300 text-center">الإضافي (دقيقة)</th>
+                      <th className="p-3 border-l border-slate-300 text-center">المسافة الجغرافية</th>
+                      <th className="p-3 text-center">الحالة</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {zkRecords.map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-50">
-                        <td className="p-3 font-mono font-semibold">{r.workDate}</td>
-                        <td className="p-3 text-center font-mono font-bold text-emerald-600">
+                  <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
+                    {zkRecords.map((r, idx) => (
+                      <tr key={r.id || idx} className="hover:bg-slate-50">
+                        <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-slate-500">
+                          {idx + 1}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 font-mono font-bold text-slate-900">
+                          {r.workDate}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-emerald-700 bg-emerald-50/50">
                           {r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
-                        <td className="p-3 text-center font-mono font-bold text-orange-600">
+                        <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-orange-700 bg-orange-50/50">
                           {r.checkOutTime ? new Date(r.checkOutTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
-                        <td className="p-3 text-center font-mono font-bold text-slate-900">
+                        <td className="p-3 border-l border-slate-200 text-center font-mono font-black text-slate-900">
                           {r.workedMinutes > 0 ? `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د` : '—'}
                         </td>
-                        <td className="p-3 text-center font-mono text-rose-600 font-bold">
-                          {r.lateMinutes > 0 ? `${r.lateMinutes} دقيقة` : 'لا يوجد'}
+                        <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-rose-600">
+                          {r.lateMinutes > 0 ? `${r.lateMinutes} د` : '0'}
                         </td>
-                        <td className="p-3 text-center font-mono text-slate-500">{Math.round(r.gpsDistance || 0)}م</td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-blue-600">
+                          {r.overtimeMinutes > 0 ? `${r.overtimeMinutes} د` : '0'}
+                        </td>
+                        <td className="p-3 border-l border-slate-200 text-center font-mono text-slate-600">
+                          {Math.round(r.gpsDistance || 0)}م
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-md font-bold text-[10px] bg-emerald-100 text-emerald-800">
+                            حضور مؤكد
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+
+            {/* ملخص إجمالي الشهر وخانات التوقيع الرسمية */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-100 p-4 rounded-2xl border border-slate-300 text-xs">
+              <div className="space-y-1">
+                <span className="text-slate-600 font-bold block">ملخص الساعات الشهرية:</span>
+                <p className="text-slate-800">إجمالي أيام الحضور: <strong>{zkRecords.length} يوم</strong></p>
+                <p className="text-slate-800">إجمالي الساعات الفعلية: <strong>{(zkRecords.reduce((acc, r) => acc + (r.workedMinutes || 0), 0) / 60).toFixed(1)} ساعة</strong></p>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-slate-600 font-bold block">ملخص الانضباط والخصومات:</span>
+                <p className="text-rose-700">إجمالي دقائق التأخير: <strong>{zkRecords.reduce((acc, r) => acc + (r.lateMinutes || 0), 0)} دقيقة</strong></p>
+                <p className="text-blue-700">إجمالي الساعات الإضافية: <strong>{(zkRecords.reduce((acc, r) => acc + (r.overtimeMinutes || 0), 0) / 60).toFixed(1)} ساعة</strong></p>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-slate-600 font-bold block">الصافي المالي التقريبي:</span>
+                <p className="text-emerald-800 font-black text-sm">
+                  {((zkRecords.reduce((acc, r) => acc + (r.workedMinutes || 0), 0) / (selectedZkEmployee.workingHoursPerDay * 60)) * (selectedZkEmployee.monthlySalary / 30)).toFixed(2)} ج.م
+                </p>
+                <span className="text-[10px] text-slate-500">حساب الشهر الموحد ثابتاً على 30 يوماً</span>
+              </div>
+            </div>
+
+            {/* خانات الاعتماد والتوقيع عند الطباعة الورقية */}
+            <div className="pt-6 border-t-2 border-slate-300 grid grid-cols-3 gap-4 text-center text-xs font-bold text-slate-700">
+              <div className="space-y-6">
+                <span>توقيع الموظف بالعلم</span>
+                <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
+              </div>
+              <div className="space-y-6">
+                <span>توقيع مدير الفرع</span>
+                <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
+              </div>
+              <div className="space-y-6">
+                <span>اعتماد الموارد البشرية (HR)</span>
+                <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* مودال ملف HR الرسمي الكامل */}
+      {/* 3. مودال ملف HR الرسمي الكامل */}
       {selectedHrEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 custom-scrollbar text-slate-800">
