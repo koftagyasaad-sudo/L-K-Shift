@@ -33,10 +33,7 @@ export default function PersonalProfilePage() {
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState<string>('');
 
-  // 1. الصورة الشخصية
   const [profilePhoto, setProfilePhoto] = useState<string>('');
-
-  // 2. البيانات الأساسية
   const [fullName, setFullName] = useState('');
   const [fullNameEn, setFullNameEn] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -44,13 +41,11 @@ export default function PersonalProfilePage() {
   const [maritalStatus, setMaritalStatus] = useState('');
   const [militaryStatus, setMilitaryStatus] = useState('');
 
-  // 3. الهوية والتأمينات
   const [nationalId, setNationalId] = useState('');
   const [nationalIdExpiry, setNationalIdExpiry] = useState('');
   const [socialInsuranceNo, setSocialInsuranceNo] = useState('');
   const [drivingLicense, setDrivingLicense] = useState('');
 
-  // 4. الاتصال والعنوان والطوارئ
   const [phone, setPhone] = useState('');
   const [phoneAlt, setPhoneAlt] = useState('');
   const [address, setAddress] = useState('');
@@ -58,17 +53,14 @@ export default function PersonalProfilePage() {
   const [emergencyRelation, setEmergencyRelation] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
 
-  // 5. صرف الرواتب
   const [payoutMethod, setPayoutMethod] = useState<'INSTAPAY' | 'WALLET' | 'BANK' | 'CASH'>('INSTAPAY');
   const [payoutAccount, setPayoutAccount] = useState('');
   const [bankName, setBankName] = useState('');
 
-  // 6. التعليم
   const [educationLevel, setEducationLevel] = useState('');
   const [educationField, setEducationField] = useState('');
   const [graduationYear, setGraduationYear] = useState('');
 
-  // 7. كلمة المرور
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -132,7 +124,6 @@ export default function PersonalProfilePage() {
     }
   }, []);
 
-  // ضغط الصورة تلقائياً لضمان قبولها وسرعة رفعها من أول مرة
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -256,7 +247,7 @@ export default function PersonalProfilePage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-        <p className="text-xs font-semibold text-slate-400">جاري تحميل بياناتك الشخصية...</p>
+        <p className="text-xs font-semibold text-slate-500">جاري تحميل استمارة ملفك الشخصي...</p>
       </div>
     );
   }
@@ -264,16 +255,16 @@ export default function PersonalProfilePage() {
   const initialLetter = fullName ? fullName.trim().charAt(0) : 'م';
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-16 text-slate-200" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة والصورة الشخصية */}
-      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
+    <div className="max-w-4xl mx-auto space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* الترويسة والصورة الشخصية بلون رصاصي فاتح */}
+      <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
         <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-right">
           <div className="relative group shrink-0">
-            <div className="h-28 w-28 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-slate-900 shadow-xl flex items-center justify-center">
+            <div className="h-28 w-28 rounded-3xl overflow-hidden border-2 border-orange-500/40 bg-white shadow-md flex items-center justify-center">
               {profilePhoto ? (
                 <img src={profilePhoto} alt="Avatar" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-4xl font-black text-white">{initialLetter}</span>
+                <span className="text-4xl font-black text-slate-800">{initialLetter}</span>
               )}
             </div>
 
@@ -308,18 +299,18 @@ export default function PersonalProfilePage() {
 
           <div>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-white">{fullName || 'البيانات الشخصية'}</h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900">{fullName || 'البيانات الشخصية'}</h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-600 text-xs font-bold">
                 <ShieldCheck size={13} /> موظف معتمد
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">تحديث واستعراض استمارة بياناتك المسجلة في النظام</p>
-            <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs font-mono text-slate-400">
+            <p className="text-xs text-slate-500 mt-1">تحديث واستعراض استمارة بياناتك المسجلة في النظام</p>
+            <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs font-mono text-slate-600">
               <span className="flex items-center gap-1">
-                <Phone size={12} className="text-orange-500" /> {phone || 'بدون رقم'}
+                <Phone size={12} className="text-orange-600" /> {phone || 'بدون رقم'}
               </span>
               <span className="flex items-center gap-1">
-                <CreditCard size={12} className="text-emerald-500" /> {nationalId || 'الرقم القومي غير مسجل'}
+                <CreditCard size={12} className="text-emerald-600" /> {nationalId || 'الرقم القومي غير مسجل'}
               </span>
             </div>
           </div>
@@ -328,7 +319,7 @@ export default function PersonalProfilePage() {
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 px-4 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer"
+          className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer"
         >
           <ArrowRight size={15} className={isRtl ? '' : 'rotate-180'} />
           <span>رجوع للخلف</span>
@@ -339,8 +330,8 @@ export default function PersonalProfilePage() {
         <div
           className={`p-4 rounded-2xl flex items-center gap-3 border text-xs font-bold ${
             statusMsg.type === 'ok'
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-              : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
           }`}
         >
           {statusMsg.type === 'ok' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
@@ -350,15 +341,15 @@ export default function PersonalProfilePage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* 1. البيانات الشخصية */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
-            <User size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">1. البيانات الشخصية الأساسية</h2>
+        <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl space-y-5 shadow-sm">
+          <div className="border-b border-slate-200 pb-3 flex items-center gap-2">
+            <User size={18} className="text-orange-600" />
+            <h2 className="text-sm font-bold text-slate-900">1. البيانات الشخصية الأساسية</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 الاسم بالكامل (رباعي) <span className="text-rose-500">*</span>
               </label>
               <input
@@ -367,38 +358,38 @@ export default function PersonalProfilePage() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="أدخل اسمك رباعي"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الاسم بالإنجليزية</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">الاسم بالإنجليزية</label>
               <input
                 type="text"
                 value={fullNameEn}
                 onChange={(e) => setFullNameEn(e.target.value)}
                 placeholder="Full Name"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تاريخ الميلاد</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">تاريخ الميلاد</label>
               <input
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">النوع / الجنس</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">النوع / الجنس</label>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value as any)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 font-semibold"
               >
                 <option value="MALE">ذكر</option>
                 <option value="FEMALE">أنثى</option>
@@ -406,11 +397,11 @@ export default function PersonalProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الحالة الاجتماعية</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">الحالة الاجتماعية</label>
               <select
                 value={maritalStatus}
                 onChange={(e) => setMaritalStatus(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 font-semibold"
               >
                 <option value="">-- اختر الحالة --</option>
                 <option value="أعزب">أعزب</option>
@@ -421,11 +412,11 @@ export default function PersonalProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الموقف التجنيدي</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">الموقف التجنيدي</label>
               <select
                 value={militaryStatus}
                 onChange={(e) => setMilitaryStatus(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 font-semibold"
               >
                 <option value="">-- اختر الموقف --</option>
                 <option value="أدى الخدمة العسكرية">أدى الخدمة العسكرية</option>
@@ -439,15 +430,15 @@ export default function PersonalProfilePage() {
         </div>
 
         {/* 2. الهوية والتأمينات */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
-            <CreditCard size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">2. بيانات الهوية والتأمينات الاجتماعية</h2>
+        <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl space-y-5 shadow-sm">
+          <div className="border-b border-slate-200 pb-3 flex items-center gap-2">
+            <CreditCard size={18} className="text-orange-600" />
+            <h2 className="text-sm font-bold text-slate-900">2. بيانات الهوية والتأمينات الاجتماعية</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 الرقم القومي (14 رقماً) <span className="text-rose-500">*</span>
               </label>
               <input
@@ -457,39 +448,39 @@ export default function PersonalProfilePage() {
                 value={nationalId}
                 onChange={(e) => setNationalId(e.target.value)}
                 placeholder="299xxxxxxxxxxx"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">سريان البطاقة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">سريان البطاقة</label>
               <input
                 type="date"
                 value={nationalIdExpiry}
                 onChange={(e) => setNationalIdExpiry(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">الرقم التأميني</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">الرقم التأميني</label>
               <input
                 type="text"
                 value={socialInsuranceNo}
                 onChange={(e) => setSocialInsuranceNo(e.target.value)}
                 placeholder="مثال: 12345678"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رخصة القيادة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">رخصة القيادة</label>
               <select
                 value={drivingLicense}
                 onChange={(e) => setDrivingLicense(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 font-semibold"
               >
                 <option value="">لا يوجد رخصة قيادة</option>
                 <option value="رخصة خاصة">رخصة خاصة</option>
@@ -503,15 +494,15 @@ export default function PersonalProfilePage() {
         </div>
 
         {/* 3. الاتصال والعنوان والطوارئ */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
-            <Phone size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">3. بيانات الاتصال والإقامة وجهة الطوارئ</h2>
+        <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl space-y-5 shadow-sm">
+          <div className="border-b border-slate-200 pb-3 flex items-center gap-2">
+            <Phone size={18} className="text-orange-600" />
+            <h2 className="text-sm font-bold text-slate-900">3. بيانات الاتصال والإقامة وجهة الطوارئ</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 رقم التليفون الأساسي <span className="text-rose-500">*</span>
               </label>
               <input
@@ -520,64 +511,64 @@ export default function PersonalProfilePage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="01xxxxxxxxx"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">رقم تليفون إضافي / واتساب</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم تليفون إضافي / واتساب</label>
               <input
                 type="tel"
                 value={phoneAlt}
                 onChange={(e) => setPhoneAlt(e.target.value)}
                 placeholder="01xxxxxxxxx"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
 
             <div className="sm:col-span-2 lg:col-span-1">
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">العنوان ومحل الإقامة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">العنوان ومحل الإقامة</label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="المدينة، اسم الشارع..."
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">جهة اتصال للطوارئ (الاسم)</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">جهة اتصال للطوارئ (الاسم)</label>
               <input
                 type="text"
                 value={emergencyName}
                 onChange={(e) => setEmergencyName(e.target.value)}
                 placeholder="اسم الشخص للرجوع إليه"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">صلة القرابة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">صلة القرابة</label>
               <input
                 type="text"
                 value={emergencyRelation}
                 onChange={(e) => setEmergencyRelation(e.target.value)}
                 placeholder="مثال: الوالد، الأخ..."
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">هاتف الطوارئ</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">هاتف الطوارئ</label>
               <input
                 type="tel"
                 value={emergencyPhone}
                 onChange={(e) => setEmergencyPhone(e.target.value)}
                 placeholder="01xxxxxxxxx"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
@@ -585,19 +576,19 @@ export default function PersonalProfilePage() {
         </div>
 
         {/* 4. صرف المستحقات والرواتب */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
-            <DollarSign size={18} className="text-emerald-500" />
-            <h2 className="text-sm font-bold text-white">4. بيانات تحويل الراتب والمستحقات</h2>
+        <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl space-y-5 shadow-sm">
+          <div className="border-b border-slate-200 pb-3 flex items-center gap-2">
+            <DollarSign size={18} className="text-emerald-600" />
+            <h2 className="text-sm font-bold text-slate-900">4. بيانات تحويل الراتب والمستحقات</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">طريقة التحويل المفضلة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">طريقة التحويل المفضلة</label>
               <select
                 value={payoutMethod}
                 onChange={(e) => setPayoutMethod(e.target.value as any)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 font-bold"
+                className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 font-bold"
               >
                 <option value="INSTAPAY">إنستاباي (InstaPay)</option>
                 <option value="WALLET">محفظة كاش (فودافون / أورنج / اتصالات / وي)</option>
@@ -607,7 +598,7 @@ export default function PersonalProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 {payoutMethod === 'INSTAPAY'
                   ? 'عنوان الدفع (IPA) أو رقم الموبايل'
                   : payoutMethod === 'WALLET'
@@ -621,38 +612,38 @@ export default function PersonalProfilePage() {
                 value={payoutAccount}
                 onChange={(e) => setPayoutAccount(e.target.value)}
                 placeholder={payoutMethod === 'INSTAPAY' ? '01xxxxxxxxx أو username@instapay' : 'رقم الحساب أو المحفظة'}
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-emerald-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-emerald-500"
                 dir="ltr"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">اسم البنك أو شبكة المحفظة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">اسم البنك أو شبكة المحفظة</label>
               <input
                 type="text"
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
                 placeholder="مثال: فودافون كاش / بنك مصر"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500"
               />
             </div>
           </div>
         </div>
 
         {/* 5. المؤهل والتعليم */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3 flex items-center gap-2">
-            <GraduationCap size={18} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-white">5. المؤهل الدراسي وسنة التخرج</h2>
+        <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl space-y-5 shadow-sm">
+          <div className="border-b border-slate-200 pb-3 flex items-center gap-2">
+            <GraduationCap size={18} className="text-orange-600" />
+            <h2 className="text-sm font-bold text-slate-900">5. المؤهل الدراسي وسنة التخرج</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">المستوى التعليمي</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">المستوى التعليمي</label>
               <select
                 value={educationLevel}
                 onChange={(e) => setEducationLevel(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 font-semibold"
               >
                 <option value="">-- اختر المؤهل --</option>
                 <option value="مؤهل عالي (جامعي / بكالوريوس)">مؤهل عالي (جامعي / بكالوريوس)</option>
@@ -664,24 +655,24 @@ export default function PersonalProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">التخصص / الكلية</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">التخصص / الكلية</label>
               <input
                 type="text"
                 value={educationField}
                 onChange={(e) => setEducationField(e.target.value)}
                 placeholder="مثال: تجارة / نظم ومعلومات..."
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">سنة التخرج</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">سنة التخرج</label>
               <input
                 type="number"
                 value={graduationYear}
                 onChange={(e) => setGraduationYear(e.target.value)}
                 placeholder="مثال: 2023"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs font-mono text-left focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 font-mono rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
                 dir="ltr"
               />
             </div>
@@ -689,19 +680,19 @@ export default function PersonalProfilePage() {
         </div>
 
         {/* 6. كلمة المرور */}
-        <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
-          <div className="border-b border-white/5 pb-3">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Lock size={18} className="text-rose-500" /> 6. أمان الحساب وتغيير كلمة المرور
+        <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl space-y-5 shadow-sm">
+          <div className="border-b border-slate-200 pb-3">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Lock size={18} className="text-rose-600" /> 6. أمان الحساب وتغيير كلمة المرور
             </h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-slate-500 mt-0.5">
               اترك الحقول فارغة إذا كنت لا ترغب في تغيير كلمة المرور.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div>
-              <label className="block text-xs font-semibold text-rose-400 mb-1.5">
+              <label className="block text-xs font-bold text-rose-600 mb-1.5">
                 كلمة المرور الحالية <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
@@ -710,12 +701,12 @@ export default function PersonalProfilePage() {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="كلمة المرور الحالية"
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-rose-500 pl-10"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-rose-500 pl-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute left-3 top-2.5 text-slate-500 hover:text-slate-300"
+                  className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600"
                 >
                   {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -723,19 +714,19 @@ export default function PersonalProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">كلمة المرور الجديدة</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">كلمة المرور الجديدة</label>
               <div className="relative">
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="6 أحرف على الأقل"
-                  className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pl-10"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 pl-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute left-3 top-2.5 text-slate-500 hover:text-slate-300"
+                  className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600"
                 >
                   {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -743,13 +734,13 @@ export default function PersonalProfilePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">تأكيد كلمة المرور</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">تأكيد كلمة المرور</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="تأكيد كلمة المرور"
-                className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
           </div>
