@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
         SET 
           name = COALESCE(${name || null}, name),
           name_ar = ${nameAr},
+          name_en = COALESCE(${name || null}, name_en),
           latitude = ${latitude ? parseFloat(latitude) : 31.1308},
           longitude = ${longitude ? parseFloat(longitude) : 30.6475},
           geofence_radius = ${geofenceRadius ? parseInt(geofenceRadius, 10) : 150},
@@ -58,8 +59,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'تم تحديث بيانات الفرع بنجاح' });
     } else {
       await db.execute(sql`
-        INSERT INTO branches (name, name_ar, latitude, longitude, geofence_radius, manager_id, phone)
+        INSERT INTO branches (name, name_en, name_ar, latitude, longitude, geofence_radius, manager_id, phone)
         VALUES (
+          ${name || 'Branch'},
           ${name || 'Branch'},
           ${nameAr},
           ${latitude ? parseFloat(latitude) : 31.1308},
@@ -74,5 +76,51 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Branches POST error:', error);
     return NextResponse.json({ message: error?.message || 'فشل حفظ الفرع' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ message: 'معرف الفرع مطلوب' }, { status: 400 });
+    }
+
+    const branchId = parseInt(id, 10);
+
+    // 1. فك ارتباط الموظفين بالفرع قبل حذفه لتفادي قيود Foreign Key
+    try {
+      await db.execute(sql`
+        UPDATE users 
+        SET primary_branch_id = NULL 
+        WHERE primary_branch_id = ${branchId};
+      `);
+      await db.execute(sql`
+        UPDATE users 
+        SET branch_id = NULL 
+        WHERE branch_id = ${branchId};
+      `);
+    } catch {}
+
+    // 2. فك ارتباط سجلات الحضور المرتبطة
+    try {
+      await db.execute(sql`
+        UPDATE attendance_logs 
+        SET branch_id = NULL 
+        WHERE branch_id = ${branchId};
+      `);
+    } catch {}
+
+    // 3. حذف الفرع نهائياً
+    await db.execute(sql`
+      DELETE FROM branches WHERE id = ${branchId};
+    `);
+
+    return NextResponse.json({ success: true, message: 'تم حذف الفرع بنجاح' });
+  } catch (error: any) {
+    console.error('Branches DELETE error:', error);
+    return NextResponse.json({ message: error?.message || 'فشل حذف الفرع' }, { status: 500 });
   }
 }
