@@ -1,345 +1,552 @@
 'use client';
 
-import React, { useState, useEffect, useRef, use } from 'react';
-import { useRouter } from 'next/navigation';
-import { 
-  Camera, MapPin, CheckCircle2, AlertCircle, RefreshCw, 
-  Loader2, FlipHorizontal, X, ShieldCheck, UserCheck 
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams } from 'next/navigation';
+import {
+  MapPin,
+  Camera,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  RefreshCw,
+  Loader2,
+  ShieldAlert,
+  WifiOff,
+  Wifi,
+  CloudUpload,
 } from 'lucide-react';
+import {
+  saveOfflineAttendance,
+  getPendingOfflineAttendance,
+  syncOfflineAttendance,
+} from '@/utils/offlineSync';
 
-interface AttendancePageProps {
-  params: Promise<{
-    locale: string;
-  }>;
-}
-
-export default function AttendancePage({ params }: AttendancePageProps) {
-  const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
+export default function AttendancePage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
-  const router = useRouter();
 
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const [userId, setUserId] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
+
+  // بيانات الموقع والفرع
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [branchInfo, setBranchInfo] = useState<{
+    name: string;
+    lat: number;
+    lng: number;
+    radius: number;
+  }>({
+    name: 'الفرع الرئيسي',
+    lat: 31.1308,
+    lng: 30.6475,
+    radius: 60,
+  });
+
   const [distance, setDistance] = useState<number | null>(null);
+  const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(false);
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
 
-  // حالة النافذة المنبثقة للكاميرا
-  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'CHECK_IN' | 'CHECK_OUT' | null>(null);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
-
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
+  // الكاميرا والسيلفي
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [selfiePhoto, setSelfiePhoto] = useState<string>('');
 
-  // 1. تحميل بيانات المستخدم والتحقق من الموقع
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.user) setUser(data.user);
-      })
-      .catch(console.error);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-    getCurrentLocation();
+  // حساب المسافة الدقيقة (Haversine Formula) - تعمل بدون نت
+  const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
 
-    return () => {
-      stopCamera();
-    };
-  }, []);
+  // استرجاع بيانات الفرع (مع حفظها محلياً للعمل أوفلاين)
+  const fetchEmployeeBranch = async (uid: string) => {
+    // محاولة القراءة من الكاش المحلي أولاً إذا كان أوفلاين
+    try {
+      const cachedBranch = localStorage.getItem(`user_branch_${uid}`);
+      if (cachedBranch) {
+        setBranchInfo(JSON.parse(cachedBranch));
+      }
+    } catch {}
 
-  // 2. فحص الـ GPS
-  const getCurrentLocation = () => {
-    setErrorMsg(null);
+    if (!navigator.onLine) return;
+
+    try {
+      const res = await fetch(`/api/employees?id=${uid}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const emp = Array.isArray(data) ? data.find((e: any) => String(e.id) === uid) : data;
+        if (emp && emp.branchLat && emp.branchLng) {
+          const info = {
+            name: emp.branchName || 'فرع العمل',
+            lat: parseFloat(emp.branchLat),
+            lng: parseFloat(emp.branchLng),
+            radius: Number(emp.branchRadius) || 60,
+          };
+          setBranchInfo(info);
+          localStorage.setItem(`user_branch_${uid}`, JSON.stringify(info));
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching branch coordinates:', e);
+    }
+  };
+
+  // فحص عدد البصمات المعلقة أوفلاين
+  const checkPending = async () => {
+    try {
+      const pending = await getPendingOfflineAttendance();
+      setPendingCount(pending.length);
+    } catch {}
+  };
+
+  // التقاط GPS حقيقي بدقة عالية حتى في حالة الأوفلاين
+  const acquirePreciseLocation = () => {
+    setLocating(true);
+    setStatusMsg(null);
+
     if (!navigator.geolocation) {
-      setErrorMsg('خدمة الموقع الجغرافي (GPS) غير مدعومة على هذا الجهاز');
+      setStatusMsg({ type: 'err', text: 'خاصية تحديد الموقع الجغرافي غير مدعومة في جهازك' });
+      setLocating(false);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setDistance(25); // مسافة تقريبية داخل الفرع
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const acc = Math.round(position.coords.accuracy);
+
+        setUserCoords({ lat, lng });
+        setLocationAccuracy(acc);
+
+        const dist = getDistanceMeters(lat, lng, branchInfo.lat, branchInfo.lng);
+        setDistance(dist);
+        setIsInsideGeofence(dist <= branchInfo.radius);
+        setLocating(false);
       },
-      () => {
-        setErrorMsg('يرجى تفعيل الـ GPS وإعطاء الإذن للمتصفح لتحديد موقع الفرع');
+      (error) => {
+        setLocating(false);
+        let errorText = 'تعذر تحديد موقعك. يرجى تفعيل الـ GPS والسماح بالوصول للموقع.';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorText = 'تم رفض إذن الوصول للموقع. يرجى تفعيل الإذن من إعدادات المتصفح.';
+        }
+        setStatusMsg({ type: 'err', text: errorText });
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
     );
   };
 
-  // 3. التحكم بالكاميرا
-  const startCamera = async (mode: 'user' | 'environment' = facingMode) => {
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const handleStatusChange = async () => {
+      const online = navigator.onLine;
+      setIsOnline(online);
+      if (online) {
+        const res = await syncOfflineAttendance();
+        if (res.syncedCount > 0) {
+          setStatusMsg({
+            type: 'ok',
+            text: `تم الاتصال بالإنترنت ومزامنة (${res.syncedCount}) بصمة معلقة بنجاح!`,
+          });
+        }
+        checkPending();
       }
+    };
 
+    window.addEventListener('online', handleStatusChange);
+    window.addEventListener('offline', handleStatusChange);
+
+    const uid = localStorage.getItem('userId') || '';
+    const uname = localStorage.getItem('userName') || '';
+    setUserId(uid);
+    setUserName(uname);
+
+    if (uid) {
+      fetchEmployeeBranch(uid);
+    }
+    checkPending();
+    acquirePreciseLocation();
+    startCamera();
+
+    return () => {
+      window.removeEventListener('online', handleStatusChange);
+      window.removeEventListener('offline', handleStatusChange);
+      stopCamera();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (userCoords && branchInfo.lat && branchInfo.lng) {
+      const dist = getDistanceMeters(userCoords.lat, userCoords.lng, branchInfo.lat, branchInfo.lng);
+      setDistance(dist);
+      setIsInsideGeofence(dist <= branchInfo.radius);
+    }
+  }, [branchInfo, userCoords]);
+
+  // تشغيل الكاميرا
+  const startCamera = async () => {
+    try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: mode,
-          width: { ideal: 720 },
-          height: { ideal: 960 }, // أبعاد رأسية طولية 3:4
-          aspectRatio: { ideal: 3 / 4 },
-        },
-        audio: false,
+        video: { width: { ideal: 320 }, height: { ideal: 320 }, facingMode: 'user' },
       });
-
-      streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        setCameraActive(true);
       }
-    } catch (err) {
-      setErrorMsg('تعذر فتح الكاميرا، يرجى التأكد من صلاحية الكاميرا بالمتصفح');
-      setIsCameraModalOpen(false);
+    } catch {
+      setCameraActive(false);
     }
   };
 
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((track) => track.stop());
     }
   };
 
-  const toggleFacingMode = () => {
-    const nextMode = facingMode === 'user' ? 'environment' : 'user';
-    setFacingMode(nextMode);
-    startCamera(nextMode);
+  // التقاط وضغط السيلفي
+  const capturePhoto = () => {
+    if (!videoRef.current) return '';
+    const canvas = document.createElement('canvas');
+    canvas.width = 240;
+    canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, 240, 240);
+      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+      setSelfiePhoto(base64);
+      return base64;
+    }
+    return '';
   };
 
-  // 4. معالجة الضغط على زر الحضور أو الانصراف
-  const handleInitiateAction = (action: 'CHECK_IN' | 'CHECK_OUT') => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
+  // تسجيل البصمة (أونلاين أو أوفلاين)
+  const handleAttendanceAction = async (action: 'CHECK_IN' | 'CHECK_OUT') => {
+    setStatusMsg(null);
 
-    if (!gpsLocation) {
-      setErrorMsg('جاري جلب إحداثيات موقعك، يرجى الانتظار ثوانٍ والمحاولة ثانية');
-      getCurrentLocation();
+    if (!userCoords) {
+      setStatusMsg({ type: 'err', text: 'يرجى الانتظار حتى يتم تحديد موقعك الجغرافي بدقة أولاً' });
       return;
     }
 
-    const isGpsOnly = user?.verification_mode === 'GPS_ONLY';
-
-    if (isGpsOnly) {
-      // إذا كان الموظف محدد له الموقع فقط، سجل البصمة فوراً بدون كاميرا
-      submitAttendance(action, null);
-    } else {
-      // فتح نافذة الكاميرا السيلفي فوراً
-      setPendingAction(action);
-      setIsCameraModalOpen(true);
-      setTimeout(() => {
-        startCamera(facingMode);
-      }, 100);
+    if (!isInsideGeofence) {
+      setStatusMsg({
+        type: 'err',
+        text: `لا يمكنك تسجيل البصمة! أنت تبعد ${distance} متر عن الفرع (المسموح: ${branchInfo.radius} متر).`,
+      });
+      return;
     }
-  };
 
-  // 5. التقاط الصورة وتأكيد البصمة
-  const handleCaptureAndConfirm = () => {
-    if (!videoRef.current || !canvasRef.current || !pendingAction) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    // كانفاس رأسي 3:4
-    canvas.width = 720;
-    canvas.height = 960;
-
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      if (facingMode === 'user') {
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1); // وضع المرآة الطبيعي للسيلفي
-      }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const photoBase64 = canvas.toDataURL('image/jpeg', 0.85);
-
-      // إيقاف الكاميرا وإغلاق النافذة
-      stopCamera();
-      setIsCameraModalOpen(false);
-
-      // إرسال البصمة والصورة للسيرفر
-      submitAttendance(pendingAction, photoBase64);
+    let photo = selfiePhoto;
+    if (!photo) {
+      photo = capturePhoto();
     }
-  };
 
-  const handleCloseModal = () => {
-    stopCamera();
-    setIsCameraModalOpen(false);
-    setPendingAction(null);
-  };
-
-  // 6. إرسال البصمة لقاعدة البيانات
-  const submitAttendance = async (action: 'CHECK_IN' | 'CHECK_OUT', photoBase64: string | null) => {
     setLoading(true);
-    setErrorMsg(null);
 
+    // حالة 1: الجهاز غير متصل بالإنترنت (أوفلاين)
+    if (!navigator.onLine) {
+      try {
+        await saveOfflineAttendance({
+          userId,
+          userName,
+          action,
+          latitude: userCoords.lat,
+          longitude: userCoords.lng,
+          distanceMeters: distance || 0,
+          photoBase64: photo,
+          timestamp: new Date().toISOString(),
+        });
+
+        await checkPending();
+        setLoading(false);
+        setStatusMsg({
+          type: 'ok',
+          text: `تم تسجيل ${
+            action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'
+          } محلياً (أوفلاين)! سيتم رفع البيانات تلقائياً أول ما يلقط إنترنت.`,
+        });
+        return;
+      } catch (err: any) {
+        setLoading(false);
+        setStatusMsg({ type: 'err', text: 'حدث خطأ أثناء حفظ البصمة محلياً.' });
+        return;
+      }
+    }
+
+    // حالة 2: الجهاز متصل بالإنترنت (أونلاين)
     try {
       const res = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
-          latitude: gpsLocation?.lat || 30.0444,
-          longitude: gpsLocation?.lng || 31.2357,
-          distanceMeters: distance || 25,
-          photoBase64,
+          userId,
+          latitude: userCoords.lat,
+          longitude: userCoords.lng,
+          distanceMeters: distance,
+          photoBase64: photo,
         }),
       });
 
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData.message || 'فشل تسجيل الحركة');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'فشل تسجيل الحركة');
 
-      setSuccessMsg(
-        action === 'CHECK_IN'
-          ? 'تم تسجيل حضورك بنجاح! نهارك سعيد'
-          : 'تم تسجيل انصرافك بنجاح! بالتوفيق'
-      );
+      setStatusMsg({
+        type: 'ok',
+        text: data.message || `تم تسجيل ${action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'} بنجاح!`,
+      });
     } catch (err: any) {
-      setErrorMsg(err.message || 'حدث خطأ أثناء الاتصال بالسيرفر');
+      // إذا حدث انقطاع مفاجئ بالنت أثناء الإرسال، حفظها أوفلاين
+      await saveOfflineAttendance({
+        userId,
+        userName,
+        action,
+        latitude: userCoords.lat,
+        longitude: userCoords.lng,
+        distanceMeters: distance || 0,
+        photoBase64: photo,
+        timestamp: new Date().toISOString(),
+      });
+      await checkPending();
+      setStatusMsg({
+        type: 'ok',
+        text: 'انقطع الاتصال، وتم حفظ البصمة بنجاح أوفلاين وسيتم رفعها تلقائياً فور عودة النت.',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-6 pb-12" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية */}
-      <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl text-center space-y-2 shadow-xl">
-        <div className="w-12 h-12 bg-orange-500/10 text-orange-500 rounded-2xl mx-auto flex items-center justify-center">
-          <UserCheck size={24} />
+    <div className="max-w-2xl mx-auto space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* شريط حالة الاتصال والأوفلاين */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex items-center gap-2">
+          {isOnline ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+              <Wifi size={13} /> متصل بالإنترنت
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold animate-pulse">
+              <WifiOff size={13} /> وضع الأوفلاين (شغال بدون نت)
+            </span>
+          )}
+
+          {pendingCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/15 border border-orange-500/30 text-orange-400 text-xs font-black">
+              <CloudUpload size={13} /> {pendingCount} معلقة
+            </span>
+          )}
         </div>
-        <h1 className="text-xl font-black text-white">تسجيل البصمة الذكية</h1>
-        <p className="text-xs text-slate-400">توثيق الحضور والانصراف الميداني عبر الموقع الجغرافي</p>
+
+        {pendingCount > 0 && isOnline && (
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await syncOfflineAttendance();
+              if (res.syncedCount > 0) {
+                setStatusMsg({ type: 'ok', text: `تم رفع ${res.syncedCount} بصمة معلقة بنجاح!` });
+              }
+              checkPending();
+            }}
+            className="text-xs text-orange-400 hover:underline font-bold cursor-pointer"
+          >
+            مزامنة الآن
+          </button>
+        )}
       </div>
 
-      {/* التنبيهات ورسائل النجاح */}
-      {errorMsg && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <AlertCircle size={16} />
-          <span>{errorMsg}</span>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <CheckCircle2 size={16} />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* بطاقة الموقع الجغرافي (GPS) */}
-      <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center justify-between text-xs shadow-md">
-        <div className="flex items-center gap-2.5 text-slate-300">
-          <MapPin className="text-orange-500" size={18} />
+      {/* الترويسة الرئيسية */}
+      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex items-center justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+            <Clock size={24} />
+          </div>
           <div>
-            <span className="block text-slate-400 text-[11px]">حالة النطاق الجغرافي:</span>
-            {gpsLocation ? (
-              <span className="text-emerald-400 font-bold font-mono text-xs">
-                داخل نطاق الفرع المعتمد (~{distance}م)
-              </span>
-            ) : (
-              <span className="text-slate-500">جاري قراءة الإحداثيات...</span>
-            )}
+            <h1 className="text-xl sm:text-2xl font-black text-white">تسجيل الحضور والانصراف الميداني</h1>
+            <p className="text-xs text-slate-400 mt-1">
+              يدعم التسجيل الأوفلاين والرفع التلقائي عند استعادة الاتصال
+            </p>
           </div>
         </div>
-        <button
-          onClick={getCurrentLocation}
-          className="text-orange-400 hover:text-orange-300 p-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 transition cursor-pointer"
-          title="تحديث الموقع"
-        >
-          <RefreshCw size={15} />
-        </button>
-      </div>
-
-      {/* أزرار الحضور والانصراف المباشرة (دون وجود كاميرا ثابتة على الشاشة) */}
-      <div className="grid grid-cols-2 gap-4 pt-2">
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => handleInitiateAction('CHECK_IN')}
-          className="bg-gradient-to-br from-emerald-600 to-teal-700 hover:opacity-95 text-white py-4 rounded-2xl text-sm font-bold shadow-lg shadow-emerald-600/20 transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-        >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-          <span>تسجيل حضور</span>
-        </button>
 
         <button
           type="button"
-          disabled={loading}
-          onClick={() => handleInitiateAction('CHECK_OUT')}
-          className="bg-gradient-to-br from-rose-600 to-pink-700 hover:opacity-95 text-white py-4 rounded-2xl text-sm font-bold shadow-lg shadow-rose-600/20 transition disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+          onClick={acquirePreciseLocation}
+          className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+          title="تحديث إحداثيات الـ GPS"
         >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-          <span>تسجيل انصراف</span>
+          <RefreshCw size={13} className={locating ? 'animate-spin text-orange-500' : ''} />
+          <span className="hidden sm:inline">تحديث الموقع</span>
         </button>
       </div>
 
-      <canvas ref={canvasRef} className="hidden" />
+      {statusMsg && (
+        <div
+          className={`p-4 rounded-2xl flex items-center gap-3 border text-xs font-bold ${
+            statusMsg.type === 'ok'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+              : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+          }`}
+        >
+          {statusMsg.type === 'ok' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <span className="leading-relaxed">{statusMsg.text}</span>
+        </div>
+      )}
 
-      {/* نافذة الكاميرا السيلفي المنبثقة (تفتح فقط عند النقر على الحضور أو الانصراف) */}
-      {isCameraModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl p-6 space-y-5 text-center">
-            
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Camera className="text-orange-500" size={17} />
-                {pendingAction === 'CHECK_IN' ? 'التقاط سيلفي الحضور' : 'التقاط سيلفي الانصراف'}
-              </h3>
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="text-slate-400 hover:text-white p-1 rounded-full bg-slate-800"
-              >
-                <X size={18} />
-              </button>
+      {/* بطاقة فحص نطاق الـ Geofence */}
+      <div
+        className={`p-6 rounded-3xl border shadow-xl transition-all ${
+          locating
+            ? 'bg-slate-900/60 border-slate-800'
+            : isInsideGeofence
+            ? 'bg-emerald-500/10 border-emerald-500/30'
+            : 'bg-rose-500/10 border-rose-500/30'
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                locating
+                  ? 'bg-slate-800 text-slate-400'
+                  : isInsideGeofence
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : 'bg-rose-500/20 text-rose-400'
+              }`}
+            >
+              {locating ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : isInsideGeofence ? (
+                <CheckCircle2 size={22} />
+              ) : (
+                <ShieldAlert size={22} />
+              )}
             </div>
 
-            {/* إطار الكاميرا الطولي Portrait 3:4 مع محاذاة الوجه */}
-            <div className="relative w-full aspect-[3/4] bg-black rounded-2xl overflow-hidden border-2 border-orange-500 shadow-xl flex items-center justify-center">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-              />
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>{branchInfo.name}</span>
+                <span className="text-[11px] font-mono font-normal text-slate-400">
+                  (نطاق الـ Geofence: {branchInfo.radius} متر)
+                </span>
+              </h2>
 
-              {/* إطار وهمي لتوجيه الموظف لوضع وجهه في المنتصف */}
-              <div className="absolute inset-8 border border-white/30 rounded-full pointer-events-none border-dashed" />
-
-              {/* زر قلب الكاميرا */}
-              <button
-                type="button"
-                onClick={toggleFacingMode}
-                className="absolute top-3 left-3 bg-black/60 backdrop-blur-md p-2 rounded-full text-white hover:bg-black/80"
-                title="تبديل الكاميرا"
-              >
-                <FlipHorizontal size={16} />
-              </button>
+              <p className="text-xs mt-1">
+                {locating ? (
+                  <span className="text-slate-400">جاري قراءة الـ GPS من أقمار الموقع...</span>
+                ) : isInsideGeofence ? (
+                  <span className="text-emerald-400 font-bold">
+                    أنت داخل نطاق الفرع (المسافة: {distance} متر). جاهز لتسجيل البصمة.
+                  </span>
+                ) : (
+                  <span className="text-rose-400 font-bold">
+                    أنت خارج نطاق الفرع! المسافة الحالية: {distance} متر (الحد الأقصى المسموح: {branchInfo.radius}م).
+                  </span>
+                )}
+              </p>
             </div>
+          </div>
 
-            <p className="text-[11px] text-slate-400">
-              تأكد من وضوح وجهك داخل الإطار لتأكيد البصمة
-            </p>
+          {locationAccuracy !== null && (
+            <div className="text-left font-mono text-[11px] text-slate-400 shrink-0 bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
+              <span>دقة الـ GPS: ±{locationAccuracy}م</span>
+            </div>
+          )}
+        </div>
+      </div>
 
-            {/* زر الالتقاط والتأكيد */}
+      {/* الكاميرا الحية والتقاط سيلفي الحضور */}
+      <div className="bg-[#0c0e18] border border-white/5 p-6 rounded-3xl shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <h3 className="text-xs font-bold text-white flex items-center gap-2">
+            <Camera size={16} className="text-orange-500" />
+            <span>التوثيق البصري (سيلفي حي يعمل أوفلاين)</span>
+          </h3>
+          <span className="text-[11px] text-slate-400 font-semibold">مطلوبة مع كل بصمة</span>
+        </div>
+
+        <div className="relative aspect-video max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
+          {selfiePhoto ? (
+            <img src={selfiePhoto} alt="Captured Selfie" className="w-full h-full object-cover" />
+          ) : (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover transform -scale-x-100"
+            />
+          )}
+
+          {selfiePhoto && (
             <button
               type="button"
-              onClick={handleCaptureAndConfirm}
-              className="w-full bg-gradient-to-r from-orange-500 to-rose-600 text-white py-3.5 rounded-xl text-xs font-bold shadow-lg hover:opacity-95 transition flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => setSelfiePhoto('')}
+              className="absolute bottom-3 right-3 bg-black/70 hover:bg-black text-white px-3 py-1.5 rounded-xl text-[11px] font-bold backdrop-blur-xs cursor-pointer"
             >
-              <Camera size={16} />
-              <span>التقاط الصورة وتأكيد {pendingAction === 'CHECK_IN' ? 'الحضور' : 'الانصراف'}</span>
+              إعادة الالتقاط
             </button>
-          </div>
+          )}
         </div>
+      </div>
+
+      {/* أزرار الحضور والانصراف */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <button
+          type="button"
+          disabled={loading || locating || !isInsideGeofence}
+          onClick={() => handleAttendanceAction('CHECK_IN')}
+          className={`flex items-center justify-center gap-2 py-4 px-6 rounded-2xl text-xs font-bold transition-all shadow-xl cursor-pointer ${
+            !isInsideGeofence || locating
+              ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+              : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-emerald-500/20 hover:scale-[1.01]'
+          }`}
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          <span>تسجيل الحضور {!isOnline && '(أوفلاين)'}</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={loading || locating || !isInsideGeofence}
+          onClick={() => handleAttendanceAction('CHECK_OUT')}
+          className={`flex items-center justify-center gap-2 py-4 px-6 rounded-2xl text-xs font-bold transition-all shadow-xl cursor-pointer ${
+            !isInsideGeofence || locating
+              ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+              : 'bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white shadow-orange-500/20 hover:scale-[1.01]'
+          }`}
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}
+          <span>تسجيل الانصراف {!isOnline && '(أوفلاين)'}</span>
+        </button>
+      </div>
+
+      {!isInsideGeofence && !locating && (
+        <p className="text-center text-xs text-rose-400 font-semibold leading-relaxed">
+          ⚠️ الأزرار معطلة تلقائياً لأنك خارج النطاق الجغرافي للفرع. يجب التواجد داخل مقر العمل لتسجيل البصمة.
+        </p>
       )}
     </div>
   );
