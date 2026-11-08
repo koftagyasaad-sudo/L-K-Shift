@@ -1,285 +1,240 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Briefcase,
   Search,
-  Eye,
-  Printer,
+  Filter,
   CheckCircle2,
   Clock,
-  Filter,
-  FileText,
-  ExternalLink,
+  Printer,
   Copy,
-  Check,
+  ExternalLink,
+  Loader2,
+  AlertCircle,
+  Eye,
+  RefreshCw,
 } from 'lucide-react';
+
+interface ApplicationItem {
+  id: number;
+  fullName: string;
+  phone: string;
+  nationalId: string;
+  birthDate: string;
+  appliedRole: string;
+  education: string;
+  militaryStatus: string;
+  address: string;
+  expectedSalary: string;
+  experienceYears: string;
+  notes: string;
+  status: string;
+  createdAt: string;
+}
 
 export default function RecruitmentManagementPage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState('ALL');
-  const [selectedApplication, setSelectedApplication] = useState<any | null>(null);
+  const [applications, setApplications] = useState<ApplicationItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // استمارات المتقدمين الأصلية
-  const [applications] = useState<any[]>([
-    {
-      id: 1,
-      fullName: 'أحمد محمود إبراهيم',
-      phone: '01012345678',
-      email: 'ahmed.m@example.com',
-      appliedRole: 'كول سنتر',
-      branch: 'فرع دسوق',
-      experienceYears: '3 سنوات',
-      education: 'مؤهل عالي - ليسانس آداب',
-      nationalId: '29801011501234',
-      address: 'دسوق - شارع الجيش',
-      status: 'UNDER_REVIEW',
-      appliedDate: '2026-11-05',
-      notes: 'خبرة سابقة في إدارة طلبات الدليفري وسرعة الرد على العملاء.',
-    },
-    {
-      id: 2,
-      fullName: 'محمد علي حسن',
-      phone: '01198765432',
-      email: 'm.ali@example.com',
-      appliedRole: 'عضو فريق (Staff)',
-      branch: 'فرع كفر الشيخ',
-      experienceYears: 'سنة واحدة',
-      education: 'دبلوم فني صناعي',
-      nationalId: '29905051804321',
-      address: 'كفر الشيخ - المحطة',
-      status: 'ACCEPTED',
-      appliedDate: '2026-11-06',
-      notes: 'ملتزم بالمواعيد وحسن المظهر، جاهز للعمل بالوردية المسائية.',
-    },
-  ]);
+  // الفلاتر
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // نسخ رابط استمارة التقديم العامة
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/recruitment', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setApplications(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to load applications:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApplications();
+  }, []);
+
   const handleCopyLink = () => {
     const applyUrl = `${window.location.origin}/${locale}/apply`;
     navigator.clipboard.writeText(applyUrl);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // فتح استمارة التقديم في تبويب مستقل
-  const handleOpenApplyPage = () => {
-    window.open(`/${locale}/apply`, '_blank');
-  };
+  // استخراج قائمة الوظائف الكاملة ديناميكياً من الاستمارات المسجلة
+  const standardRoles = [
+    'كول سنتر',
+    'عضو فريق مطبخ',
+    'كابتن صالة وويتر',
+    'كاشير',
+    'مشرف وردية',
+    'دليفري / طيار توصيل',
+  ];
+  const dynamicRoles = Array.from(new Set(applications.map((a) => a.appliedRole).filter(Boolean)));
+  const allJobOptions = Array.from(new Set([...standardRoles, ...dynamicRoles]));
 
-  const filteredApplications = applications.filter((app) => {
-    const matchesSearch =
-      app.fullName?.includes(searchTerm) ||
-      app.phone?.includes(searchTerm) ||
-      app.nationalId?.includes(searchTerm);
-    const matchesRole = filterRole === 'ALL' || app.appliedRole === filterRole;
-    return matchesSearch && matchesRole;
+  const filteredList = applications.filter((app) => {
+    const matchRole = roleFilter === 'ALL' || app.appliedRole.includes(roleFilter);
+    const q = searchTerm.toLowerCase().trim();
+    const matchSearch =
+      !q ||
+      (app.fullName || '').toLowerCase().includes(q) ||
+      (app.phone || '').includes(q) ||
+      (app.nationalId || '').includes(q);
+    return matchRole && matchSearch;
   });
 
   return (
-    <div className="space-y-6 pb-12 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية - الثيم الداكن الأصلي مع زري فتح ونسخ الرابط */}
+    <div className="space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* الترويسة الرئيسية وأزرار الاستمارة */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 border border-orange-500/20">
-            <Briefcase size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white">إدارة استمارات التوظيف والتقديم</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              متابعة طلبات التوظيف الجديدة وفرز استمارات المتقدمين للفروع
-            </p>
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-400 rounded-2xl">
+              <Briefcase size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-white">إدارة استمارات التوظيف والتقديم</h1>
+              <p className="text-xs text-slate-400 mt-1">متابعة طلبات التوظيف الجديدة وفرز استمارات المتقدمين للفروع</p>
+            </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* زر نسخ رابط الاستمارة */}
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
-          >
-            {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-            <span>{copied ? 'تم نسخ الرابط!' : 'نسخ رابط الاستمارة'}</span>
-          </button>
+          <div className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs font-bold text-orange-400">
+            إجمالي الاستمارات: {applications.length}
+          </div>
 
-          {/* زر فتح الاستمارة */}
-          <button
-            type="button"
-            onClick={handleOpenApplyPage}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer"
+          <a
+            href={`/${locale}/apply`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-orange-500/20 transition cursor-pointer"
           >
             <ExternalLink size={14} />
             <span>فتح الاستمارة</span>
-          </button>
+          </a>
 
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
-            <FileText size={14} /> إجمالي الاستمارات: {applications.length}
-          </span>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer"
+          >
+            <Copy size={14} />
+            <span>{copied ? 'تم النسخ!' : 'نسخ رابط الاستمارة'}</span>
+          </button>
         </div>
       </div>
 
-      {/* شريط البحث والفلترة */}
-      <div className="bg-[#0c0e18] border border-white/5 p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full sm:w-96">
+      {/* شريط البحث وفلتر الوظائف الشامل */}
+      <div className="bg-[#0c0e18] border border-white/5 p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row gap-3 items-center">
+        <div className="relative flex-1 w-full">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="بحث بالاسم، الموبايل، أو الرقم القومي..."
-            className="w-full bg-slate-900 border border-slate-800 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+            className="w-full bg-slate-900 border border-slate-800 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs pl-8 focus:outline-none focus:border-orange-500"
           />
-          <Search size={16} className="absolute left-3.5 top-3 text-slate-500" />
+          <Search size={14} className="absolute left-3 top-3 text-slate-500" />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter size={15} className="text-slate-400" />
+          <Filter size={14} className="text-slate-400" />
           <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            className="bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:border-orange-500"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="w-full sm:w-64 bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
           >
-            <option value="ALL">جميع الوظائف</option>
-            <option value="كول سنتر">كول سنتر</option>
-            <option value="عضو فريق (Staff)">عضو فريق (Staff)</option>
-            <option value="مشرف وردية">مشرف وردية</option>
+            <option value="ALL">جميع الوظائف (الكل)</option>
+            {allJobOptions.map((role) => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* جدول استمارات المتقدمين بالثيم الداكن */}
-      <div className="bg-[#0c0e18] border border-white/5 rounded-3xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
-            <thead className="bg-slate-900/80 border-b border-white/5 text-slate-400 font-bold">
-              <tr>
-                <th className="p-4">اسم المتقدم</th>
-                <th className="p-4">الوظيفة والفرع</th>
-                <th className="p-4">المؤهل والخبرة</th>
-                <th className="p-4">تاريخ التقديم</th>
-                <th className="p-4 text-center">الحالة</th>
-                <th className="p-4 text-center">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-slate-300">
-              {filteredApplications.map((app) => (
-                <tr key={app.id} className="hover:bg-white/5 transition">
-                  <td className="p-4">
-                    <div className="font-bold text-white text-sm">{app.fullName}</div>
-                    <div className="text-[11px] font-mono text-slate-400" dir="ltr">{app.phone}</div>
-                  </td>
-                  <td className="p-4">
-                    <span className="font-bold text-slate-200 block">{app.appliedRole}</span>
-                    <span className="text-[11px] text-orange-400 font-semibold">{app.branch}</span>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-slate-200">{app.education}</div>
-                    <div className="text-[11px] text-slate-400 font-medium">الخبرة: {app.experienceYears}</div>
-                  </td>
-                  <td className="p-4 font-mono text-slate-400">{app.appliedDate}</td>
-                  <td className="p-4 text-center">
-                    {app.status === 'ACCEPTED' ? (
-                      <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-lg font-bold text-[11px]">
-                        <CheckCircle2 size={12} /> مقبول مبدئياً
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-lg font-bold text-[11px]">
-                        <Clock size={12} /> قيد المراجعة
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedApplication(app)}
-                      className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-orange-500 hover:text-white text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl font-bold transition cursor-pointer"
-                    >
-                      <Eye size={13} /> عرض وطباعة
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* جدول عرض المتقدمين */}
+      {loading ? (
+        <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-[#0c0e18] border border-white/5 rounded-3xl p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+          <p className="text-xs font-semibold text-slate-400">جاري تحميل الاستمارات...</p>
         </div>
-      </div>
-
-      {/* نافذة استعراض وطباعة الاستمارة (White Theme مخصص للطباعة الورقية) */}
-      {selectedApplication && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6 text-slate-900">
-            <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
-              <div>
-                <h2 className="text-2xl font-black tracking-tight text-slate-900">L-K SHIFT SYSTEMS</h2>
-                <p className="text-xs font-bold text-slate-500">إدارة التوظيف والموارد البشرية</p>
-                <p className="text-xs font-bold text-orange-600 mt-0.5">استمارة طلب التحاق بالعمل الرسمية</p>
-              </div>
-              <div className="text-left font-mono text-xs">
-                <span className="bg-slate-900 text-white px-2.5 py-1 rounded font-bold">
-                  طلب رقم: #{selectedApplication.id}
-                </span>
-                <p className="text-[11px] text-slate-500 mt-1">{selectedApplication.appliedDate}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">الاسم بالكامل:</span>
-                <span className="font-bold text-sm text-slate-900">{selectedApplication.fullName}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">رقم الهاتف:</span>
-                <span className="font-mono font-bold text-sm text-slate-900" dir="ltr">{selectedApplication.phone}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">الرقم القومي:</span>
-                <span className="font-mono font-bold text-slate-900">{selectedApplication.nationalId}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">الوظيفة المتقدم لها:</span>
-                <span className="font-bold text-orange-600">{selectedApplication.appliedRole}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">الفرع المفضل:</span>
-                <span className="font-bold text-slate-900">{selectedApplication.branch}</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">المؤهل الدراسي:</span>
-                <span className="font-bold text-slate-900">{selectedApplication.education}</span>
-              </div>
-              <div className="col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">العنوان ومحل الإقامة:</span>
-                <span className="font-bold text-slate-900">{selectedApplication.address}</span>
-              </div>
-              <div className="col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <span className="text-slate-500 block">ملاحظات وخبرات سابقة:</span>
-                <span className="font-medium text-slate-800 leading-relaxed">{selectedApplication.notes}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center pt-4 border-t border-slate-200">
-              <button
-                type="button"
-                onClick={() => setSelectedApplication(null)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer"
-              >
-                إغلاق
-              </button>
-
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-orange-500/20 transition cursor-pointer"
-              >
-                <Printer size={15} /> طباعة الاستمارة الرسمية
-              </button>
-            </div>
+      ) : filteredList.length === 0 ? (
+        <div className="bg-[#0c0e18] border border-white/5 rounded-3xl p-16 text-center text-slate-400">
+          <Briefcase size={36} className="mx-auto text-slate-600 mb-3" />
+          <p className="text-xs font-bold">لا توجد طلبات تقديم مسجلة مطابقة للبحث</p>
+        </div>
+      ) : (
+        <div className="bg-[#0c0e18] border border-white/5 rounded-3xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-slate-900/80 border-b border-white/5 text-slate-400 font-bold">
+                <tr>
+                  <th className="p-4">اسم المتقدم</th>
+                  <th className="p-4">الوظيفة المتقدم لها</th>
+                  <th className="p-4">المؤهل والخبرة</th>
+                  <th className="p-4 text-center">الراتب المتوقع</th>
+                  <th className="p-4 text-center">تاريخ التقديم</th>
+                  <th className="p-4 text-center">الحالة</th>
+                  <th className="p-4 text-center">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-slate-300">
+                {filteredList.map((app) => (
+                  <tr key={app.id} className="hover:bg-white/5 transition">
+                    <td className="p-4">
+                      <div className="font-bold text-white text-sm">{app.fullName}</div>
+                      <div className="text-[11px] font-mono text-orange-400">{app.phone}</div>
+                    </td>
+                    <td className="p-4 font-bold text-slate-200">
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-white/5 border border-white/10">
+                        {app.appliedRole}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="font-semibold text-slate-300">{app.education || 'مؤهل متوسط'}</div>
+                      <div className="text-[11px] text-slate-400 font-mono">{app.address}</div>
+                    </td>
+                    <td className="p-4 text-center font-mono font-bold text-emerald-400">
+                      {app.expectedSalary ? `${app.expectedSalary} ج.م` : '—'}
+                    </td>
+                    <td className="p-4 text-center font-mono text-slate-400">
+                      {app.createdAt ? String(app.createdAt).slice(0, 10) : '—'}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <Clock size={11} /> قيد المراجعة
+                      </span>
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-[11px] font-bold border border-slate-700 transition cursor-pointer"
+                      >
+                        <Printer size={12} />
+                        <span>طباعة</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
