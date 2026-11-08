@@ -1,73 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
-import { hashPassword } from '@/lib/auth-security';
+import crypto from 'crypto';
 
-// 1. طلب إرسال كود التحقق للموبايل
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+function hashPassword(password: string): string {
+  const salt = 'LK_SHIFT_SECURE_SALT_2026';
+  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+}
+
+// فحص قوة كلمة المرور: 8 خانات، حرف كبير، حرف صغير، رقم، رمز خاص
+function isPasswordStrong(pass: string): boolean {
+  const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
+  return strongRegex.test(pass);
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { phone } = await request.json();
-    if (!phone) {
-      return NextResponse.json({ message: 'رقم الهاتف مطلوب' }, { status: 400 });
+    const body = await request.json();
+    const { phone, resetToken, newPassword } = body;
+
+    const cleanPhone = (phone || '').trim();
+    const cleanToken = (resetToken || '').trim();
+    const cleanPass = (newPassword || '').trim();
+
+    if (!cleanPhone || !cleanToken || !cleanPass) {
+      return NextResponse.json({ message: 'جميع الحقول مطلوبة لإعادة تعيين كلمة المرور' }, { status: 400 });
     }
 
-    const raw = await db.execute(sql`SELECT id FROM users WHERE phone = ${phone.trim()} LIMIT 1;`);
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    if (!rows.length) {
-      return NextResponse.json({ message: 'رقم الهاتف غير مسجل بالنظام' }, { status: 404 });
+    // التحقق من صلاحية توكن إعادة التعيين
+    const tokenCheck = await db.execute(sql`
+      SELECT id FROM otp_verifications 
+      WHERE phone = ${cleanPhone} 
+        AND reset_token = ${cleanToken} 
+        AND expires_at > NOW() - INTERVAL '15 minutes'
+      LIMIT 1;
+    `);
+
+    const tokenRows = Array.isArray(tokenCheck) ? tokenCheck : (tokenCheck as any)?.rows || [];
+    if (!tokenRows.length) {
+      return NextResponse.json(
+        { message: 'جلسة تغيير كلمة المرور منتهية الصلاحية، يرجى طلب كود OTP جديد.' },
+        { status: 403 }
+      );
     }
 
-    // توليد كود عشوائي مكون من 6 أرقام صالح لمدة 15 دقيقة
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // التحقق الصارم من شروط الباسورد القوي
+    if (!isPasswordStrong(cleanPass)) {
+      return NextResponse.json(
+        {
+          message: 'كلمة المرور غير مطابقة للشروط! يجب أن تتكون من 8 خانات على الأقل، وتحتوي على حرف كبير (Capital)، وحرف صغير (Small)، ورقم، ورمز خاص (مثل: @, #, $, %).',
+        },
+        { status: 400 }
+      );
+    }
 
+    const hashedNewPassword = hashPassword(cleanPass);
+
+    // تحديث الباسورد المشفر للمستخدم
     await db.execute(sql`
       UPDATE users 
-      SET reset_otp = ${otpCode}, reset_otp_expires_at = NOW() + INTERVAL '15 minutes'
-      WHERE phone = ${phone.trim()};
+      SET 
+        password_hash = ${hashedNewPassword},
+        updated_at = NOW() 
+      WHERE phone = ${cleanPhone};
+    `);
+
+    // إبطال توكن إعادة التعيين
+    await db.execute(sql`
+      UPDATE otp_verifications 
+      SET reset_token = NULL 
+      WHERE phone = ${cleanPhone} AND reset_token = ${cleanToken};
     `);
 
     return NextResponse.json({
       success: true,
-      message: 'تم إرسال كود التحقق بنجاح',
-      debugCode: otpCode, // متاح للتجربة السريعة
+      message: 'تم تعيين كلمة المرور الجديدة بنجاح! يمكنك الآن تسجيل الدخول بحسابك.',
     });
   } catch (error: any) {
-    return NextResponse.json({ message: 'فشل إرسال الكود', error: error.message }, { status: 500 });
-  }
-}
-
-// 2. التحقق من الكود وتعيين كلمة المرور المشفرة الجديدة
-export async function PUT(request: NextRequest) {
-  try {
-    const { phone, otp, newPassword } = await request.json();
-    if (!phone || !otp || !newPassword) {
-      return NextResponse.json({ message: 'جميع الحقول مطلوبة' }, { status: 400 });
-    }
-
-    const raw = await db.execute(sql`
-      SELECT id FROM users 
-      WHERE phone = ${phone.trim()} 
-        AND reset_otp = ${otp.trim()} 
-        AND reset_otp_expires_at > NOW()
-      LIMIT 1;
-    `);
-
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    if (!rows.length) {
-      return NextResponse.json({ message: 'كود التحقق غير صحيح أو انتهت صلاحيته' }, { status: 400 });
-    }
-
-    // تشفير كلمة المرور الجديدة
-    const hashedPassword = hashPassword(newPassword.trim());
-
-    await db.execute(sql`
-      UPDATE users 
-      SET password_hash = ${hashedPassword}, reset_otp = NULL, reset_otp_expires_at = NULL, updated_at = NOW()
-      WHERE id = ${rows[0].id};
-    `);
-
-    return NextResponse.json({ success: true, message: 'تم تعيين وتشفير كلمة المرور الجديدة بنجاح' });
-  } catch (error: any) {
-    return NextResponse.json({ message: 'فشل إعادة التعيين', error: error.message }, { status: 500 });
+    console.error('Reset password error:', error);
+    return NextResponse.json({ message: error?.message || 'فشل تحديث كلمة المرور' }, { status: 500 });
   }
 }
