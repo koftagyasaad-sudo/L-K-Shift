@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         COALESCE(u.avatar_url, '') as "avatarUrl",
         COALESCE(u.job_role, u.system_role::text, 'موظف') as "role",
         COALESCE(u.system_role::text, 'EMPLOYEE') as "systemRole",
-        COALESCE(u.employee_number, LPAD(u.id::text, 3, '0')) as "employeeCode",
+        COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as "employeeCode",
         COALESCE(u.monthly_salary, 5000) as "monthlySalary",
         COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
         COALESCE(u.working_days_per_month, 26) as "workingDaysPerMonth",
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       FROM users u
       LEFT JOIN branches b ON b.id = COALESCE(u.primary_branch_id, u.branch_id, 1)
       WHERE ${empId ? sql`u.id::text = ${empId}` : sql`1=1`}
-      ORDER BY u.id ASC;
+      ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, u.id) ASC;
     `);
 
     const employees = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       id,
       fullNameAr,
       phone,
+      employeeCode,
       branchId,
       role,
       monthlySalary,
@@ -88,12 +89,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (id) {
-      // تعديل موظف حالي
+      // 1. تعديل موظف حالي (بما في ذلك كوده ومسلسله الوظيفي)
       await db.execute(sql`
         UPDATE users
         SET 
           full_name_ar = ${fullNameAr},
           phone = ${phone},
+          employee_number = COALESCE(NULLIF(TRIM(${employeeCode || ''}), ''), employee_number),
           primary_branch_id = ${branchId ? parseInt(branchId, 10) : 1},
           job_role = ${role || 'موظف'},
           monthly_salary = ${monthlySalary ? parseFloat(monthlySalary) : 5000},
@@ -101,17 +103,28 @@ export async function POST(request: NextRequest) {
           is_active = ${isActive !== false},
           shift_start_time = ${shiftStartTime || '10:00'},
           shift_end_time = ${shiftEndTime || '18:00'},
-          shift_name = ${shiftName || 'شيفت مخصص'},
+          shift_name = ${shiftName || 'الشيفت الصباحي'},
           updated_at = NOW()
         WHERE id = ${parseInt(id, 10)};
       `);
-      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الموظف والشيفت بنجاح' });
+      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الموظف والمسلسل الوظيفي بنجاح' });
     } else {
-      // إضافة موظف جديد
+      // 2. إضافة موظف جديد مع توليد مسلسل تلقائي ذكي إذا لم يحدد يدوياً
+      let finalCode = employeeCode ? employeeCode.trim() : '';
+      if (!finalCode) {
+        const codeQuery = await db.execute(sql`
+          SELECT LPAD((COALESCE(MAX(NULLIF(regexp_replace(employee_number, '\D', '', 'g'), '')::integer), 0) + 1)::text, 3, '0') as next_code
+          FROM users;
+        `);
+        const rows = Array.isArray(codeQuery) ? codeQuery : (codeQuery as any)?.rows || [];
+        finalCode = rows[0]?.next_code || '001';
+      }
+
       await db.execute(sql`
         INSERT INTO users (
           full_name_ar,
           phone,
+          employee_number,
           password_hash,
           primary_branch_id,
           job_role,
@@ -127,6 +140,7 @@ export async function POST(request: NextRequest) {
         ) VALUES (
           ${fullNameAr},
           ${phone},
+          ${finalCode},
           '123456',
           ${branchId ? parseInt(branchId, 10) : 1},
           ${role || 'عضو مطبخ'},
@@ -136,12 +150,12 @@ export async function POST(request: NextRequest) {
           true,
           ${shiftStartTime || '10:00'},
           ${shiftEndTime || '18:00'},
-          ${shiftName || 'شيفت مخصص'},
+          ${shiftName || 'الشيفت الصباحي'},
           NOW(),
           NOW()
         );
       `);
-      return NextResponse.json({ success: true, message: 'تم إضافة الموظف الجديد بنجاح' });
+      return NextResponse.json({ success: true, message: `تمت إضافة الموظف الجديد بالمسلسل (#${finalCode}) بنجاح` });
     }
   } catch (error: any) {
     console.error('Employees POST error:', error);
