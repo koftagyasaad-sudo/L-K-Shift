@@ -1,16 +1,10 @@
 {
-  "name": "L-K Shift",
+  "name": "L-K Shift Core",
   "short_name": "L-K Shift",
-  "start_url": "/ar/login",
+  "start_url": "/ar/attendance",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#080911",
-  "theme_color": "#080911",
-  "icons": [
-    {
-      "src": "/Logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ]
+  "display_override": ["standalone", "window-controls-overlay"],
+  "background_color": "#0c0e18",
+  "theme_color": "#0c0e18"
 }
