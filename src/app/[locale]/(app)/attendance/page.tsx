@@ -19,7 +19,7 @@ import {
   saveOfflineAttendance,
   getPendingOfflineAttendance,
   syncOfflineAttendance,
-} from '@/utils/offlineSync';
+} from '@/offlineSync';
 
 export default function AttendancePage() {
   const params = useParams();
@@ -59,7 +59,7 @@ export default function AttendancePage() {
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // حساب المسافة الدقيقة (Haversine Formula) - تعمل بدون نت
+  // دالة حساب المسافة الدقيقة (Haversine Formula)
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3;
     const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -72,9 +72,8 @@ export default function AttendancePage() {
     return Math.round(R * c);
   };
 
-  // استرجاع بيانات الفرع (مع حفظها محلياً للعمل أوفلاين)
+  // استرجاع إحداثيات الفرع الفعلي للموظف
   const fetchEmployeeBranch = async (uid: string) => {
-    // محاولة القراءة من الكاش المحلي أولاً إذا كان أوفلاين
     try {
       const cachedBranch = localStorage.getItem(`user_branch_${uid}`);
       if (cachedBranch) {
@@ -105,7 +104,6 @@ export default function AttendancePage() {
     }
   };
 
-  // فحص عدد البصمات المعلقة أوفلاين
   const checkPending = async () => {
     try {
       const pending = await getPendingOfflineAttendance();
@@ -113,7 +111,6 @@ export default function AttendancePage() {
     } catch {}
   };
 
-  // التقاط GPS حقيقي بدقة عالية حتى في حالة الأوفلاين
   const acquirePreciseLocation = () => {
     setLocating(true);
     setStatusMsg(null);
@@ -202,7 +199,6 @@ export default function AttendancePage() {
     }
   }, [branchInfo, userCoords]);
 
-  // تشغيل الكاميرا
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -224,7 +220,6 @@ export default function AttendancePage() {
     }
   };
 
-  // التقاط وضغط السيلفي
   const capturePhoto = () => {
     if (!videoRef.current) return '';
     const canvas = document.createElement('canvas');
@@ -240,7 +235,6 @@ export default function AttendancePage() {
     return '';
   };
 
-  // تسجيل البصمة (أونلاين أو أوفلاين)
   const handleAttendanceAction = async (action: 'CHECK_IN' | 'CHECK_OUT') => {
     setStatusMsg(null);
 
@@ -264,7 +258,7 @@ export default function AttendancePage() {
 
     setLoading(true);
 
-    // حالة 1: الجهاز غير متصل بالإنترنت (أوفلاين)
+    // حالة الأوفلاين
     if (!navigator.onLine) {
       try {
         await saveOfflineAttendance({
@@ -294,7 +288,7 @@ export default function AttendancePage() {
       }
     }
 
-    // حالة 2: الجهاز متصل بالإنترنت (أونلاين)
+    // حالة الأونلاين
     try {
       const res = await fetch('/api/attendance', {
         method: 'POST',
@@ -317,7 +311,6 @@ export default function AttendancePage() {
         text: data.message || `تم تسجيل ${action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'} بنجاح!`,
       });
     } catch (err: any) {
-      // إذا حدث انقطاع مفاجئ بالنت أثناء الإرسال، حفظها أوفلاين
       await saveOfflineAttendance({
         userId,
         userName,
@@ -477,7 +470,7 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* الكاميرا الحية والتقاط سيلفي الحضور */}
+      {/* الكاميرا الحية */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 rounded-3xl shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-white/5 pb-3">
           <h3 className="text-xs font-bold text-white flex items-center gap-2">
