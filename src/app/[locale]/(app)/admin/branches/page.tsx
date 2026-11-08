@@ -10,6 +10,7 @@ import {
   Phone,
   UserCheck,
   Edit2,
+  Trash2,
   Loader2,
   Save,
   X,
@@ -45,6 +46,7 @@ export default function BranchesManagementPage() {
   const [branches, setBranches] = useState<BranchItem[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   // حالة مودال الإضافة / التعديل
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -138,6 +140,32 @@ export default function BranchesManagementPage() {
     }
   };
 
+  // دالة حذف الفرع
+  const handleDeleteBranch = async (id: number, nameAr: string) => {
+    if (!confirm(`هل أنت متأكد من رغبتك في حذف فرع "${nameAr}" نهائياً من السيستم؟`)) {
+      return;
+    }
+
+    setDeletingId(id);
+    setStatusMsg(null);
+
+    try {
+      const res = await fetch(`/api/branches?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'فشل حذف الفرع');
+
+      setBranches((prev) => prev.filter((b) => b.id !== id));
+      setStatusMsg({ type: 'ok', text: `تم حذف فرع "${nameAr}" بنجاح!` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء حذف الفرع' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* الترويسة الرئيسية */}
@@ -149,7 +177,7 @@ export default function BranchesManagementPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة الفروع والورديات</h1>
             <p className="text-xs text-slate-500 mt-1">
-              تحديد النطاق الجغرافي للـ GPS لكل فرع، تعيين مديري الفروع، وأرقام التواصل
+              تحديد النطاق الجغرافي للـ GPS لكل فرع، تعيين مديري الفروع، وحذف أو تعديل الفروع
             </p>
           </div>
         </div>
@@ -163,6 +191,19 @@ export default function BranchesManagementPage() {
           <span>إضافة فرع جديد</span>
         </button>
       </div>
+
+      {statusMsg && (
+        <div
+          className={`p-4 rounded-2xl flex items-center gap-3 border text-xs font-bold ${
+            statusMsg.type === 'ok'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+        >
+          {statusMsg.type === 'ok' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <span>{statusMsg.text}</span>
+        </div>
+      )}
 
       {/* قائمة الفروع */}
       {loading ? (
@@ -183,14 +224,28 @@ export default function BranchesManagementPage() {
                   <span className="text-xs text-slate-400 font-mono">{b.name}</span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleOpenModal(b)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer"
-                >
-                  <Edit2 size={13} />
-                  <span>تعديل</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenModal(b)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer"
+                    title="تعديل الفرع"
+                  >
+                    <Edit2 size={13} />
+                    <span>تعديل</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={deletingId === b.id}
+                    onClick={() => handleDeleteBranch(b.id, b.nameAr)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                    title="حذف الفرع"
+                  >
+                    {deletingId === b.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    <span>حذف</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -217,7 +272,7 @@ export default function BranchesManagementPage() {
         </div>
       )}
 
-      {/* مودال تعديل وإضافة الفرع واختيار المدير بأسماء صريحة */}
+      {/* مودال تعديل وإضافة الفرع */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
@@ -234,19 +289,6 @@ export default function BranchesManagementPage() {
                 <X size={16} />
               </button>
             </div>
-
-            {statusMsg && (
-              <div
-                className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
-                  statusMsg.type === 'ok'
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-rose-50 text-rose-700 border border-rose-200'
-                }`}
-              >
-                {statusMsg.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-                <span>{statusMsg.text}</span>
-              </div>
-            )}
 
             <form onSubmit={handleSaveBranch} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -274,7 +316,6 @@ export default function BranchesManagementPage() {
                   />
                 </div>
 
-                {/* اختيار مدير الفرع بأسماء الأشخاص الصريحة */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     اختر مدير الفرع (الاسم الصريح والدور):
