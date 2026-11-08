@@ -79,6 +79,24 @@ export default function EmployeesManagementPage() {
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // قائمة الأدوار الوظيفية المسترجعة من السيستم
+  const [systemRoles, setSystemRoles] = useState<string[]>([
+    'مدير النظام',
+    'مدير عام',
+    'مدير فرع',
+    'مدير منطقة',
+    'مشرف وردية',
+    'كول سنتر',
+    'كاشير',
+    'عضو مطبخ',
+    'شيف / طاهي',
+    'كابتن صالة وويتر',
+    'دليفري / طيار',
+    'مسؤول موارد بشرية',
+    'عامل نظافة وخدمات',
+    'موظف',
+  ]);
+
   // المودالات
   const [selectedHrEmployee, setSelectedHrEmployee] = useState<EmployeeItem | null>(null);
   const [selectedZkEmployee, setSelectedZkEmployee] = useState<EmployeeItem | null>(null);
@@ -106,16 +124,34 @@ export default function EmployeesManagementPage() {
     }
   };
 
+  // جلب الأدوار من قاعدة البيانات لإدراج أي دور مخصص تم إنشاؤه
+  const fetchRoles = async () => {
+    try {
+      const res = await fetch('/api/roles', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const names = data.map((r: any) => r.nameAr || r.name).filter(Boolean);
+          setSystemRoles((prev) => Array.from(new Set([...prev, ...names])));
+        }
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     fetchEmployees();
+    fetchRoles();
   }, []);
 
-  // فتح شيت ZK وسحب كافة حركات الموظف
+  // فتح وتفريغ شيت ZK للموظف
   const handleOpenZkSheet = async (emp: EmployeeItem) => {
     setSelectedZkEmployee(emp);
     setZkLoading(true);
     try {
-      const res = await fetch(`/api/attendance?userId=${emp.id}`, { cache: 'no-store' });
+      const res = await fetch(
+        `/api/attendance?userId=${emp.id}&code=${emp.employeeCode}&phone=${emp.phone}`,
+        { cache: 'no-store' }
+      );
       if (res.ok) {
         const data = await res.json();
         setZkRecords(Array.isArray(data) ? data : []);
@@ -135,7 +171,7 @@ export default function EmployeesManagementPage() {
         fullNameAr: emp.fullNameAr,
         phone: emp.phone,
         employeeCode: emp.employeeCode || '',
-        role: emp.role,
+        role: emp.role || 'عضو مطبخ',
         branchId: emp.branchId || 1,
         monthlySalary: emp.monthlySalary || 5000,
         workingHoursPerDay: emp.workingHoursPerDay || 8,
@@ -182,7 +218,7 @@ export default function EmployeesManagementPage() {
       setTimeout(() => {
         setIsEditModalOpen(false);
         fetchEmployees();
-      }, 800);
+      }, 700);
     } catch (err: any) {
       setModalStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
     } finally {
@@ -216,7 +252,7 @@ export default function EmployeesManagementPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة شؤون الموظفين والورديات</h1>
             <p className="text-xs text-slate-500 mt-1">
-              مسلسل تلقائي للموظفين (001)، تفريغ شيتات الحضور ZK، وطباعة ملفات HR
+              مسلسل تلقائي للموظفين (001)، اختيار الأدوار من السيستم، وتفريغ شيتات ZK
             </p>
           </div>
         </div>
@@ -353,7 +389,7 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* 1. مودال تعديل بيانات الموظف مع إتاحة تعديل المسلسل الوظيفي */}
+      {/* 1. مودال تعديل بيانات الموظف مع قائمة اختيار الدور الوظيفي من السيستم والمسلسل */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
@@ -386,7 +422,7 @@ export default function EmployeesManagementPage() {
 
             <form onSubmit={handleSaveEmployee} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* خانة المسلسل الوظيفي القابلة للتعديل */}
+                {/* تعديل المسلسل الوظيفي */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <Hash size={13} className="text-orange-500" />
@@ -440,14 +476,22 @@ export default function EmployeesManagementPage() {
                   </select>
                 </div>
 
+                {/* الدور الوظيفي كقائمة منسدلة من أدوار السيستم */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الدور الوظيفي</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    الدور الوظيفي (اختيار من أدوار السيستم) *
+                  </label>
+                  <select
                     value={editingEmp.role || 'عضو مطبخ'}
                     onChange={(e) => setEditingEmp({ ...editingEmp, role: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
-                  />
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-bold rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-orange-500 cursor-pointer"
+                  >
+                    {systemRoles.map((roleName) => (
+                      <option key={roleName} value={roleName}>
+                        {roleName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
