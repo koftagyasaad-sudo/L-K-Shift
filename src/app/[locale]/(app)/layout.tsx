@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import GlobalHeader from '@/components/global-header';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -21,10 +22,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
       className="min-h-screen bg-slate-50 dark:bg-[#080911] text-slate-900 dark:text-white flex flex-row"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* 1. القائمة الجانبية (تظهر طبيعياً على اليمين في واجهة العربي) */}
+      {/* مشغل ومراقب الأوفلاين في الخلفية */}
+      <ServiceWorkerRegister />
+
+      {/* 1. السايدبار المعتمد على اليمين */}
       {!sidebarCollapsed && <Sidebar locale={locale} />}
 
-      {/* 2. منطقة العمل والشاشات (على اليسار) */}
+      {/* 2. منطقة العمل والشاشات على اليسار */}
       <div className="flex-1 flex flex-col min-w-0">
         <GlobalHeader
           sidebarCollapsed={sidebarCollapsed}
