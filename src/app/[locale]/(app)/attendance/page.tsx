@@ -14,12 +14,21 @@ import {
   WifiOff,
   Wifi,
   CloudUpload,
+  Building2,
 } from 'lucide-react';
 import {
   saveOfflineAttendance,
   getPendingOfflineAttendance,
   syncOfflineAttendance,
 } from '@/offlineSync';
+
+interface BranchItem {
+  id: number;
+  name: string;
+  lat: number;
+  lng: number;
+  radius: number;
+}
 
 export default function AttendancePage() {
   const params = useParams();
@@ -34,20 +43,16 @@ export default function AttendancePage() {
   const [userId, setUserId] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
 
-  // بيانات الموقع والفرع
-  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [branchInfo, setBranchInfo] = useState<{
-    name: string;
-    lat: number;
-    lng: number;
-    radius: number;
-  }>({
-    name: 'الفرع الرئيسي',
-    lat: 31.1308,
-    lng: 30.6475,
-    radius: 60,
-  });
+  // قائمة الفروع والفرع المختار
+  const [branches, setBranches] = useState<BranchItem[]>([
+    { id: 1, name: 'الإدارة (كفر الشيخ / دسوق)', lat: 31.1308, lng: 30.6475, radius: 150 },
+    { id: 2, name: 'بروست الأسد (كفر الشيخ)', lat: 31.1125, lng: 30.9388, radius: 150 },
+    { id: 3, name: 'الكفتجي (دسوق)', lat: 31.1295, lng: 30.6492, radius: 150 },
+  ]);
+  const [selectedBranchId, setSelectedBranchId] = useState<number>(1);
 
+  // إحداثيات وموقع الموظف
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [isInsideGeofence, setIsInsideGeofence] = useState<boolean>(false);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
@@ -59,9 +64,8 @@ export default function AttendancePage() {
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // دالة حساب المسافة الدقيقة (Haversine Formula)
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371e3;
+    const R = 6371000;
     const toRad = (deg: number) => (deg * Math.PI) / 180;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
@@ -72,43 +76,49 @@ export default function AttendancePage() {
     return Math.round(R * c);
   };
 
-  // استرجاع إحداثيات الفرع الفعلي للموظف
-  const fetchEmployeeBranch = async (uid: string) => {
+  // جلب الفروع المسجلة بالنظام
+  const fetchBranches = async () => {
     try {
-      const cachedBranch = localStorage.getItem(`user_branch_${uid}`);
-      if (cachedBranch) {
-        setBranchInfo(JSON.parse(cachedBranch));
-      }
-    } catch {}
-
-    if (!navigator.onLine) return;
-
-    try {
-      const res = await fetch(`/api/employees?id=${uid}`, { cache: 'no-store' });
+      const res = await fetch('/api/branches', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        const emp = Array.isArray(data) ? data.find((e: any) => String(e.id) === uid) : data;
-        if (emp && emp.branchLat && emp.branchLng) {
-          const info = {
-            name: emp.branchName || 'فرع العمل',
-            lat: parseFloat(emp.branchLat),
-            lng: parseFloat(emp.branchLng),
-            radius: Number(emp.branchRadius) || 60,
-          };
-          setBranchInfo(info);
-          localStorage.setItem(`user_branch_${uid}`, JSON.stringify(info));
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: BranchItem[] = data.map((b: any) => ({
+            id: b.id,
+            name: b.name_ar || b.name || 'فرع',
+            lat: parseFloat(b.latitude),
+            lng: parseFloat(b.longitude),
+            radius: Number(b.geofence_radius) || 150,
+          }));
+          setBranches(mapped);
+          setSelectedBranchId(mapped[0].id);
         }
       }
-    } catch (e) {
-      console.error('Error fetching branch coordinates:', e);
-    }
+    } catch {}
   };
 
-  const checkPending = async () => {
-    try {
-      const pending = await getPendingOfflineAttendance();
-      setPendingCount(pending.length);
-    } catch {}
+  const currentBranch = branches.find((b) => b.id === selectedBranchId) || branches[0];
+
+  // حساب المسافة واكتشاف أقرب فرع تلقائياً إذا كان الموظف قريباً منه
+  const updateDistance = (coords: { lat: number; lng: number }) => {
+    let closestBranch = currentBranch;
+    let minDistance = getDistanceMeters(coords.lat, coords.lng, currentBranch.lat, currentBranch.lng);
+
+    branches.forEach((b) => {
+      const d = getDistanceMeters(coords.lat, coords.lng, b.lat, b.lng);
+      if (d < minDistance) {
+        minDistance = d;
+        closestBranch = b;
+      }
+    });
+
+    // إذا وُجد فرع أقرب، يتم التحويل إليه تلقائياً
+    if (closestBranch.id !== selectedBranchId && minDistance <= closestBranch.radius + 100) {
+      setSelectedBranchId(closestBranch.id);
+    }
+
+    setDistance(minDistance);
+    setIsInsideGeofence(minDistance <= (closestBranch.radius + 100)); // هامش 100 متر لدقة الأبراج
   };
 
   const acquirePreciseLocation = () => {
@@ -129,10 +139,7 @@ export default function AttendancePage() {
 
         setUserCoords({ lat, lng });
         setLocationAccuracy(acc);
-
-        const dist = getDistanceMeters(lat, lng, branchInfo.lat, branchInfo.lng);
-        setDistance(dist);
-        setIsInsideGeofence(dist <= branchInfo.radius);
+        updateDistance({ lat, lng });
         setLocating(false);
       },
       (error) => {
@@ -177,9 +184,7 @@ export default function AttendancePage() {
     setUserId(uid);
     setUserName(uname);
 
-    if (uid) {
-      fetchEmployeeBranch(uid);
-    }
+    fetchBranches();
     checkPending();
     acquirePreciseLocation();
     startCamera();
@@ -191,13 +196,20 @@ export default function AttendancePage() {
     };
   }, []);
 
+  const checkPending = async () => {
+    try {
+      const pending = await getPendingOfflineAttendance();
+      setPendingCount(pending.length);
+    } catch {}
+  };
+
   useEffect(() => {
-    if (userCoords && branchInfo.lat && branchInfo.lng) {
-      const dist = getDistanceMeters(userCoords.lat, userCoords.lng, branchInfo.lat, branchInfo.lng);
+    if (userCoords) {
+      const dist = getDistanceMeters(userCoords.lat, userCoords.lng, currentBranch.lat, currentBranch.lng);
       setDistance(dist);
-      setIsInsideGeofence(dist <= branchInfo.radius);
+      setIsInsideGeofence(dist <= (currentBranch.radius + 100));
     }
-  }, [branchInfo, userCoords]);
+  }, [selectedBranchId, userCoords]);
 
   const startCamera = async () => {
     try {
@@ -246,7 +258,7 @@ export default function AttendancePage() {
     if (!isInsideGeofence) {
       setStatusMsg({
         type: 'err',
-        text: `لا يمكنك تسجيل البصمة! أنت تبعد ${distance} متر عن الفرع (المسموح: ${branchInfo.radius} متر).`,
+        text: `أنت خارج نطاق ${currentBranch.name}! المسافة: ${distance} متر (المسموح: ${currentBranch.radius} متر).`,
       });
       return;
     }
@@ -258,7 +270,6 @@ export default function AttendancePage() {
 
     setLoading(true);
 
-    // حالة الأوفلاين
     if (!navigator.onLine) {
       try {
         await saveOfflineAttendance({
@@ -276,19 +287,16 @@ export default function AttendancePage() {
         setLoading(false);
         setStatusMsg({
           type: 'ok',
-          text: `تم تسجيل ${
-            action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'
-          } محلياً (أوفلاين)! سيتم رفع البيانات تلقائياً أول ما يلقط إنترنت.`,
+          text: `تم تسجيل ${action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'} محلياً (أوفلاين)! سيتم رفعها تلقائياً أول ما يلقط نت.`,
         });
         return;
-      } catch (err: any) {
+      } catch {
         setLoading(false);
         setStatusMsg({ type: 'err', text: 'حدث خطأ أثناء حفظ البصمة محلياً.' });
         return;
       }
     }
 
-    // حالة الأونلاين
     try {
       const res = await fetch('/api/attendance', {
         method: 'POST',
@@ -296,6 +304,7 @@ export default function AttendancePage() {
         body: JSON.stringify({
           action,
           userId,
+          branchId: selectedBranchId,
           latitude: userCoords.lat,
           longitude: userCoords.lng,
           distanceMeters: distance,
@@ -324,7 +333,7 @@ export default function AttendancePage() {
       await checkPending();
       setStatusMsg({
         type: 'ok',
-        text: 'انقطع الاتصال، وتم حفظ البصمة بنجاح أوفلاين وسيتم رفعها تلقائياً فور عودة النت.',
+        text: 'تم حفظ البصمة بنجاح أوفلاين وسيتم رفعها تلقائياً فور عودة النت.',
       });
     } finally {
       setLoading(false);
@@ -333,7 +342,7 @@ export default function AttendancePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* شريط حالة الاتصال والأوفلاين */}
+      {/* شريط حالة الأوفلاين */}
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           {isOnline ? (
@@ -342,7 +351,7 @@ export default function AttendancePage() {
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold animate-pulse">
-              <WifiOff size={13} /> وضع الأوفلاين (شغال بدون نت)
+              <WifiOff size={13} /> وضع الأوفلاين (بدون إنترنت)
             </span>
           )}
 
@@ -352,22 +361,6 @@ export default function AttendancePage() {
             </span>
           )}
         </div>
-
-        {pendingCount > 0 && isOnline && (
-          <button
-            type="button"
-            onClick={async () => {
-              const res = await syncOfflineAttendance();
-              if (res.syncedCount > 0) {
-                setStatusMsg({ type: 'ok', text: `تم رفع ${res.syncedCount} بصمة معلقة بنجاح!` });
-              }
-              checkPending();
-            }}
-            className="text-xs text-orange-400 hover:underline font-bold cursor-pointer"
-          >
-            مزامنة الآن
-          </button>
-        )}
       </div>
 
       {/* الترويسة الرئيسية */}
@@ -379,7 +372,7 @@ export default function AttendancePage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-white">تسجيل الحضور والانصراف الميداني</h1>
             <p className="text-xs text-slate-400 mt-1">
-              يدعم التسجيل الأوفلاين والرفع التلقائي عند استعادة الاتصال
+              الشيفتات الليلية (10 ص إلى 4 ص) معتمدة كيوم واحد وتأكيد البصمة الأخيرة
             </p>
           </div>
         </div>
@@ -388,11 +381,29 @@ export default function AttendancePage() {
           type="button"
           onClick={acquirePreciseLocation}
           className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
-          title="تحديث إحداثيات الـ GPS"
         >
           <RefreshCw size={13} className={locating ? 'animate-spin text-orange-500' : ''} />
-          <span className="hidden sm:inline">تحديث الموقع</span>
+          <span className="hidden sm:inline">تحديث الـ GPS</span>
         </button>
+      </div>
+
+      {/* اختيار الفرع */}
+      <div className="bg-[#0c0e18] border border-white/5 p-4 rounded-2xl shadow-xl flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+          <Building2 size={16} className="text-orange-500" />
+          <span>فرع العمل الحالي:</span>
+        </div>
+        <select
+          value={selectedBranchId}
+          onChange={(e) => setSelectedBranchId(Number(e.target.value))}
+          className="bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-orange-500"
+        >
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {statusMsg && (
@@ -408,7 +419,7 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* بطاقة فحص نطاق الـ Geofence */}
+      {/* بطاقة فحص النطاق الجغرافي */}
       <div
         className={`p-6 rounded-3xl border shadow-xl transition-all ${
           locating
@@ -440,22 +451,22 @@ export default function AttendancePage() {
 
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>{branchInfo.name}</span>
-                <span className="text-[11px] font-mono font-normal text-slate-400">
-                  (نطاق الـ Geofence: {branchInfo.radius} متر)
+                <span>{currentBranch.name}</span>
+                <span className="text-[11px] font-mono text-slate-400">
+                  (نطاق السماح: {currentBranch.radius}م)
                 </span>
               </h2>
 
               <p className="text-xs mt-1">
                 {locating ? (
-                  <span className="text-slate-400">جاري قراءة الـ GPS من أقمار الموقع...</span>
+                  <span className="text-slate-400">جاري الاتصال بالأقمار الصناعية...</span>
                 ) : isInsideGeofence ? (
                   <span className="text-emerald-400 font-bold">
                     أنت داخل نطاق الفرع (المسافة: {distance} متر). جاهز لتسجيل البصمة.
                   </span>
                 ) : (
                   <span className="text-rose-400 font-bold">
-                    أنت خارج نطاق الفرع! المسافة الحالية: {distance} متر (الحد الأقصى المسموح: {branchInfo.radius}م).
+                    أنت خارج نطاق الفرع! المسافة الحالية: {distance} متر (الحد الأقصى: {currentBranch.radius}م).
                   </span>
                 )}
               </p>
@@ -475,7 +486,7 @@ export default function AttendancePage() {
         <div className="flex items-center justify-between border-b border-white/5 pb-3">
           <h3 className="text-xs font-bold text-white flex items-center gap-2">
             <Camera size={16} className="text-orange-500" />
-            <span>التوثيق البصري (سيلفي حي يعمل أوفلاين)</span>
+            <span>التوثيق البصري (سيلفي حي)</span>
           </h3>
           <span className="text-[11px] text-slate-400 font-semibold">مطلوبة مع كل بصمة</span>
         </div>
@@ -532,13 +543,13 @@ export default function AttendancePage() {
           }`}
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}
-          <span>تسجيل الانصراف {!isOnline && '(أوفلاين)'}</span>
+          <span>تسجيل الانصراف (اعتماد الأخيرة)</span>
         </button>
       </div>
 
       {!isInsideGeofence && !locating && (
         <p className="text-center text-xs text-rose-400 font-semibold leading-relaxed">
-          ⚠️ الأزرار معطلة تلقائياً لأنك خارج النطاق الجغرافي للفرع. يجب التواجد داخل مقر العمل لتسجيل البصمة.
+          ⚠️ الأزرار معطلة لأنك خارج نطاق ({currentBranch.name}). يجب التواجد داخل الفرع لتسجيل البصمة.
         </p>
       )}
     </div>
