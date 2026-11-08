@@ -35,6 +35,38 @@ interface NotificationItem {
   createdAt: string;
 }
 
+// دالة توليد صوت جرس تنبيه نقي (Synthesized Chime) تعمل على أي هاتف فوراً
+function playNotificationChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    // نغمة جرس تنبيه ثنائية التردد
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.15); // E6
+
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+
+    if (navigator.vibrate) {
+      navigator.vibrate([150, 80, 150]);
+    }
+  } catch (e) {
+    console.warn('Audio chime play skipped:', e);
+  }
+}
+
 export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: GlobalHeaderProps) {
   const router = useRouter();
   const params = useParams();
@@ -44,13 +76,12 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const [userName, setUserName] = useState('عمر محمد سعيد عبدالحليم');
   const [userRole, setUserRole] = useState('مدير النظام');
   const [userId, setUserId] = useState<string>('');
-  const [isDark, setIsDark] = useState(true);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // منبه الشيفت الصوتي
+  const prevUnreadCountRef = useRef<number>(0);
   const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
@@ -62,17 +93,11 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
       if (storedRole) setUserRole(storedRole);
       if (storedId) setUserId(storedId);
 
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme === 'light') {
-        setIsDark(false);
-        document.documentElement.classList.remove('dark');
-      } else {
-        setIsDark(true);
-        document.documentElement.classList.add('dark');
+      // طلب إذن الإشعارات الخارجية على الهاتف
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
       }
-    } catch {
-      document.documentElement.classList.add('dark');
-    }
+    } catch {}
   }, []);
 
   const fetchNotifications = async () => {
@@ -83,7 +108,23 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
       const res = await fetch(`/api/notifications?userId=${currentUid}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(Array.isArray(data) ? data : []);
+        const items: NotificationItem[] = Array.isArray(data) ? data : [];
+        setNotifications(items);
+
+        const currentUnread = items.filter((n) => !n.isRead).length;
+        // إذا وصل إشعار جديد، إطلاق صوت التنبيه وإشعار الهاتف الخارجي
+        if (currentUnread > prevUnreadCountRef.current && prevUnreadCountRef.current !== 0) {
+          playNotificationChime();
+
+          const newest = items.find((n) => !n.isRead);
+          if (newest && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification(newest.title, {
+              body: newest.message,
+              icon: '/Logo.png',
+            });
+          }
+        }
+        prevUnreadCountRef.current = currentUnread;
       }
     } catch {}
   };
@@ -104,7 +145,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // فحص منبه بداية الشيفت (ساعة، نصف ساعة، و15 دقيقة)
+  // فحص منبه بداية الشيفت المخصص للموظف (قبل الوردية بساعة، 30 دقيقة، 15 دقيقة)
   useEffect(() => {
     const checkShiftAlarm = () => {
       const branchShift = localStorage.getItem('userBranchShift') || '10:00';
@@ -122,10 +163,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
       [60, 30, 15].forEach((intervalMinutes) => {
         if (diffMinutes === intervalMinutes && !shiftNotified[`${intervalMinutes}`]) {
-          try {
-            const audio = new Audio('/alarm.mp3');
-            audio.play().catch(() => {});
-          } catch {}
+          playNotificationChime();
 
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('منبه بداية الشيفت - L-K Shift', {
@@ -139,21 +177,9 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
       });
     };
 
-    const alarmInterval = setInterval(checkShiftAlarm, 30000);
+    const alarmInterval = setInterval(checkShiftAlarm, 25000);
     return () => clearInterval(alarmInterval);
   }, [shiftNotified]);
-
-  const handleToggleTheme = () => {
-    const nextDark = !isDark;
-    setIsDark(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  };
 
   const handleNotificationClick = async (item: NotificationItem) => {
     try {
@@ -198,27 +224,26 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'ATTENDANCE':
-        return <Clock size={16} className="text-emerald-500" />;
+        return <Clock size={16} className="text-emerald-600" />;
       case 'ADVANCE':
-        return <Clock size={16} className="text-emerald-400" />;
+        return <Clock size={16} className="text-emerald-500" />;
       case 'PERMISSION':
         return <Clock size={16} className="text-amber-500" />;
       case 'COMPLAINT':
-        return <ShieldAlert size={16} className="text-rose-500" />;
+        return <ShieldAlert size={16} className="text-rose-600" />;
       default:
-        return <Calendar size={16} className="text-orange-500" />;
+        return <Calendar size={16} className="text-orange-600" />;
     }
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/90 px-4 sm:px-6 backdrop-blur-md dark:border-white/5 dark:bg-[#0c0e18]/90">
-      {/* الجانب الأيمن */}
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/95 px-4 sm:px-6 backdrop-blur-md">
       <div className="flex items-center gap-3">
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition cursor-pointer"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
             title="طي / فتح القائمة"
           >
             {isRtl ? (
@@ -231,30 +256,29 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
         <Link
           href={`/${locale}/profile`}
-          className="flex items-center gap-3 rounded-2xl p-1.5 hover:bg-slate-100 dark:hover:bg-white/5 transition cursor-pointer group"
+          className="flex items-center gap-3 rounded-2xl p-1.5 hover:bg-slate-50 transition cursor-pointer group"
           title="البيانات الشخصية"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-rose-600 text-white font-bold text-sm shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
             {firstLetter}
           </div>
           <div className="text-right">
-            <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-orange-500 transition">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-orange-600 transition">
               {userName}
             </h3>
-            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 block">
+            <span className="text-[11px] font-semibold text-emerald-600 block">
               {userRole}
             </span>
           </div>
         </Link>
       </div>
 
-      {/* الجانب الأيسر: جرس الإشعارات التفاعلي + المظهر + الخروج */}
       <div className="flex items-center gap-2.5">
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => setShowDropdown(!showDropdown)}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 transition cursor-pointer"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
             title="الإشعارات"
           >
             <Bell size={17} />
@@ -265,17 +289,16 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
             )}
           </button>
 
-          {/* القائمة الرأسية المنسدلة بدقة */}
           {showDropdown && (
             <div
               dir={isRtl ? 'rtl' : 'ltr'}
-              className="absolute top-full mt-2 left-0 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#121422] z-50 flex flex-col"
+              className="absolute top-full mt-2 left-0 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl z-50 flex flex-col text-slate-800"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 px-2 dark:border-white/5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 px-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">قائمة الإشعارات</span>
+                  <span className="text-xs font-bold text-slate-900">قائمة الإشعارات</span>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-500">
+                    <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-600">
                       {unreadCount} غير مقروء
                     </span>
                   )}
@@ -284,7 +307,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
                   <button
                     type="button"
                     onClick={handleMarkAllAsRead}
-                    className="flex items-center gap-1 text-[11px] font-bold text-orange-500 hover:text-orange-400 cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
                   >
                     <CheckCheck size={13} />
                     <span>تحديد الكل كمقروء</span>
@@ -292,8 +315,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
                 )}
               </div>
 
-              {/* القائمة الرأسية الصرفة */}
-              <div className="flex flex-col max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5 custom-scrollbar mt-1">
+              <div className="flex flex-col max-h-80 overflow-y-auto divide-y divide-slate-100 custom-scrollbar mt-1">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-xs text-slate-400">لا توجد إشعارات حالياً</div>
                 ) : (
@@ -303,16 +325,16 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
                       onClick={() => handleNotificationClick(item)}
                       className={`flex flex-row items-start gap-3 p-3 transition cursor-pointer rounded-xl text-right w-full ${
                         item.isRead
-                          ? 'opacity-70 hover:bg-slate-50 dark:hover:bg-white/5'
-                          : 'bg-orange-500/5 hover:bg-orange-500/10 border-r-2 border-orange-500'
+                          ? 'opacity-70 hover:bg-slate-50'
+                          : 'bg-orange-50/60 hover:bg-orange-50 border-r-2 border-orange-500'
                       }`}
                     >
-                      <div className="mt-0.5 shrink-0 p-1.5 rounded-lg bg-slate-100 dark:bg-white/5">
+                      <div className="mt-0.5 shrink-0 p-1.5 rounded-lg bg-slate-100">
                         {getNotificationIcon(item.type)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          <h4 className="text-xs font-bold text-slate-900 truncate">
                             {item.title}
                           </h4>
                           <span className="text-[10px] text-slate-400 font-mono shrink-0">
@@ -322,7 +344,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
                             })}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed break-words">
+                        <p className="text-[11px] text-slate-600 mt-1 leading-relaxed break-words">
                           {item.message}
                         </p>
                       </div>
@@ -336,17 +358,8 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
         <button
           type="button"
-          onClick={handleToggleTheme}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition cursor-pointer"
-          title={isDark ? 'المظهر النهاري' : 'المظهر الليلي'}
-        >
-          {isDark ? <Sun size={16} strokeWidth={1.75} /> : <Moon size={16} strokeWidth={1.75} />}
-        </button>
-
-        <button
-          type="button"
           onClick={handleLogout}
-          className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-500/20 transition cursor-pointer"
+          className="flex items-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-500/20 transition cursor-pointer"
         >
           <LogOut size={13} />
           <span>خروج</span>
