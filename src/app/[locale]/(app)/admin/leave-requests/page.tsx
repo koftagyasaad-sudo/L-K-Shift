@@ -19,6 +19,7 @@ import {
   Timer,
   X,
   Send,
+  Users2,
 } from 'lucide-react';
 
 interface RequestItem {
@@ -27,7 +28,7 @@ interface RequestItem {
   userName: string;
   userPhone: string;
   branchName: string;
-  requestType: 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT';
+  requestType: 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST';
   startDate: string;
   endDate: string;
   durationDays: number;
@@ -47,12 +48,10 @@ export default function LeaveApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
 
-  // فلاتر التبويب والبحث
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // نافذة تأكيد الرفض مع كتابة السبب
   const [rejectModalReq, setRejectModalReq] = useState<RequestItem | null>(null);
   const [rejectionReasonText, setRejectionReasonText] = useState('');
   const [statusAlert, setStatusAlert] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -76,7 +75,6 @@ export default function LeaveApprovalsPage() {
     fetchRequests();
   }, []);
 
-  // معالجة القبول بنقرة زر واحدة
   const handleApprove = async (req: RequestItem) => {
     setProcessingId(req.id);
     setStatusAlert(null);
@@ -96,8 +94,7 @@ export default function LeaveApprovalsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'فشل اعتماد الطلب');
 
-      setStatusAlert({ type: 'ok', text: `تم قبول واعتماد طلب (${req.userName}) بنجاح وإرسال إشعار له!` });
-      // تحديث الحالة محلياً فوراً
+      setStatusAlert({ type: 'ok', text: `تم قبول واعتماد طلب (${req.userName}) بنجاح!` });
       setRequests((prev) =>
         prev.map((r) => (r.id === req.id ? { ...r, status: 'APPROVED' } : r))
       );
@@ -108,13 +105,11 @@ export default function LeaveApprovalsPage() {
     }
   };
 
-  // فتح نافذة كتابة سبب الرفض
   const openRejectModal = (req: RequestItem) => {
     setRejectModalReq(req);
     setRejectionReasonText('');
   };
 
-  // تأكيد الرفض وإرسال السبب للموظف
   const handleConfirmReject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectModalReq) return;
@@ -164,12 +159,13 @@ export default function LeaveApprovalsPage() {
         return { label: 'سلفة مالية', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
       case 'COMPLAINT':
         return { label: 'شكوى', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+      case 'STAFF_REQUEST':
+        return { label: 'طلب عمالة', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
       default:
         return { label: 'طلب عام', color: 'bg-slate-800 text-slate-300 border-slate-700' };
     }
   };
 
-  // فلترة السجلات
   const filteredRequests = requests.filter((r) => {
     const matchType = typeFilter === 'ALL' || r.requestType === typeFilter;
     const matchStatus = statusFilter === 'ALL' || r.status === statusFilter;
@@ -188,12 +184,11 @@ export default function LeaveApprovalsPage() {
 
   return (
     <div className="space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية */}
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-white">اعتماد الإجازات والطلبات والسلف</h1>
           <p className="text-xs text-slate-400 mt-1">
-            مراجعة طلبات الموظفين واتخاذ قرار القبول أو الرفض الفوري مع إرسال إشعار للموظف
+            مراجعة طلبات الموظفين وطلبات العمالة والبت فيها بالقبول أو الرفض الفوري
           </p>
         </div>
 
@@ -220,35 +215,35 @@ export default function LeaveApprovalsPage() {
         </div>
       )}
 
-      {/* كروت الإحصائيات السريعة */}
+      {/* كروت الإحصائيات */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-[#0c0e18] border border-white/5 p-5 rounded-2xl">
           <span className="text-xs text-slate-400 block">إجمالي الطلبات</span>
           <span className="text-2xl font-black font-mono text-white mt-1 block">{requests.length}</span>
         </div>
         <div className="bg-[#0c0e18] border border-amber-500/20 p-5 rounded-2xl bg-amber-500/5">
-          <span className="text-xs text-amber-400 font-bold block">بانتظار القرار (معلق)</span>
+          <span className="text-xs text-amber-400 font-bold block">بانتظار القرار</span>
           <span className="text-2xl font-black font-mono text-amber-400 mt-1 block">{pendingCount}</span>
         </div>
         <div className="bg-[#0c0e18] border border-emerald-500/20 p-5 rounded-2xl bg-emerald-500/5">
-          <span className="text-xs text-emerald-400 font-bold block">تمت الموافقة والاعتماد</span>
+          <span className="text-xs text-emerald-400 font-bold block">معتمدة ومقبولة</span>
           <span className="text-2xl font-black font-mono text-emerald-400 mt-1 block">{approvedCount}</span>
         </div>
         <div className="bg-[#0c0e18] border border-rose-500/20 p-5 rounded-2xl bg-rose-500/5">
-          <span className="text-xs text-rose-400 font-bold block">الطلبات المرفوضة</span>
+          <span className="text-xs text-rose-400 font-bold block">مرفوضة</span>
           <span className="text-2xl font-black font-mono text-rose-400 mt-1 block">{rejectedCount}</span>
         </div>
       </div>
 
-      {/* شريط الفلاتر والتبويبات */}
+      {/* التبويبات والفلاتر */}
       <div className="bg-[#0c0e18] border border-white/5 p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row gap-3 items-center justify-between">
-        {/* تبويب نوع الطلب */}
         <div className="flex flex-wrap gap-1.5 w-full sm:w-auto">
           {[
             { id: 'ALL', label: 'الكل' },
             { id: 'LEAVE', label: 'إجازات' },
             { id: 'PERMISSION', label: 'أذونات' },
             { id: 'ADVANCE', label: 'سلف مالية' },
+            { id: 'STAFF_REQUEST', label: 'طلبات عمالة' },
             { id: 'COMPLAINT', label: 'شكاوى' },
           ].map((t) => (
             <button
@@ -266,7 +261,6 @@ export default function LeaveApprovalsPage() {
           ))}
         </div>
 
-        {/* فلتر الحالة والبحث */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <select
             value={statusFilter}
@@ -274,7 +268,7 @@ export default function LeaveApprovalsPage() {
             className="bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-orange-500"
           >
             <option value="ALL">جميع الحالات</option>
-            <option value="PENDING">قيد الانتظار (معلق)</option>
+            <option value="PENDING">قيد الانتظار</option>
             <option value="APPROVED">معتمد ومقبول</option>
             <option value="REJECTED">مرفوض</option>
           </select>
@@ -292,7 +286,7 @@ export default function LeaveApprovalsPage() {
         </div>
       </div>
 
-      {/* جدول الطلبات وأزرار الإجراءات الفورية */}
+      {/* جدول الطلبات */}
       {loading ? (
         <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-[#0c0e18] border border-white/5 rounded-3xl p-12">
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
@@ -309,12 +303,12 @@ export default function LeaveApprovalsPage() {
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-900/80 border-b border-white/5 text-slate-400 font-bold">
                 <tr>
-                  <th className="p-4">الموظف والفرع</th>
+                  <th className="p-4">الموظف / المدير</th>
                   <th className="p-4">نوع الطلب</th>
-                  <th className="p-4">تفاصيل المدة / المبلغ</th>
-                  <th className="p-4">السبب والملاحظات</th>
+                  <th className="p-4">تفاصيل المدة / العدد</th>
+                  <th className="p-4">السبب والمبررات</th>
                   <th className="p-4 text-center">التاريخ</th>
-                  <th className="p-4 text-center">الحالة الحالية</th>
+                  <th className="p-4 text-center">الحالة</th>
                   <th className="p-4 text-center min-w-[200px]">القرار والإجراء</th>
                 </tr>
               </thead>
@@ -339,7 +333,11 @@ export default function LeaveApprovalsPage() {
                       </td>
 
                       <td className="p-4">
-                        {req.requestType === 'ADVANCE' ? (
+                        {req.requestType === 'STAFF_REQUEST' ? (
+                          <span className="font-bold text-purple-400 flex items-center gap-1">
+                            <Users2 size={13} /> عدد: {req.durationDays} أفراد
+                          </span>
+                        ) : req.requestType === 'ADVANCE' ? (
                           <span className="font-mono font-bold text-emerald-400 text-sm">
                             {req.advanceAmount} ج.م
                           </span>
@@ -387,29 +385,26 @@ export default function LeaveApprovalsPage() {
                         )}
                       </td>
 
-                      {/* أزرار اتخاذ القرار (قبول / رفض) */}
                       <td className="p-4 text-center">
                         {req.status === 'PENDING' ? (
                           <div className="flex items-center justify-center gap-2">
-                            {/* زر القبول الأخضر */}
                             <button
                               type="button"
                               disabled={isProcessing}
                               onClick={() => handleApprove(req)}
                               className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition cursor-pointer disabled:opacity-50"
-                              title="قبول واعتماد الطلب"
+                              title="قبول واعتماد"
                             >
                               {isProcessing ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                               <span>قبول</span>
                             </button>
 
-                            {/* زر الرفض الأحمر */}
                             <button
                               type="button"
                               disabled={isProcessing}
                               onClick={() => openRejectModal(req)}
                               className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 transition cursor-pointer disabled:opacity-50"
-                              title="رفض الطلب مع ذكر السبب"
+                              title="رفض الطلب"
                             >
                               <XCircle size={13} />
                               <span>رفض</span>
@@ -436,7 +431,7 @@ export default function LeaveApprovalsPage() {
         </div>
       )}
 
-      {/* نافذة كتابة سبب الرفض وإشعار الموظف به */}
+      {/* نافذة سبب الرفض */}
       {rejectModalReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-md bg-[#0c0e18] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
@@ -457,14 +452,14 @@ export default function LeaveApprovalsPage() {
             <form onSubmit={handleConfirmReject} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  سبب الرفض (سيتم إرساله كإشعار مباشر للموظف):
+                  سبب الرفض (سيصل كإشعار مباشر للمرسل):
                 </label>
                 <textarea
                   rows={3}
                   required
                   value={rejectionReasonText}
                   onChange={(e) => setRejectionReasonText(e.target.value)}
-                  placeholder="مثال: ضغط عمل غير مسموح بالغياب في هذه الوردية، أو استنفاد رصيد السلف..."
+                  placeholder="مثال: لا يوجد شواغر حالياً، أو استنفاد رصيد الإجازات..."
                   className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl p-3 text-xs focus:outline-none focus:border-rose-500 resize-none"
                 />
               </div>
