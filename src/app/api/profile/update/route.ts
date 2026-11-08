@@ -1,40 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// تشفير آمن بملح رقمي SHA-256 / PBKDF2 متوافق وسريع
+function hashPassword(password: string): string {
+  const salt = 'LK_SHIFT_SECURE_SALT_2026';
+  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+}
+
+function verifyPassword(inputPass: string, storedHash: string): boolean {
+  if (!storedHash) return false;
+  // 1. مطابقة صريحة للحسابات القديمة المسجلة بنص عادي
+  if (storedHash === inputPass) return true;
+  // 2. مطابقة التشفير الأمني الجديد
+  const hashedInput = hashPassword(inputPass);
+  if (storedHash === hashedInput) return true;
+  return false;
+}
+
+// شرط الباسورد القوي: 8 خانات على الأقل، حرف كبير، حرف صغير، رقم، رمز خاص
+function isPasswordStrong(pass: string): boolean {
+  const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
+  return strongRegex.test(pass);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('id') || searchParams.get('userId');
+    const userId = searchParams.get('id');
 
     if (!userId) {
-      return NextResponse.json({ message: 'معرف المستخدم مفقود' }, { status: 400 });
+      return NextResponse.json({ message: 'User ID is required' }, { status: 400 });
     }
 
-    const numericId = parseInt(userId, 10);
-    if (isNaN(numericId)) {
-      return NextResponse.json({ message: 'معرف غير صالح' }, { status: 400 });
-    }
-
-    const result = await db.execute(sql`
+    const raw = await db.execute(sql`
       SELECT 
         u.id,
-        COALESCE(u.full_name_ar, u.name, 'موظف') as "fullName",
+        COALESCE(u.full_name_ar, u.name, '') as "fullName",
         COALESCE(u.full_name_en, '') as "fullNameEn",
-        COALESCE(u.phone, '') as "phone",
+        COALESCE(u.phone, '') as phone,
         COALESCE(u.phone_alt, '') as "phoneAlt",
         COALESCE(u.national_id, '') as "nationalId",
         TO_CHAR(u.national_id_expiry, 'YYYY-MM-DD') as "nationalIdExpiry",
-        COALESCE(u.social_insurance_no, '') as "socialInsuranceNo",
-        COALESCE(u.driving_license, '') as "drivingLicense",
         TO_CHAR(u.birth_date, 'YYYY-MM-DD') as "birthDate",
-        COALESCE(u.gender, 'MALE') as "gender",
+        COALESCE(u.gender, 'MALE') as gender,
         COALESCE(u.marital_status, '') as "maritalStatus",
         COALESCE(u.military_status, '') as "militaryStatus",
-        COALESCE(u.address, '') as "address",
+        COALESCE(u.address, '') as address,
+        COALESCE(u.social_insurance_no, '') as "socialInsuranceNo",
+        COALESCE(u.driving_license, '') as "drivingLicense",
         COALESCE(u.emergency_name, '') as "emergencyName",
         COALESCE(u.emergency_relation, '') as "emergencyRelation",
         COALESCE(u.emergency_contact, '') as "emergencyPhone",
@@ -45,21 +63,28 @@ export async function GET(request: NextRequest) {
         COALESCE(u.education_field, '') as "educationField",
         u.graduation_year as "graduationYear",
         COALESCE(u.avatar_url, '') as "avatarUrl",
-        COALESCE(u.job_role, u.system_role::text, 'موظف') as "role"
+        COALESCE(u.password_hash, '') as "passwordHash"
       FROM users u
-      WHERE u.id = ${numericId}
+      WHERE u.id::text = ${userId}
       LIMIT 1;
     `);
 
-    const usersList = Array.isArray(result) ? result : (result as any)?.rows || [];
-    if (!usersList.length) {
+    const users = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    if (!users.length) {
       return NextResponse.json({ message: 'المستخدم غير موجود' }, { status: 404 });
     }
 
-    return NextResponse.json(usersList[0], { status: 200 });
+    const u = users[0];
+    const isWeak = !u.passwordHash || u.passwordHash === '123456' || !isPasswordStrong(u.passwordHash);
+
+    return NextResponse.json({
+      ...u,
+      mustChangePassword: isWeak,
+      passwordHash: undefined, // عدم تصدير الهاش للواجهة
+    }, { status: 200 });
   } catch (error: any) {
     console.error('Profile GET error:', error);
-    return NextResponse.json({ message: 'فشل جلب البيانات' }, { status: 500 });
+    return NextResponse.json({ message: 'حدث خطأ أثناء جلب الملف الشخصي' }, { status: 500 });
   }
 }
 
@@ -99,60 +124,87 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'معرف المستخدم مفقود' }, { status: 400 });
     }
 
-    const numericId = parseInt(userId, 10);
-
-    // التحقق من كلمة المرور القديمة في حال الرغبة في التغيير
-    if (newPassword) {
-      const userCheck = await db.execute(sql`
-        SELECT id, password_hash FROM users WHERE id = ${numericId} LIMIT 1;
-      `);
-      const existing = Array.isArray(userCheck) ? userCheck : (userCheck as any)?.rows || [];
-      if (existing.length > 0) {
-        const storedPwd = existing[0].password_hash;
-        if (storedPwd && storedPwd !== currentPassword) {
-          return NextResponse.json({ message: 'كلمة المرور الحالية غير صحيحة' }, { status: 400 });
-        }
-      }
+    // جلب الباسورد الحالي من قاعدة البيانات للتحقق الدقيق
+    const currentQuery = await db.execute(sql`
+      SELECT id, password_hash, password FROM users WHERE id::text = ${userId.toString()} LIMIT 1;
+    `);
+    const currentRows = Array.isArray(currentQuery) ? currentQuery : (currentQuery as any)?.rows || [];
+    if (!currentRows.length) {
+      return NextResponse.json({ message: 'المستخدم غير مسجل' }, { status: 404 });
     }
 
-    // حفظ وتحديث كافة بيانات الاستمارة والصورة الشخصية من أول مرة
+    const userDb = currentRows[0];
+    const existingPasswordHash = userDb.password_hash || userDb.password || '';
+
+    // معالجة تغيير كلمة المرور إن طُلبت
+    let finalPasswordHash = existingPasswordHash;
+    if (newPassword && newPassword.trim() !== '') {
+      const trimmedNewPass = newPassword.trim();
+      const trimmedCurrentPass = currentPassword ? currentPassword.trim() : '';
+
+      // 1. التحقق من كلمة المرور الحالية (سواء قديمة نصية أو مشفرة)
+      const isCurrentCorrect = verifyPassword(trimmedCurrentPass, existingPasswordHash);
+      if (!isCurrentCorrect) {
+        return NextResponse.json({
+          message: 'كلمة المرور الحالية غير صحيحة، يرجى التأكد وإعادة المحاولة.',
+        }, { status: 400 });
+      }
+
+      // 2. تطبيق قاعدة كلمة المرور القوية الصارمة
+      if (!isPasswordStrong(trimmedNewPass)) {
+        return NextResponse.json({
+          message: 'كلمة المرور ضعيفة! يجب ألا تقل عن 8 خانات، وتحتوي على حرف كبير (Capital)، وحرف صغير (Small)، ورقم، ورمز خاص (مثل: @, $, !, #, %).',
+        }, { status: 400 });
+      }
+
+      // 3. التشفير قبل الحفظ
+      finalPasswordHash = hashPassword(trimmedNewPass);
+    }
+
+    const gradYearNum = graduationYear ? parseInt(graduationYear, 10) : null;
+    const bDate = birthDate ? birthDate : null;
+    const nExpiry = nationalIdExpiry ? nationalIdExpiry : null;
+
     await db.execute(sql`
       UPDATE users
-      SET
-        full_name_ar = COALESCE(${fullName || null}, full_name_ar),
+      SET 
+        full_name_ar = COALESCE(NULLIF(${fullName || ''}, ''), full_name_ar),
+        name = COALESCE(NULLIF(${fullName || ''}, ''), name),
         full_name_en = ${fullNameEn || null},
-        phone = COALESCE(${phone || null}, phone),
+        phone = COALESCE(NULLIF(${phone || ''}, ''), phone),
         phone_alt = ${phoneAlt || null},
         national_id = ${nationalId || null},
-        national_id_expiry = ${nationalIdExpiry ? sql`${nationalIdExpiry}::date` : null},
+        national_id_expiry = ${nExpiry}::date,
         social_insurance_no = ${socialInsuranceNo || null},
         driving_license = ${drivingLicense || null},
-        birth_date = ${birthDate ? sql`${birthDate}::date` : null},
-        gender = COALESCE(${gender || 'MALE'}, gender),
+        birth_date = ${bDate}::date,
+        gender = ${gender || 'MALE'},
         marital_status = ${maritalStatus || null},
         military_status = ${militaryStatus || null},
         address = ${address || null},
         emergency_name = ${emergencyName || null},
         emergency_relation = ${emergencyRelation || null},
         emergency_contact = ${emergencyPhone || null},
-        payout_method = COALESCE(${payoutMethod || 'INSTAPAY'}, payout_method),
+        payout_method = ${payoutMethod || 'INSTAPAY'},
         payout_account = ${payoutAccount || null},
         bank_name = ${bankName || null},
         education_level = ${educationLevel || null},
         education_field = ${educationField || null},
-        graduation_year = ${graduationYear ? parseInt(graduationYear, 10) : null},
-        avatar_url = COALESCE(${profilePhoto || null}, avatar_url),
+        graduation_year = ${gradYearNum},
+        avatar_url = COALESCE(NULLIF(${profilePhoto || ''}, ''), avatar_url),
+        password_hash = ${finalPasswordHash},
         updated_at = NOW()
-        ${newPassword ? sql`, password_hash = ${newPassword}` : sql``}
-      WHERE id = ${numericId};
+      WHERE id::text = ${userId.toString()};
     `);
 
     return NextResponse.json({
       success: true,
-      message: 'تم حفظ كافة بيانات استمارتك الشخصية وصورتك بنجاح!',
-    });
+      message: 'تم تحديث الملف الشخصي وكلمة المرور بنجاح!',
+    }, { status: 200 });
   } catch (error: any) {
     console.error('Profile POST error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل تحديث البيانات' }, { status: 500 });
+    return NextResponse.json({
+      message: error?.message || 'حدث خطأ غير متوقع أثناء حفظ البيانات',
+    }, { status: 500 });
   }
 }
