@@ -7,11 +7,12 @@ export const revalidate = 0;
 
 export async function GET() {
   try {
-    // التأكد التلقائي من وجود أعمدة الورديات الثلاث وفترة السماح والعنوان
     try {
       await db.execute(sql`
         ALTER TABLE branches ADD COLUMN IF NOT EXISTS address TEXT;
         ALTER TABLE branches ADD COLUMN IF NOT EXISTS name_en VARCHAR(150);
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS manager_id INTEGER;
         ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_secret_key TEXT DEFAULT md5(random()::text);
         ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_start TEXT DEFAULT '09:00';
         ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_end TEXT DEFAULT '17:00';
@@ -46,7 +47,7 @@ export async function GET() {
         COALESCE(b.shift3_end::text, '01:00') as "shift3End",
         COALESCE(b.grace_period_minutes, 15) as "gracePeriodMinutes"
       FROM branches b
-      LEFT JOIN users u ON b.manager_id = u.id
+      LEFT JOIN users u ON b.manager_id::text = u.id::text
       ORDER BY b.id ASC;
     `);
 
@@ -85,6 +86,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'اسم الفرع بالعربية مطلوب' }, { status: 400 });
     }
 
+    try {
+      await db.execute(sql`
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS address TEXT;
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS name_en VARCHAR(150);
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS manager_id INTEGER;
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_start TEXT DEFAULT '09:00';
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_end TEXT DEFAULT '17:00';
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift2_start TEXT DEFAULT '13:00';
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift2_end TEXT DEFAULT '21:00';
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift3_start TEXT DEFAULT '17:00';
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift3_end TEXT DEFAULT '01:00';
+        ALTER TABLE branches ADD COLUMN IF NOT EXISTS grace_period_minutes INTEGER DEFAULT 15;
+      `);
+    } catch {}
+
     const enName = nameEn || name || 'Branch';
     const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
     const lng = longitude !== undefined && longitude !== null ? parseFloat(longitude) : 30.6475;
@@ -96,9 +113,9 @@ export async function POST(request: NextRequest) {
     const s2End = shift2End || '21:00';
     const s3Start = shift3Start || '17:00';
     const s3End = shift3End || '01:00';
-    const grace = gracePeriodMinutes ? parseInt(gracePeriodMinutes, 10) : 15;
+    const grace = gracePeriodMinutes !== undefined ? parseInt(gracePeriodMinutes, 10) : 15;
 
-    if (id) {
+    if (id && Number(id) > 0) {
       await db.execute(sql`
         UPDATE branches
         SET 
@@ -120,7 +137,7 @@ export async function POST(request: NextRequest) {
           grace_period_minutes = ${grace}
         WHERE id = ${parseInt(id, 10)};
       `);
-      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الفرع والورديات بنجاح' });
+      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الفرع بنجاح' });
     } else {
       await db.execute(sql`
         INSERT INTO branches (
@@ -155,29 +172,12 @@ export async function DELETE(request: NextRequest) {
     const branchId = parseInt(id, 10);
 
     try {
-      await db.execute(sql`
-        UPDATE users 
-        SET primary_branch_id = NULL 
-        WHERE primary_branch_id = ${branchId};
-      `);
-      await db.execute(sql`
-        UPDATE users 
-        SET branch_id = NULL 
-        WHERE branch_id = ${branchId};
-      `);
+      await db.execute(sql`UPDATE users SET primary_branch_id = NULL WHERE primary_branch_id = ${branchId};`);
+      await db.execute(sql`UPDATE users SET branch_id = NULL WHERE branch_id = ${branchId};`);
+      await db.execute(sql`UPDATE attendance_logs SET branch_id = NULL WHERE branch_id = ${branchId};`);
     } catch {}
 
-    try {
-      await db.execute(sql`
-        UPDATE attendance_logs 
-        SET branch_id = NULL 
-        WHERE branch_id = ${branchId};
-      `);
-    } catch {}
-
-    await db.execute(sql`
-      DELETE FROM branches WHERE id = ${branchId};
-    `);
+    await db.execute(sql`DELETE FROM branches WHERE id = ${branchId};`);
 
     return NextResponse.json({ success: true, message: 'تم حذف الفرع بنجاح' });
   } catch (error: any) {
