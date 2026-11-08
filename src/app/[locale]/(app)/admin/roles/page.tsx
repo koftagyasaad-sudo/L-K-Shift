@@ -14,6 +14,9 @@ import {
   AlertCircle,
   KeyRound,
   Check,
+  Building2,
+  Layers,
+  MapPin,
 } from 'lucide-react';
 
 interface CustomRole {
@@ -21,10 +24,16 @@ interface CustomRole {
   name: string;
   nameAr: string;
   permissions: string[];
+  branchScope: 'ALL' | 'OWN_BRANCH' | 'CUSTOM';
+  allowedBranchIds: number[];
   isSystem: boolean;
 }
 
-// قائمة الصلاحيات التفصيلية الكاملة للنظام القديم (16 صلاحية)
+interface BranchItem {
+  id: number;
+  nameAr: string;
+}
+
 const SYSTEM_PERMISSIONS = [
   { id: 'dashboard.view', label: 'لوحة التحكم والتقارير العامة', group: 'عام' },
   { id: 'dashboard.analytics', label: 'التحليلات المالية والتشغيلية المتقدمة', group: 'عام' },
@@ -44,7 +53,6 @@ const SYSTEM_PERMISSIONS = [
   { id: 'staff_requests.manage', label: 'تقديم واعتماد طلبات احتياج العمالة', group: 'الطلبات' },
 ];
 
-// دالة أمان صارمة تمنع أي خطأ برمي في الرندر وتضمن تحويل الصلاحيات لمصفوفة صريحة دائماً
 function parsePermissions(perms: any): string[] {
   if (!perms) return [];
   if (Array.isArray(perms)) return perms;
@@ -101,14 +109,16 @@ const autoGenerateRoleCode = (arabicName: string): string => {
     }
   }
 
-  return clean
-    .replace(/[أإآ]/g, 'a')
-    .replace(/[ة]/g, 'a')
-    .replace(/[ى]/g, 'a')
-    .replace(/[ي]/g, 'y')
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .trim()
-    .replace(/\s+/g, '_') || 'custom_role';
+  return (
+    clean
+      .replace(/[أإآ]/g, 'a')
+      .replace(/[ة]/g, 'a')
+      .replace(/[ى]/g, 'a')
+      .replace(/[ي]/g, 'y')
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .trim()
+      .replace(/\s+/g, '_') || 'custom_role'
+  );
 };
 
 export default function RolesManagementPage() {
@@ -117,6 +127,7 @@ export default function RolesManagementPage() {
   const isRtl = locale === 'ar';
 
   const [roles, setRoles] = useState<CustomRole[]>([]);
+  const [allBranches, setAllBranches] = useState<BranchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -126,10 +137,12 @@ export default function RolesManagementPage() {
   const [code, setCode] = useState('');
   const [isCodeManuallyEdited, setIsCodeManuallyEdited] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [branchScope, setBranchScope] = useState<'ALL' | 'OWN_BRANCH' | 'CUSTOM'>('ALL');
+  const [allowedBranchIds, setAllowedBranchIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  const fetchRoles = async () => {
+  const fetchRolesData = async () => {
     try {
       setLoading(true);
       const res = await fetch('/api/roles', { cache: 'no-store' });
@@ -141,6 +154,10 @@ export default function RolesManagementPage() {
             name: String(r.name || ''),
             nameAr: String(r.nameAr || r.name_ar || r.name || ''),
             permissions: parsePermissions(r.permissions),
+            branchScope: r.branchScope || r.branch_scope || 'ALL',
+            allowedBranchIds: Array.isArray(r.allowedBranchIds)
+              ? r.allowedBranchIds.map(Number)
+              : [],
             isSystem: Boolean(r.isSystem ?? r.is_system),
           }));
           setRoles(sanitized);
@@ -148,8 +165,18 @@ export default function RolesManagementPage() {
           setRoles([]);
         }
       }
+
+      const resB = await fetch('/api/branches', { cache: 'no-store' });
+      if (resB.ok) {
+        const dataB = await resB.json();
+        const mappedB: BranchItem[] = (Array.isArray(dataB) ? dataB : []).map((b: any) => ({
+          id: b.id,
+          nameAr: b.nameAr || b.name_ar || b.name || 'فرع',
+        }));
+        setAllBranches(mappedB);
+      }
     } catch (err) {
-      console.error('Failed to load roles:', err);
+      console.error('Failed to load roles/branches:', err);
       setRoles([]);
     } finally {
       setLoading(false);
@@ -157,7 +184,7 @@ export default function RolesManagementPage() {
   };
 
   useEffect(() => {
-    fetchRoles();
+    fetchRolesData();
   }, []);
 
   const handleNameArChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,12 +203,16 @@ export default function RolesManagementPage() {
       setCode(role.name || '');
       setIsCodeManuallyEdited(true);
       setSelectedPermissions(parsePermissions(role.permissions));
+      setBranchScope(role.branchScope || 'ALL');
+      setAllowedBranchIds(role.allowedBranchIds || []);
     } else {
       setEditingRoleId(null);
       setNameAr('');
       setCode('');
       setIsCodeManuallyEdited(false);
       setSelectedPermissions(['attendance.view']);
+      setBranchScope('ALL');
+      setAllowedBranchIds([]);
     }
     setIsModalOpen(true);
   };
@@ -189,6 +220,12 @@ export default function RolesManagementPage() {
   const togglePermission = (permId: string) => {
     setSelectedPermissions((prev) =>
       prev.includes(permId) ? prev.filter((p) => p !== permId) : [...prev, permId]
+    );
+  };
+
+  const toggleBranch = (bId: number) => {
+    setAllowedBranchIds((prev) =>
+      prev.includes(bId) ? prev.filter((id) => id !== bId) : [...prev, bId]
     );
   };
 
@@ -207,6 +244,11 @@ export default function RolesManagementPage() {
       return;
     }
 
+    if (branchScope === 'CUSTOM' && allowedBranchIds.length === 0) {
+      setStatusMsg({ type: 'err', text: 'يرجى تحديد فرع واحد على الأقل عند اختيار فروع محددة' });
+      return;
+    }
+
     setSaving(true);
     setStatusMsg(null);
 
@@ -219,6 +261,8 @@ export default function RolesManagementPage() {
           nameAr: nameAr.trim(),
           name: code.trim(),
           permissions: selectedPermissions,
+          branchScope,
+          allowedBranchIds: branchScope === 'CUSTOM' ? allowedBranchIds : [],
         }),
       });
 
@@ -226,7 +270,7 @@ export default function RolesManagementPage() {
       if (!res.ok) throw new Error(data.message || 'فشل حفظ الدور');
 
       setIsModalOpen(false);
-      fetchRoles();
+      fetchRolesData();
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
     } finally {
@@ -239,7 +283,7 @@ export default function RolesManagementPage() {
     try {
       const res = await fetch(`/api/roles?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        fetchRoles();
+        fetchRolesData();
       }
     } catch (err) {
       console.error('Delete role error:', err);
@@ -264,7 +308,7 @@ export default function RolesManagementPage() {
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة الأدوار والصلاحيات</h1>
               <p className="text-xs text-slate-500 mt-1">
-                تحديد الصلاحيات التفصيلية لكل دور وظيفي مع إمكانية التعديل والإضافة
+                تحديد الصلاحيات ونطاق الاطلاع الجغرافي (فرعه فقط أو كل الفروع أو فروع محددة)
               </p>
             </div>
           </div>
@@ -294,7 +338,7 @@ export default function RolesManagementPage() {
         </div>
       </div>
 
-      {/* جدول الأدوار المطابق للصورة مع عداد الصلاحيات بالأخضر الفسفوري */}
+      {/* جدول الأدوار */}
       {loading ? (
         <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-slate-100 border border-slate-200 rounded-3xl p-12">
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
@@ -313,6 +357,7 @@ export default function RolesManagementPage() {
                 <tr>
                   <th className="p-4">اسم الدور</th>
                   <th className="p-4">المعرف البرمجي</th>
+                  <th className="p-4 text-center">نطاق الفروع المسموح</th>
                   <th className="p-4 text-center">عدد الصلاحيات الممنوحة</th>
                   <th className="p-4 text-center">نوع الدور</th>
                   <th className="p-4 text-center">الإجراءات</th>
@@ -334,18 +379,32 @@ export default function RolesManagementPage() {
                           {role.name}
                         </span>
                       </td>
-                      {/* عدد الصلاحيات بالأخضر الفسفوري الصريح المطابق لـ image_a5ddff.png */}
+                      <td className="p-4 text-center">
+                        {role.branchScope === 'OWN_BRANCH' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <MapPin size={12} /> فرعه فقط
+                          </span>
+                        ) : role.branchScope === 'CUSTOM' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                            <Layers size={12} /> {role.allowedBranchIds?.length || 0} فروع محددة
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Building2 size={12} /> جميع الفروع
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4 text-center font-black text-emerald-600 font-mono text-sm">
-                        {permCount} صلاحيات[cite: 14]
+                        {permCount} صلاحيات
                       </td>
                       <td className="p-4 text-center">
                         {role.isSystem ? (
                           <span className="inline-block px-3 py-1 rounded-xl text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200">
-                            نظامي أساسي[cite: 14]
+                            نظامي أساسي
                           </span>
                         ) : (
                           <span className="inline-block px-3 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                            مخصص[cite: 14]
+                            مخصص
                           </span>
                         )}
                       </td>
@@ -380,7 +439,7 @@ export default function RolesManagementPage() {
         </div>
       )}
 
-      {/* نافذة تعديل الدور والصلاحيات الـ 16 التفصيلية */}
+      {/* نافذة التعديل */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 custom-scrollbar text-slate-800">
@@ -415,7 +474,7 @@ export default function RolesManagementPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    اسم الدور (بالعربية) <span className="text-rose-500">*</span>[cite: 13]
+                    اسم الدور (بالعربية) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -429,8 +488,8 @@ export default function RolesManagementPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                    <span>المعرف البرمجي (Role Code) <span className="text-rose-500">*</span>[cite: 13]</span>
-                    <span className="text-[10px] text-orange-600 font-bold">⚡ توليد تلقائي[cite: 13]</span>
+                    <span>المعرف البرمجي (Role Code) <span className="text-rose-500">*</span></span>
+                    <span className="text-[10px] text-orange-600 font-bold">⚡ توليد تلقائي</span>
                   </label>
                   <input
                     type="text"
@@ -447,22 +506,108 @@ export default function RolesManagementPage() {
                 </div>
               </div>
 
-              {/* الصلاحيات التفصيلية الـ 16 */}
-              <div className="space-y-2 pt-2">
+              {/* قسم نطاق الفروع الجغرافي */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-900">
+                  <Building2 size={16} className="text-orange-600" />
+                  <span>نطاق الاطلاع والتحكم بالفروع:</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[
+                    {
+                      id: 'ALL',
+                      label: 'جميع الفروع',
+                      desc: 'اطلاع وتحكم شامل بكافة الفروع',
+                    },
+                    {
+                      id: 'OWN_BRANCH',
+                      label: 'فرع الموظف فقط',
+                      desc: 'حضور وسجلات فرعه المسجل به حصراً',
+                    },
+                    {
+                      id: 'CUSTOM',
+                      label: 'فروع محددة',
+                      desc: 'اختيار فرعين أو فروع معينة',
+                    },
+                  ].map((scope) => (
+                    <button
+                      key={scope.id}
+                      type="button"
+                      onClick={() => setBranchScope(scope.id as any)}
+                      className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between ${
+                        branchScope === scope.id
+                          ? 'bg-orange-50 border-orange-500 text-slate-900 shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="font-bold text-xs">{scope.label}</span>
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                            branchScope === scope.id
+                              ? 'border-orange-500 bg-orange-500 text-white'
+                              : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {branchScope === scope.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-slate-500 leading-tight">{scope.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {branchScope === 'CUSTOM' && (
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <span className="text-[11px] font-bold text-slate-700 block">
+                      اختر الفروع المسموح لهذا الدور بالاطلاع عليها:
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {allBranches.map((b) => {
+                        const isSelected = allowedBranchIds.includes(b.id);
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={() => toggleBranch(b.id)}
+                            className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition ${
+                              isSelected
+                                ? 'bg-orange-100 border-orange-400 text-orange-900 font-bold'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                            }`}
+                          >
+                            <span>{b.nameAr}</span>
+                            <div
+                              className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                                isSelected ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-300 bg-slate-50'
+                              }`}
+                            >
+                              {isSelected && <Check size={11} strokeWidth={3} />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* الصلاحيات التفصيلية */}
+              <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800">
-                    الصلاحيات الممنوحة لهذا الدور ({selectedPermissions.length}):[cite: 13]
+                    الصلاحيات الممنوحة لهذا الدور ({selectedPermissions.length}):
                   </label>
                   <button
                     type="button"
                     onClick={handleSelectAllPerms}
                     className="text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
                   >
-                    {selectedPermissions.length === SYSTEM_PERMISSIONS.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}[cite: 13]
+                    {selectedPermissions.length === SYSTEM_PERMISSIONS.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-64 overflow-y-auto p-1 custom-scrollbar">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto p-1 custom-scrollbar">
                   {SYSTEM_PERMISSIONS.map((perm) => {
                     const isChecked = selectedPermissions.includes(perm.id);
                     return (
@@ -497,7 +642,7 @@ export default function RolesManagementPage() {
                   onClick={() => setIsModalOpen(false)}
                   className="px-5 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-600 hover:text-slate-900 text-xs font-bold cursor-pointer"
                 >
-                  إلغاء[cite: 13]
+                  إلغاء
                 </button>
                 <button
                   type="submit"
@@ -505,7 +650,7 @@ export default function RolesManagementPage() {
                   className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer disabled:opacity-50"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-                  <span>حفظ الدور والصلاحيات</span>[cite: 13]
+                  <span>حفظ الدور والصلاحيات</span>
                 </button>
               </div>
             </form>
