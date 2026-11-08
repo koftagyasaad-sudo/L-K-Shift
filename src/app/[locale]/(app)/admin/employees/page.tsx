@@ -67,19 +67,26 @@ interface EmployeeItem {
   shiftEndTime?: string;
 }
 
+interface BranchOption {
+  id: number;
+  name: string;
+  nameAr: string;
+}
+
 export default function EmployeesManagementPage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+  const [allBranches, setAllBranches] = useState<BranchOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   // الفلاتر
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // قائمة الأدوار الوظيفية المسترجعة من السيستم
+  // قائمة الأدوار الوظيفية المسجلة بالسيستم
   const [systemRoles, setSystemRoles] = useState<string[]>([
     'مدير النظام',
     'مدير عام',
@@ -109,41 +116,47 @@ export default function EmployeesManagementPage() {
   const [savingEmp, setSavingEmp] = useState(false);
   const [modalStatusMsg, setModalStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  const fetchEmployees = async () => {
+  const fetchEmployeesData = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/employees', { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(Array.isArray(data) ? data : []);
+      const resE = await fetch('/api/employees', { cache: 'no-store' });
+      if (resE.ok) {
+        const dataE = await resE.json();
+        setEmployees(Array.isArray(dataE) ? dataE : []);
+      }
+
+      // جلب كافة الفروع المسجلة في السيستم مباشرة
+      const resB = await fetch('/api/branches', { cache: 'no-store' });
+      if (resB.ok) {
+        const dataB = await resB.json();
+        const mappedB: BranchOption[] = (Array.isArray(dataB) ? dataB : []).map((b: any) => ({
+          id: b.id,
+          name: b.name || 'Branch',
+          nameAr: b.nameAr || b.name_ar || b.name || 'فرع',
+        }));
+        setAllBranches(mappedB);
+      }
+
+      // جلب أي أدوار مخصصة من السيستم
+      const resR = await fetch('/api/roles', { cache: 'no-store' });
+      if (resR.ok) {
+        const dataR = await resR.json();
+        if (Array.isArray(dataR) && dataR.length > 0) {
+          const names = dataR.map((r: any) => r.nameAr || r.name).filter(Boolean);
+          setSystemRoles((prev) => Array.from(new Set([...prev, ...names])));
+        }
       }
     } catch (err) {
-      console.error('Failed to load employees:', err);
+      console.error('Failed to load employees data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // جلب الأدوار من قاعدة البيانات لإدراج أي دور مخصص تم إنشاؤه
-  const fetchRoles = async () => {
-    try {
-      const res = await fetch('/api/roles', { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const names = data.map((r: any) => r.nameAr || r.name).filter(Boolean);
-          setSystemRoles((prev) => Array.from(new Set([...prev, ...names])));
-        }
-      }
-    } catch {}
-  };
-
   useEffect(() => {
-    fetchEmployees();
-    fetchRoles();
+    fetchEmployeesData();
   }, []);
 
-  // فتح وتفريغ شيت ZK للموظف
   const handleOpenZkSheet = async (emp: EmployeeItem) => {
     setSelectedZkEmployee(emp);
     setZkLoading(true);
@@ -172,7 +185,7 @@ export default function EmployeesManagementPage() {
         phone: emp.phone,
         employeeCode: emp.employeeCode || '',
         role: emp.role || 'عضو مطبخ',
-        branchId: emp.branchId || 1,
+        branchId: emp.branchId || (allBranches[0]?.id ?? 1),
         monthlySalary: emp.monthlySalary || 5000,
         workingHoursPerDay: emp.workingHoursPerDay || 8,
         isActive: emp.isActive !== false,
@@ -187,7 +200,7 @@ export default function EmployeesManagementPage() {
         phone: '',
         employeeCode: '',
         role: 'عضو مطبخ',
-        branchId: 1,
+        branchId: allBranches[0]?.id ?? 1,
         monthlySalary: 5000,
         workingHoursPerDay: 8,
         isActive: true,
@@ -214,10 +227,10 @@ export default function EmployeesManagementPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'فشل حفظ بيانات الموظف والمسلسل');
 
-      setModalStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الموظف والمسلسل الوظيفي بنجاح!' });
+      setModalStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الموظف بنجاح!' });
       setTimeout(() => {
         setIsEditModalOpen(false);
-        fetchEmployees();
+        fetchEmployeesData();
       }, 700);
     } catch (err: any) {
       setModalStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
@@ -236,10 +249,6 @@ export default function EmployeesManagementPage() {
       emp.employeeCode.includes(q);
     return matchBranch && matchSearch;
   });
-
-  const uniqueBranches = Array.from(
-    new Map(employees.map((e) => [e.branchId, { id: e.branchId, name: e.branchName }])).values()
-  );
 
   return (
     <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -273,18 +282,18 @@ export default function EmployeesManagementPage() {
         </div>
       </div>
 
-      {/* البحث وفلتر الفرع */}
+      {/* البحث وفلتر الفروع المسجلة بالكامل */}
       <div className="bg-slate-100 border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row gap-3 items-center">
         <div className="w-full sm:w-60">
           <select
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
-            className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
+            className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500 cursor-pointer"
           >
             <option value="ALL">جميع الفروع</option>
-            {uniqueBranches.map((b) => (
+            {allBranches.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.name}
+                {b.nameAr}
               </option>
             ))}
           </select>
@@ -389,7 +398,7 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* 1. مودال تعديل بيانات الموظف مع قائمة اختيار الدور الوظيفي من السيستم والمسلسل */}
+      {/* مودال تعديل بيانات الموظف مع قائمة اختيار الفروع والأدوار الكاملة */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
@@ -422,7 +431,6 @@ export default function EmployeesManagementPage() {
 
             <form onSubmit={handleSaveEmployee} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* تعديل المسلسل الوظيفي */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <Hash size={13} className="text-orange-500" />
@@ -461,22 +469,23 @@ export default function EmployeesManagementPage() {
                   />
                 </div>
 
+                {/* اختيار الفرع من كافة الفروع المسجلة بالنظام */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">فرع العمل *</label>
                   <select
-                    value={editingEmp.branchId || 1}
+                    value={editingEmp.branchId || (allBranches[0]?.id ?? 1)}
                     onChange={(e) => setEditingEmp({ ...editingEmp, branchId: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-orange-500"
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-orange-500 cursor-pointer"
                   >
-                    {uniqueBranches.map((b) => (
+                    {allBranches.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.name}
+                        {b.nameAr}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* الدور الوظيفي كقائمة منسدلة من أدوار السيستم */}
+                {/* اختيار الدور من قائمة الأدوار المسجلة بالسيستم */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     الدور الوظيفي (اختيار من أدوار السيستم) *
