@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// دالة حساب المسافة الدقيقة بين نقطتين جغرافيين بالأمتار (Haversine Formula)
+// دالة حساب المسافة الدقيقة بين نقطتين بالأمتار (Haversine Formula)
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -18,7 +18,7 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return Math.round(R * c);
 }
 
-// 1. جلب كافة سجلات الحضور والانصراف
+// 1. استرجاع حركات البصمة
 export async function GET(request: NextRequest) {
   try {
     const raw = await db.execute(sql`
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. تسجيل حركة الحضور أو الانصراف مع القفل الجغرافي وإشعار المدير المباشر
+// 2. تسجيل حركة الحضور أو الانصراف مع القفل الجغرافي الصارم
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -83,47 +83,43 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // استخراج بيانات الموظف والفرع التابع له
     let targetUserId = reqUserId;
     if (!targetUserId) {
       const authHeader = request.headers.get('x-user-id');
       if (authHeader) targetUserId = authHeader;
     }
 
-    let userQuery;
-    if (targetUserId) {
-      userQuery = sql`
-        SELECT 
-          u.id, 
-          COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
-          COALESCE(u.primary_branch_id, u.branch_id, 1) as branch_id,
-          u.working_hours_per_day,
-          b.latitude as branch_lat,
-          b.longitude as branch_lng,
-          COALESCE(b.geofence_radius, 60) as branch_radius,
-          COALESCE(b.name_ar, b.name, 'الفرع') as branch_name
-        FROM users u
-        LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id, 1) = b.id
-        WHERE u.id::text = ${targetUserId.toString()}
-        LIMIT 1;
-      `;
-    } else {
-      userQuery = sql`
-        SELECT 
-          u.id, 
-          COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
-          COALESCE(u.primary_branch_id, u.branch_id, 1) as branch_id,
-          u.working_hours_per_day,
-          b.latitude as branch_lat,
-          b.longitude as branch_lng,
-          COALESCE(b.geofence_radius, 60) as branch_radius,
-          COALESCE(b.name_ar, b.name, 'الفرع') as branch_name
-        FROM users u
-        LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id, 1) = b.id
-        ORDER BY u.last_login_at DESC NULLS LAST, u.id ASC 
-        LIMIT 1;
-      `;
-    }
+    let userQuery = targetUserId
+      ? sql`
+          SELECT 
+            u.id, 
+            COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
+            COALESCE(u.primary_branch_id, u.branch_id, 1) as branch_id,
+            u.working_hours_per_day,
+            b.latitude as branch_lat,
+            b.longitude as branch_lng,
+            COALESCE(b.geofence_radius, 60) as branch_radius,
+            COALESCE(b.name_ar, b.name, 'الفرع') as branch_name
+          FROM users u
+          LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id, 1) = b.id
+          WHERE u.id::text = ${targetUserId.toString()}
+          LIMIT 1;
+        `
+      : sql`
+          SELECT 
+            u.id, 
+            COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
+            COALESCE(u.primary_branch_id, u.branch_id, 1) as branch_id,
+            u.working_hours_per_day,
+            b.latitude as branch_lat,
+            b.longitude as branch_lng,
+            COALESCE(b.geofence_radius, 60) as branch_radius,
+            COALESCE(b.name_ar, b.name, 'الفرع') as branch_name
+          FROM users u
+          LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id, 1) = b.id
+          ORDER BY u.last_login_at DESC NULLS LAST, u.id ASC 
+          LIMIT 1;
+        `;
 
     const userRaw = await db.execute(userQuery);
     const userRows = Array.isArray(userRaw) ? userRaw : (userRaw as any)?.rows || [];
@@ -135,7 +131,6 @@ export async function POST(request: NextRequest) {
     const userId = user.id;
     const branchId = user.branch_id || 1;
 
-    // حساب المسافة الدقيقة بين الهاتف والفرع على السيرفر
     let actualDistance = 0;
     const branchLat = parseFloat(user.branch_lat);
     const branchLng = parseFloat(user.branch_lng);
@@ -145,7 +140,6 @@ export async function POST(request: NextRequest) {
       actualDistance = calculateDistanceMeters(userLat, userLng, branchLat, branchLng);
     }
 
-    // القفل الجغرافي الصارم (Geofence Validation)
     if (!isNaN(branchLat) && !isNaN(branchLng) && actualDistance > allowedRadius) {
       return NextResponse.json({
         success: false,
@@ -155,7 +149,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // تحديد التوقيت (في حال تم التسجيل أوفلاين يتم اعتماد التوقيت الفعلي للحركة)
     const recordTime = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
     const workDateStr = recordTime.toISOString().slice(0, 10);
 
@@ -224,7 +217,6 @@ export async function POST(request: NextRequest) {
         `);
       }
 
-      // إرسال إشعار فوري لمديري النظام ومدير الفرع
       try {
         const managers = await db.execute(sql`
           SELECT id FROM users 
@@ -272,7 +264,6 @@ export async function POST(request: NextRequest) {
         WHERE id = ${existingLog.id};
       `);
 
-      // إرسال إشعار الانصراف للمديرين
       try {
         const managers = await db.execute(sql`
           SELECT id FROM users 
