@@ -48,7 +48,10 @@ export async function GET(request: NextRequest) {
         b.latitude as "branchLat",
         b.longitude as "branchLng",
         COALESCE(b.geofence_radius, 150) as "branchRadius",
-        TO_CHAR(u.created_at, 'YYYY-MM-DD') as "hireDate"
+        TO_CHAR(u.created_at, 'YYYY-MM-DD') as "hireDate",
+        COALESCE(u.shift_name, 'الشيفت الصباحي') as "shiftName",
+        COALESCE(u.shift_start_time, '10:00') as "shiftStartTime",
+        COALESCE(u.shift_end_time, '18:00') as "shiftEndTime"
       FROM users u
       LEFT JOIN branches b ON b.id = COALESCE(u.primary_branch_id, u.branch_id, 1)
       WHERE ${empId ? sql`u.id::text = ${empId}` : sql`1=1`}
@@ -60,5 +63,88 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('Employees GET error:', error);
     return NextResponse.json([], { status: 200 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const {
+      id,
+      fullNameAr,
+      phone,
+      branchId,
+      role,
+      monthlySalary,
+      workingHoursPerDay,
+      isActive,
+      shiftStartTime,
+      shiftEndTime,
+      shiftName,
+    } = body;
+
+    if (!fullNameAr || !phone) {
+      return NextResponse.json({ message: 'الاسم ورقم الهاتف مطلوبان' }, { status: 400 });
+    }
+
+    if (id) {
+      // تعديل موظف حالي
+      await db.execute(sql`
+        UPDATE users
+        SET 
+          full_name_ar = ${fullNameAr},
+          phone = ${phone},
+          primary_branch_id = ${branchId ? parseInt(branchId, 10) : 1},
+          job_role = ${role || 'موظف'},
+          monthly_salary = ${monthlySalary ? parseFloat(monthlySalary) : 5000},
+          working_hours_per_day = ${workingHoursPerDay ? parseInt(workingHoursPerDay, 10) : 8},
+          is_active = ${isActive !== false},
+          shift_start_time = ${shiftStartTime || '10:00'},
+          shift_end_time = ${shiftEndTime || '18:00'},
+          shift_name = ${shiftName || 'شيفت مخصص'},
+          updated_at = NOW()
+        WHERE id = ${parseInt(id, 10)};
+      `);
+      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الموظف والشيفت بنجاح' });
+    } else {
+      // إضافة موظف جديد
+      await db.execute(sql`
+        INSERT INTO users (
+          full_name_ar,
+          phone,
+          password_hash,
+          primary_branch_id,
+          job_role,
+          system_role,
+          monthly_salary,
+          working_hours_per_day,
+          is_active,
+          shift_start_time,
+          shift_end_time,
+          shift_name,
+          created_at,
+          updated_at
+        ) VALUES (
+          ${fullNameAr},
+          ${phone},
+          '123456',
+          ${branchId ? parseInt(branchId, 10) : 1},
+          ${role || 'عضو مطبخ'},
+          'EMPLOYEE',
+          ${monthlySalary ? parseFloat(monthlySalary) : 5000},
+          ${workingHoursPerDay ? parseInt(workingHoursPerDay, 10) : 8},
+          true,
+          ${shiftStartTime || '10:00'},
+          ${shiftEndTime || '18:00'},
+          ${shiftName || 'شيفت مخصص'},
+          NOW(),
+          NOW()
+        );
+      `);
+      return NextResponse.json({ success: true, message: 'تم إضافة الموظف الجديد بنجاح' });
+    }
+  } catch (error: any) {
+    console.error('Employees POST error:', error);
+    return NextResponse.json({ message: error?.message || 'فشل حفظ الموظف' }, { status: 500 });
   }
 }
