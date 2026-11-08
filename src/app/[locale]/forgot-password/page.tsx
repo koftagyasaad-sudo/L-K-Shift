@@ -1,160 +1,370 @@
 'use client';
 
-import React, { useState, use } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { KeyRound, Phone, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import {
+  Phone,
+  KeyRound,
+  Lock,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Send,
+  Eye,
+  EyeOff,
+  RefreshCw,
+} from 'lucide-react';
 
-interface PageProps {
-  params: Promise<{
-    locale: string;
-  }>;
-}
-
-export default function ForgotPasswordPage({ params }: PageProps) {
-  const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
+export default function ForgotPasswordPage() {
   const router = useRouter();
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ar';
+  const isRtl = locale === 'ar';
 
-  const [step, setStep] = useState<1 | 2>(1);
+  // المراحل: 1 = إرسال الـ OTP، 2 = إدخال وتأكيد الـ OTP، 3 = تعيين الباسورد الجديد
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [resetToken, setResetToken] = useState('');
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // مؤقت إعادة الإرسال
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  // الخطوة 1: إرسال كود الـ OTP عبر الـ SMS
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!phone.trim()) {
+      setStatusMsg({ type: 'err', text: 'يرجى إدخال رقم الهاتف المسجل' });
+      return;
+    }
+
     setLoading(true);
-    setMsg(null);
+    setStatusMsg(null);
+
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ action: 'SEND_OTP', phone: phone.trim() }),
       });
+
       const data = await res.json();
-      if (res.ok) {
-        setStep(2);
-        setMsg({ type: 'ok', text: `تم إرسال الكود بنجاح. كود الاختبار السريع: ${data.debugCode || ''}` });
-      } else {
-        setMsg({ type: 'err', text: data.message || 'رقم الهاتف غير مسجل بالنظام' });
-      }
-    } catch {
-      setMsg({ type: 'err', text: 'فشل الاتصال بالسيرفر' });
+      if (!res.ok) throw new Error(data.message || 'فشل إرسال كود التحقق');
+
+      setStatusMsg({ type: 'ok', text: data.message });
+      setStep(2);
+      setResendCooldown(60);
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء إرسال الكود' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleReset = async (e: React.FormEvent) => {
+  // الخطوة 2: تأكيد كود الـ OTP المستلم في رسالة الـ SMS
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (otp.trim().length < 4) {
+      setStatusMsg({ type: 'err', text: 'يرجى إدخال كود التحقق المكون من 6 أرقام المستلم على هاتفك' });
+      return;
+    }
+
     setLoading(true);
-    setMsg(null);
+    setStatusMsg(null);
+
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'VERIFY_OTP', phone: phone.trim(), otp: otp.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'كود التحقق غير صحيح');
+
+      setResetToken(data.resetToken);
+      setStatusMsg({ type: 'ok', text: 'تم التحقق بنجاح! يمكنك الآن تعيين كلمة مرور قوية جديدة.' });
+      setStep(3);
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err.message || 'كود التحقق غير صحيح' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // الخطوة 3: تعيين كلمة المرور الجديدة
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatusMsg(null);
+
+    if (newPassword !== confirmPassword) {
+      setStatusMsg({ type: 'err', text: 'كلمة المرور وتأكيدها غير متطابقين!' });
+      return;
+    }
+
+    // فحص شروط القوة
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasNumber = /\d/.test(newPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
+
+    if (newPassword.length < 8 || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+      setStatusMsg({
+        type: 'err',
+        text: 'كلمة المرور يجب أن تتكون من 8 خانات على الأقل، وتحتوي على حرف كبير، وحرف صغير، ورقم، ورمز خاص (مثل: @, #, $, %).',
+      });
+      return;
+    }
+
+    setLoading(true);
+
     try {
       const res = await fetch('/api/auth/reset-password', {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp, newPassword }),
+        body: JSON.stringify({
+          phone: phone.trim(),
+          resetToken,
+          newPassword,
+        }),
       });
+
       const data = await res.json();
-      if (res.ok) {
-        setMsg({ type: 'ok', text: 'تم تغيير كلمة المرور بنجاح! جاري تحويلك لتسجيل الدخول...' });
-        setTimeout(() => router.push(`/${locale}/login`), 2000);
-      } else {
-        setMsg({ type: 'err', text: data.message || 'كود التحقق غير صحيح' });
-      }
-    } catch {
-      setMsg({ type: 'err', text: 'فشل الاتصال بالسيرفر' });
+      if (!res.ok) throw new Error(data.message || 'فشل تحديث كلمة المرور');
+
+      setStatusMsg({ type: 'ok', text: 'تم تغيير كلمة المرور بنجاح! جاري تحويلك لصفحة تسجيل الدخول...' });
+      setTimeout(() => {
+        router.push(`/${locale}/login`);
+      }, 1500);
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#080911]" dir="rtl">
-      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-black text-white">استعادة كلمة المرور</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            {step === 1 ? 'أدخل رقم الهاتف المسجل لإرسال كود التحقق' : 'أدخل الكود وكلمة المرور الجديدة'}
+    <div
+      className="min-h-screen bg-[#0c0e18] flex items-center justify-center p-4 text-white relative overflow-hidden"
+      dir={isRtl ? 'rtl' : 'ltr'}
+    >
+      {/* هالة خلفية متدرجة */}
+      <div className="absolute w-96 h-96 rounded-full bg-orange-600/10 blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-md bg-[#161928] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10 space-y-6">
+        {/* اللوجو والعنوان */}
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-2 mx-auto flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <img src="/Logo.png" alt="Logo" className="w-full h-full object-contain filter drop-shadow brightness-110" />
+          </div>
+          <h1 className="text-xl font-black text-white tracking-tight">استعادة كلمة المرور (OTP)</h1>
+          <p className="text-xs text-slate-400">
+            {step === 1 && 'أدخل رقم هاتفك لاستلام رمز التحقق في رسالة نصية قصيرة'}
+            {step === 2 && `أدخل كود التحقق المرسل في رسالة SMS إلى هاتفك (${phone})`}
+            {step === 3 && 'قم بإنشاء كلمة مرور قوية وجديدة لحسابك'}
           </p>
         </div>
 
-        {msg && (
+        {/* مؤشر المراحل */}
+        <div className="flex items-center justify-center gap-2">
+          {[1, 2, 3].map((s) => (
+            <div
+              key={s}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                step === s ? 'w-8 bg-orange-500' : step > s ? 'w-4 bg-emerald-500' : 'w-4 bg-white/10'
+              }`}
+            />
+          ))}
+        </div>
+
+        {statusMsg && (
           <div
-            className={`p-3.5 rounded-xl flex items-center gap-2 text-xs font-bold ${
-              msg.type === 'ok'
+            className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2.5 ${
+              statusMsg.type === 'ok'
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                 : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
             }`}
           >
-            {msg.type === 'ok' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            <span>{msg.text}</span>
+            {statusMsg.type === 'ok' ? <CheckCircle2 size={16} className="shrink-0" /> : <AlertCircle size={16} className="shrink-0" />}
+            <span className="leading-relaxed">{statusMsg.text}</span>
           </div>
         )}
 
-        {step === 1 ? (
+        {/* المرحلة 1: طلب رقم الهاتف */}
+        {step === 1 && (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">رقم الهاتف المسجل</label>
-              <input
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="010XXXXXXXX"
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm font-mono text-left focus:outline-none focus:border-orange-500"
-                dir="ltr"
-              />
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم التليفون المسجل بالحساب</label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white font-mono focus:outline-none focus:border-orange-500 transition text-left"
+                  dir="ltr"
+                />
+                <Phone size={16} className="absolute right-4 top-3.5 text-slate-500" />
+              </div>
             </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-rose-600 text-white py-3.5 rounded-xl text-xs font-bold shadow-lg hover:opacity-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white font-black text-xs shadow-lg shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-              {loading ? 'جاري الإرسال...' : 'إرسال كود التحقق'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleReset} className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">كود التحقق (OTP)</label>
-              <input
-                type="text"
-                required
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                placeholder="أدخل الـ 6 أرقام"
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-center text-lg font-mono tracking-widest focus:outline-none focus:border-orange-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">كلمة المرور الجديدة</label>
-              <input
-                type="password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-rose-600 text-white py-3.5 rounded-xl text-xs font-bold shadow-lg hover:opacity-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-              {loading ? 'جاري التعيين...' : 'تأكيد وتعيين كلمة المرور'}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+              <span>إرسال رمز التحقق OTP في رسالة SMS</span>
             </button>
           </form>
         )}
 
-        <div className="text-center pt-2">
-          <Link href={`/${locale}/login`} className="text-xs text-orange-400 hover:underline inline-flex items-center gap-1 font-semibold">
-            <ArrowRight size={14} /> العودة لصفحة تسجيل الدخول
+        {/* المرحلة 2: إدخال كود الـ OTP */}
+        {step === 2 && (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">كود التحقق (OTP)</label>
+              <input
+                type="text"
+                required
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="------"
+                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3.5 text-center text-lg tracking-[0.5em] font-mono font-black text-orange-400 focus:outline-none focus:border-orange-500 transition"
+                dir="ltr"
+              />
+              <span className="text-[11px] text-slate-400 block mt-1.5 text-center">
+                تم إرسال الكود إلى {phone} في رسالة SMS
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white font-black text-xs shadow-lg shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+              <span>تأكيد الكود ومتابعة</span>
+            </button>
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                تغيير رقم الهاتف
+              </button>
+
+              <button
+                type="button"
+                disabled={resendCooldown > 0 || loading}
+                onClick={() => handleSendOtp()}
+                className="text-orange-400 hover:underline disabled:opacity-40 transition cursor-pointer flex items-center gap-1"
+              >
+                <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+                <span>{resendCooldown > 0 ? `إعادة الإرسال بعد (${resendCooldown}ث)` : 'إعادة إرسال الكود'}</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* المرحلة 3: تعيين كلمة المرور الجديدة والقوية */}
+        {step === 3 && (
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور الجديدة *</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="أدخل كلمة مرور قوية"
+                  className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1.5">تأكيد كلمة المرور الجديدة *</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="أعد إدخال كلمة المرور"
+                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
+                dir="ltr"
+              />
+            </div>
+
+            {/* شروط الأمان الإلزامية */}
+            <div className="bg-[#0c0e18] p-3 rounded-2xl border border-white/5 space-y-1 text-[11px]">
+              <span className="font-bold text-slate-300 block mb-1">شروط كلمة المرور القوية:</span>
+              <p className={newPassword.length >= 8 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                ✓ 8 خانات على الأقل
+              </p>
+              <p className={/[A-Z]/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                ✓ حرف كبير واحد على الأقل (Capital)
+              </p>
+              <p className={/[a-z]/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                ✓ حرف صغير واحد على الأقل (Small)
+              </p>
+              <p className={/\d/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                ✓ رقم واحد على الأقل (0-9)
+              </p>
+              <p className={/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                ✓ رمز خاص واحد على الأقل (مثل: @, #, $, %)
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white font-black text-xs shadow-lg shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={15} />}
+              <span>تحديث وتأكيد كلمة المرور الآن</span>
+            </button>
+          </form>
+        )}
+
+        {/* العودة لتسجيل الدخول */}
+        <div className="text-center pt-2 border-t border-white/5">
+          <Link
+            href={`/${locale}/login`}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition"
+          >
+            <ArrowRight size={13} />
+            <span>العودة إلى صفحة تسجيل الدخول</span>
           </Link>
         </div>
       </div>
