@@ -8,11 +8,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Bell,
-  CheckCircle2,
-  AlertCircle,
   Clock,
   Calendar,
-  MessageSquare,
   ShieldAlert,
   CheckCheck,
   Volume2,
@@ -34,7 +31,6 @@ interface NotificationItem {
   createdAt: string;
 }
 
-// محرك صوت وحيد دائم لتجنب قيود المتصفح
 let sharedAudioCtx: AudioContext | null = null;
 
 function getSharedAudioContext(): AudioContext | null {
@@ -51,32 +47,69 @@ function getSharedAudioContext(): AudioContext | null {
   return sharedAudioCtx;
 }
 
-function playPermanentChime() {
+// دالة رنين صفارة قوية ومرتفعة الصوت (High-Pitch Loud Double Alert)
+function playLoudNotificationAlert() {
   try {
     const ctx = getSharedAudioContext();
     if (!ctx) return;
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const now = ctx.currentTime;
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.15);
+    // نبضة الصوت الأولى (1046 Hz - C6)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'square'; // موجة مربعة مسموعة بوضوح وقوة في الهاتف
+    osc1.frequency.setValueAtTime(1046.5, now);
+    gain1.gain.setValueAtTime(0.8, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.2);
 
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    // نبضة الصوت الثانية الأعلى والأقوى (1567 Hz - G6)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(1567.98, now + 0.22);
+    gain2.gain.setValueAtTime(0.9, now + 0.22);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.22);
+    osc2.stop(now + 0.5);
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.5);
-
+    // اهتزاز ثلاثي قوي للهاتف
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([150, 80, 150]);
+      navigator.vibrate([300, 150, 300]);
     }
   } catch (e) {
-    console.warn('Audio play warning:', e);
+    console.warn('Audio alert error:', e);
+  }
+}
+
+// إطلاق إشعار خارجي في درج الإشعارات وشاشة القفل عبر الـ Service Worker
+function triggerSystemOSNotification(title: string, message: string) {
+  if (typeof window === 'undefined') return;
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.showNotification(title, {
+          body: message,
+          icon: '/Logo.png',
+          badge: '/Logo.png',
+          vibrate: [300, 150, 300],
+          tag: 'lk-shift-os-alert',
+          renotify: true,
+          requireInteraction: true,
+        });
+      }).catch(() => {
+        new Notification(title, { body: message, icon: '/Logo.png' });
+      });
+    } else {
+      new Notification(title, { body: message, icon: '/Logo.png' });
+    }
   }
 }
 
@@ -88,13 +121,10 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
   const [userName, setUserName] = useState('عمر محمد سعيد عبدالحليم');
   const [userRole, setUserRole] = useState('مدير النظام');
-  const [userId, setUserId] = useState<string>('');
-
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // تم تصحيح القيمة الأولية إلى -1 ليعمل الصوت دائماً في كل مرة يصل إشعار جديد
   const prevUnreadCountRef = useRef<number>(-1);
   const [hasAudioUnlocked, setHasAudioUnlocked] = useState<boolean>(true);
   const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
@@ -103,10 +133,8 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     try {
       const storedName = localStorage.getItem('userName');
       const storedRole = localStorage.getItem('userRole');
-      const storedId = localStorage.getItem('userId') || '';
       if (storedName) setUserName(storedName);
       if (storedRole) setUserRole(storedRole);
-      if (storedId) setUserId(storedId);
 
       const unlocked = localStorage.getItem('audio_notifications_unlocked');
       if (!unlocked) {
@@ -121,21 +149,18 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
       if (ctx && ctx.state === 'suspended') {
         await ctx.resume();
       }
-      playPermanentChime();
+      playLoudNotificationAlert();
       localStorage.setItem('audio_notifications_unlocked', 'true');
       setHasAudioUnlocked(true);
 
       if (typeof window !== 'undefined' && 'Notification' in window) {
         const perm = await Notification.requestPermission();
         if (perm === 'granted') {
-          new Notification('L-K Shift Core', {
-            body: 'تم تفعيل التنبيهات الصوتية وإشعارات الهاتف بنجاح!',
-            icon: '/Logo.png',
-          });
+          triggerSystemOSNotification('L-K Shift Core', 'تم تفعيل التنبيهات الصوتية القوية وقائمة إشعارات الهاتف بنجاح!');
         }
       }
     } catch (e) {
-      console.warn('Audio unlock error:', e);
+      console.warn('Unlock audio error:', e);
     }
   };
 
@@ -152,16 +177,12 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
         const currentUnread = items.filter((n) => !n.isRead).length;
 
-        // تشغيل صوت الإشعار مع الاهتزاز في كل مرة يزيد فيها عدد الإشعارات غير المقروءة
         if (prevUnreadCountRef.current !== -1 && currentUnread > prevUnreadCountRef.current) {
-          playPermanentChime();
+          playLoudNotificationAlert();
 
           const newest = items.find((n) => !n.isRead);
-          if (newest && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(newest.title, {
-              body: newest.message,
-              icon: '/Logo.png',
-            });
+          if (newest) {
+            triggerSystemOSNotification(newest.title, newest.message);
           }
         }
         prevUnreadCountRef.current = currentUnread;
@@ -185,7 +206,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // منبه الوردية
+  // فحص منبه اقتراب الوردية
   useEffect(() => {
     const checkShiftAlarm = () => {
       const branchShift = localStorage.getItem('userBranchShift') || '10:00';
@@ -203,15 +224,11 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
       [60, 30, 15].forEach((intervalMinutes) => {
         if (diffMinutes === intervalMinutes && !shiftNotified[`${intervalMinutes}`]) {
-          playPermanentChime();
-
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification('منبه بداية الشيفت - L-K Shift', {
-              body: `تنبيه: ستبدأ ورديتك خلال ${intervalMinutes} دقيقة! يرجى الاستعداد لتسجيل البصمة.`,
-              icon: '/Logo.png',
-            });
-          }
-
+          playLoudNotificationAlert();
+          triggerSystemOSNotification(
+            'منبه موعد الوردية - L-K Shift',
+            `تنبيه هام: ستبدأ وردية العمل خلال ${intervalMinutes} دقيقة! يرجى الاستعداد لتسجيل البصمة داخل الفرع.`
+          );
           setShiftNotified((prev) => ({ ...prev, [`${intervalMinutes}`]: true }));
         }
       });
@@ -265,8 +282,6 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     switch (type) {
       case 'ATTENDANCE':
         return <Clock size={16} className="text-emerald-600" />;
-      case 'ADVANCE':
-        return <Clock size={16} className="text-emerald-500" />;
       case 'PERMISSION':
         return <Clock size={16} className="text-amber-500" />;
       case 'COMPLAINT':
