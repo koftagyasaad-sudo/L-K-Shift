@@ -73,6 +73,45 @@ interface BranchOption {
   nameAr: string;
 }
 
+// دالة ذكية تقرأ أي صيغة وقت صادرة من قاعدة البيانات أو ماكينة البصمة وتمنع ظهور الشرطة
+function formatTimeArabic(val: any): string {
+  if (!val) return '—';
+
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.includes('ص') || trimmed.includes('م')) return trimmed;
+
+    // فحص إذا كان الوقت بصيغة HH:mm:ss أو HH:mm
+    const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*(AM|PM|am|pm))?$/);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      const m = timeMatch[2];
+      const ampm = timeMatch[4]?.toUpperCase()?.trim();
+      if (ampm === 'PM' && h < 12) h += 12;
+      if (ampm === 'AM' && h === 12) h = 0;
+      const period = h >= 12 ? 'م' : 'ص';
+      const displayH = h % 12 || 12;
+      return `${displayH}:${m} ${period}`;
+    }
+  }
+
+  try {
+    let d = new Date(val);
+    if (isNaN(d.getTime()) && typeof val === 'string') {
+      d = new Date(`2000-01-01T${val}`);
+    }
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+  } catch {}
+
+  return typeof val === 'string' ? val : '—';
+}
+
 export default function EmployeesManagementPage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
@@ -82,11 +121,9 @@ export default function EmployeesManagementPage() {
   const [allBranches, setAllBranches] = useState<BranchOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // الفلاتر
   const [branchFilter, setBranchFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // قائمة الأدوار الوظيفية المسجلة بالسيستم
   const [systemRoles, setSystemRoles] = useState<string[]>([
     'مدير النظام',
     'مدير عام',
@@ -104,13 +141,11 @@ export default function EmployeesManagementPage() {
     'موظف',
   ]);
 
-  // المودالات
   const [selectedHrEmployee, setSelectedHrEmployee] = useState<EmployeeItem | null>(null);
   const [selectedZkEmployee, setSelectedZkEmployee] = useState<EmployeeItem | null>(null);
   const [zkRecords, setZkRecords] = useState<any[]>([]);
   const [zkLoading, setZkLoading] = useState(false);
 
-  // مودال التعديل
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Partial<EmployeeItem>>({});
   const [savingEmp, setSavingEmp] = useState(false);
@@ -125,7 +160,6 @@ export default function EmployeesManagementPage() {
         setEmployees(Array.isArray(dataE) ? dataE : []);
       }
 
-      // جلب كافة الفروع المسجلة في السيستم مباشرة
       const resB = await fetch('/api/branches', { cache: 'no-store' });
       if (resB.ok) {
         const dataB = await resB.json();
@@ -137,7 +171,6 @@ export default function EmployeesManagementPage() {
         setAllBranches(mappedB);
       }
 
-      // جلب أي أدوار مخصصة من السيستم
       const resR = await fetch('/api/roles', { cache: 'no-store' });
       if (resR.ok) {
         const dataR = await resR.json();
@@ -252,7 +285,7 @@ export default function EmployeesManagementPage() {
 
   return (
     <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية بلون رصاصي فاتح */}
+      {/* الترويسة الرئيسية */}
       <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-600 rounded-2xl">
@@ -282,7 +315,7 @@ export default function EmployeesManagementPage() {
         </div>
       </div>
 
-      {/* البحث وفلتر الفروع المسجلة بالكامل */}
+      {/* البحث وفلتر الفروع */}
       <div className="bg-slate-100 border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row gap-3 items-center">
         <div className="w-full sm:w-60">
           <select
@@ -398,7 +431,7 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* مودال تعديل بيانات الموظف مع قائمة اختيار الفروع والأدوار الكاملة */}
+      {/* مودال تعديل الموظف */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
@@ -469,7 +502,6 @@ export default function EmployeesManagementPage() {
                   />
                 </div>
 
-                {/* اختيار الفرع من كافة الفروع المسجلة بالنظام */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">فرع العمل *</label>
                   <select
@@ -485,7 +517,6 @@ export default function EmployeesManagementPage() {
                   </select>
                 </div>
 
-                {/* اختيار الدور من قائمة الأدوار المسجلة بالسيستم */}
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     الدور الوظيفي (اختيار من أدوار السيستم) *
@@ -504,7 +535,6 @@ export default function EmployeesManagementPage() {
                 </div>
               </div>
 
-              {/* مواعيد الوردية المخصصة */}
               <div className="bg-orange-50/70 border border-orange-200 p-4 rounded-2xl space-y-3">
                 <div className="flex items-center gap-2 text-xs font-black text-orange-700">
                   <Timer size={16} />
@@ -578,11 +608,10 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* 2. مودال شيت ZK بالشكل القديم والرسمي الكامل للمطاعم والشركات */}
+      {/* مودال شيت ZK مع قراءة الوقت بشكل صحيح 100% */}
       {selectedZkEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
           <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto bg-white border border-slate-300 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 custom-scrollbar text-slate-900 print:m-0 print:p-0 print:border-none print:shadow-none">
-            {/* الترويسة الرسمية لشيت ZK القديم */}
             <div className="flex items-center justify-between border-b-2 border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 flex items-center justify-center text-white font-black text-lg shadow-md">
@@ -617,7 +646,6 @@ export default function EmployeesManagementPage() {
               </div>
             </div>
 
-            {/* بيانات الموظف والتعاقد الأساسية */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-100 p-4 rounded-2xl border border-slate-300 text-xs">
               <div>
                 <span className="text-slate-500 block font-semibold">الموظف والكود:</span>
@@ -645,7 +673,6 @@ export default function EmployeesManagementPage() {
               </div>
             </div>
 
-            {/* جدول حركات البصمة التفصيلي */}
             {zkLoading ? (
               <div className="py-16 text-center text-xs text-slate-500">
                 <Loader2 size={26} className="animate-spin mx-auto text-blue-600 mb-2" />
@@ -680,11 +707,13 @@ export default function EmployeesManagementPage() {
                         <td className="p-3 border-l border-slate-200 font-mono font-bold text-slate-900">
                           {r.workDate}
                         </td>
+                        {/* هنا يتم فحص وتحويل وقت الحضور إلى توقيت صريح بنجاح */}
                         <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-emerald-700 bg-emerald-50/50">
-                          {r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {formatTimeArabic(r.checkInTime)}
                         </td>
+                        {/* هنا يتم فحص وتحويل وقت الانصراف بنجاح */}
                         <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-orange-700 bg-orange-50/50">
-                          {r.checkOutTime ? new Date(r.checkOutTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          {formatTimeArabic(r.checkOutTime)}
                         </td>
                         <td className="p-3 border-l border-slate-200 text-center font-mono font-black text-slate-900">
                           {r.workedMinutes > 0 ? `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د` : '—'}
@@ -710,7 +739,6 @@ export default function EmployeesManagementPage() {
               </div>
             )}
 
-            {/* ملخص إجمالي الشهر وخانات التوقيع الرسمية */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-100 p-4 rounded-2xl border border-slate-300 text-xs">
               <div className="space-y-1">
                 <span className="text-slate-600 font-bold block">ملخص الساعات الشهرية:</span>
@@ -733,7 +761,6 @@ export default function EmployeesManagementPage() {
               </div>
             </div>
 
-            {/* خانات الاعتماد والتوقيع عند الطباعة الورقية */}
             <div className="pt-6 border-t-2 border-slate-300 grid grid-cols-3 gap-4 text-center text-xs font-bold text-slate-700">
               <div className="space-y-6">
                 <span>توقيع الموظف بالعلم</span>
@@ -752,7 +779,7 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* 3. مودال ملف HR الرسمي الكامل */}
+      {/* مودال ملف HR */}
       {selectedHrEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 custom-scrollbar text-slate-800">
