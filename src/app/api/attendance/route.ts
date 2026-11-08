@@ -5,7 +5,6 @@ import { sql } from 'drizzle-orm';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// دالة حساب المسافة الدقيقة (Haversine Formula) مع حماية ضد عكس الإحداثيات
 function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -62,7 +61,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, latitude, longitude, photoBase64, userId: reqUserId, offlineTimestamp } = body;
+    const { action, latitude, longitude, photoBase64, userId: reqUserId, branchId: reqBranchId, offlineTimestamp } = body;
 
     if (!action || (action !== 'CHECK_IN' && action !== 'CHECK_OUT')) {
       return NextResponse.json({ message: 'نوع الحركة غير محدد (حضور أو انصراف)' }, { status: 400 });
@@ -70,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
       return NextResponse.json({
-        message: 'تعذر التقاط موقعك الجغرافي. يرجى تفعيل الـ GPS والسماح بالوصول للموقع.',
+        message: 'تعذر التقاط موقعك الجغرافي بدقة. يرجى تفعيل الـ GPS والسماح بالإذن.',
       }, { status: 400 });
     }
 
@@ -83,18 +82,19 @@ export async function POST(request: NextRequest) {
       if (authHeader) targetUserId = authHeader;
     }
 
+    // جلب بيانات الموظف والفرع
     const userRaw = await db.execute(sql`
       SELECT 
         u.id, 
         COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
-        COALESCE(u.primary_branch_id, u.branch_id, 1) as branch_id,
+        COALESCE(${reqBranchId ? parseInt(reqBranchId, 10) : null}, u.primary_branch_id, u.branch_id, 1) as branch_id,
         u.working_hours_per_day,
         b.latitude as branch_lat,
         b.longitude as branch_lng,
-        COALESCE(b.geofence_radius, 100) as branch_radius,
+        COALESCE(b.geofence_radius, 150) as branch_radius,
         COALESCE(b.name_ar, b.name, 'الفرع') as branch_name
       FROM users u
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id, 1) = b.id
+      LEFT JOIN branches b ON b.id = COALESCE(${reqBranchId ? parseInt(reqBranchId, 10) : null}, u.primary_branch_id, u.branch_id, 1)
       WHERE u.id::text = ${targetUserId ? targetUserId.toString() : '1'}
       LIMIT 1;
     `);
@@ -110,38 +110,47 @@ export async function POST(request: NextRequest) {
 
     let bLat = parseFloat(user.branch_lat);
     let bLng = parseFloat(user.branch_lng);
-    const allowedRadius = Number(user.branch_radius) || 100;
+    const allowedRadius = Number(user.branch_radius) || 150;
 
-    // فحص المسافة بالترتيب العادي وبالترتيب المعكوس لعلاج خطأ إدخال الفرع
     let actualDistance = calculateDistanceMeters(userLat, userLng, bLat, bLng);
     const invertedDistance = calculateDistanceMeters(userLat, userLng, bLng, bLat);
     if (invertedDistance < actualDistance) {
       actualDistance = invertedDistance;
     }
 
-    // السماح بهامش خطأ الأبراج داخل المباني (50 متر إضافية)
-    if (actualDistance > allowedRadius + 50) {
+    // السماح بهامش 100 متر للأبراج وضعف الإشارة داخل المطابخ والمباني
+    if (actualDistance > allowedRadius + 100) {
       return NextResponse.json({
         success: false,
-        message: `أنت خارج نطاق الفرع! المسافة المحسوبة: ${actualDistance} متر عن (${user.branch_name})، بينما النطاق المسموح هو ${allowedRadius} متر.`,
+        message: `أنت خارج نطاق ${user.branch_name}! المسافة: ${actualDistance}م (المسموح: ${allowedRadius}م).`,
         currentDistance: actualDistance,
         allowedRadius: allowedRadius,
       }, { status: 400 });
     }
 
-    // حساب تاريخ الوردية لنظام الشيفت الليلي (10 ص إلى 4 ص اليوم التالي)
+    // قاعدة الشيفت العام للمطعم (من 10:00 صباحاً حتى 04:00 فجراً لليوم التالي)
     const now = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
-    // تحويل التوقيت لتوقيت مصر (UTC+2)
+    // توقيت مصر UTC+2
     const cairoHour = (now.getUTCHours() + 2) % 24;
+    const cairoMinute = now.getUTCMinutes();
 
     let workDateObj = new Date(now);
-    // إذا كانت البصمة بين 12 منتصف الليل وحتى 6 صباحاً، تُعتبر تابعة لوردية اليوم السابق
+    // إذا تمت البصمة بين منتصف الليل (00:00) وحتى 06:00 صباحاً، تُحسب تبع وردية اليوم السابق
     if (cairoHour >= 0 && cairoHour < 6) {
       workDateObj.setDate(workDateObj.getDate() - 1);
     }
     const workDateStr = workDateObj.toISOString().slice(0, 10);
 
-    // البحث عن سجل اليوم لهذا الموظف
+    // حساب التأخير طبقاً للشيفت العام والمحدد (بداية استقبال العمل 10:00 صباحاً)
+    let lateMinutes = 0;
+    if (action === 'CHECK_IN' && cairoHour >= 10 && cairoHour < 24) {
+      const minutesSince10AM = (cairoHour - 10) * 60 + cairoMinute;
+      if (minutesSince10AM > 15) {
+        // سماح 15 دقيقة
+        lateMinutes = minutesSince10AM - 15;
+      }
+    }
+
     const checkExisting = await db.execute(sql`
       SELECT id, check_in_time, check_out_time 
       FROM attendance_logs
@@ -156,7 +165,6 @@ export async function POST(request: NextRequest) {
 
     if (action === 'CHECK_IN') {
       if (existingLog && existingLog.check_in_time) {
-        // إذا كان مسجلاً حضوراً من قبل، يتم تحديث موقعه وسيلفيه دون إنشاء يوم مكرر
         await db.execute(sql`
           UPDATE attendance_logs
           SET 
@@ -167,7 +175,7 @@ export async function POST(request: NextRequest) {
         `);
         return NextResponse.json({
           success: true,
-          message: 'تم تحديث بيانات حضورك للوردية الحالية بنجاح.',
+          message: 'تم تحديث بصمة حضورك للوردية الحالية بنجاح.',
         });
       }
 
@@ -180,11 +188,10 @@ export async function POST(request: NextRequest) {
         ) VALUES (
           ${userId}, ${branchId}, ${workDateStr}::date, NOW(),
           ${userLat}, ${userLng}, ${actualDistance},
-          ${photoBase64 || null}, 'ON_TIME', 0, 0, 0, NOW()
+          ${photoBase64 || null}, 'ON_TIME', 0, ${lateMinutes}, 0, NOW()
         );
       `);
 
-      // إرسال إشعار للمدير بأمان
       try {
         await db.execute(sql`
           INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
@@ -197,7 +204,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `تم تسجيل حضورك بنجاح في وردية (${workDateStr}) على بعد ${actualDistance}م.`,
+        message: `تم تسجيل حضورك في وردية (${workDateStr}) بنجاح داخل نطاق ${user.branch_name}.`,
       });
     }
 
@@ -208,7 +215,7 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // اعتماد البصمة الأخيرة دائماً وتحديث ساعات العمل بدقة
+      // اعتماد البصمة الأخيرة وإعادة حساب ساعات العمل الفعلية
       await db.execute(sql`
         UPDATE attendance_logs
         SET 
@@ -221,20 +228,9 @@ export async function POST(request: NextRequest) {
         WHERE id = ${existingLog.id};
       `);
 
-      // إشعار الانصراف
-      try {
-        await db.execute(sql`
-          INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
-          SELECT id, ${userId}, 'تسجيل انصراف موظف', 
-                 ${'سجل الموظف (' + user.user_name + ') انصرافه (البصمة الأخيرة)'},
-                 'ATTENDANCE', '/admin/attendance-review', false, NOW()
-          FROM users WHERE role IN ('SUPER_ADMIN', 'مدير النظام', 'مدير فرع') AND id != ${userId};
-        `);
-      } catch {}
-
       return NextResponse.json({
         success: true,
-        message: `تم اعتماد بصمة انصرافك الأخيرة بنجاح وتحديث ساعات عمل الوردية.`,
+        message: 'تم اعتماد بصمة انصرافك الأخيرة وتحديث إجمالي ساعات عمل الوردية.',
       });
     }
 
