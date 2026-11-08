@@ -1,6 +1,7 @@
 {
   "name": "L-K Shift Core",
   "short_name": "L-K Shift",
+  "id": "/?source=pwa",
   "description": "نظام إدارة الحضور والانصراف والورديات الميدانية",
   "start_url": "/ar/attendance",
   "scope": "/",
@@ -9,18 +10,35 @@
   "orientation": "portrait",
   "background_color": "#0c0e18",
   "theme_color": "#0c0e18",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/Logo.png",
-      "sizes": "192x192",
+      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/Logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/Logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "L-K Shift Mobile"
+    },
+    {
+      "src": "/Logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "L-K Shift Desktop"
     }
   ]
 }
