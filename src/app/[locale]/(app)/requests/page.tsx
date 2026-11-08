@@ -12,6 +12,8 @@ import {
   AlertCircle,
   MessageSquare,
   Timer,
+  Users2,
+  Building2,
 } from 'lucide-react';
 
 export default function EmployeeRequestsPage() {
@@ -20,7 +22,14 @@ export default function EmployeeRequestsPage() {
   const isRtl = locale === 'ar';
 
   const [userId, setUserId] = useState('');
-  const [requestType, setRequestType] = useState<'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT'>('LEAVE');
+  const [userRole, setUserRole] = useState('موظف');
+  const [isManager, setIsManager] = useState(false);
+
+  // أنواع الطلبات
+  const [requestType, setRequestType] = useState<
+    'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST'
+  >('LEAVE');
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [durationDays, setDurationDays] = useState('1');
@@ -32,13 +41,34 @@ export default function EmployeeRequestsPage() {
   const [permissionFromTime, setPermissionFromTime] = useState('');
   const [permissionToTime, setPermissionToTime] = useState('');
 
+  // تفاصيل طلب العمالة (خاص بالمديرين)
+  const [targetRole, setTargetRole] = useState('عضو مطبخ');
+  const [staffCount, setStaffCount] = useState('1');
+  const [targetBranch, setTargetBranch] = useState('فرع العمل الحالي');
+
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     const uid = localStorage.getItem('userId') || '';
+    const urole = localStorage.getItem('userRole') || 'موظف';
+    const permsRaw = localStorage.getItem('userPermissions') || '[]';
+    const perms: string[] = JSON.parse(permsRaw);
+
     setUserId(uid);
+    setUserRole(urole);
     setStartDate(new Date().toISOString().slice(0, 10));
+
+    // تحديد ما إذا كان المستخدم مديراً لإتاحة خيار طلب العمالة
+    const hasManagerRole =
+      urole === 'SUPER_ADMIN' ||
+      urole === 'مدير النظام' ||
+      urole.includes('مدير') ||
+      urole.includes('مشرف') ||
+      perms.includes('*') ||
+      perms.includes('manager');
+
+    setIsManager(hasManagerRole);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,6 +83,8 @@ export default function EmployeeRequestsPage() {
           ? `(من الساعة ${permissionFromTime} إلى الساعة ${permissionToTime})`
           : '';
       finalReason = `[مدة الإذن: ${permissionDuration} ${timeDetails}] - السبب: ${finalReason}`;
+    } else if (requestType === 'STAFF_REQUEST') {
+      finalReason = `[طلب عمالة: ${staffCount} ${targetRole} لمقر: ${targetBranch}] - مبررات الطلب: ${finalReason}`;
     }
 
     try {
@@ -64,9 +96,11 @@ export default function EmployeeRequestsPage() {
           requestType,
           startDate,
           endDate: requestType === 'LEAVE' ? endDate : startDate,
-          durationDays: requestType === 'PERMISSION' ? 0 : durationDays,
+          durationDays: requestType === 'STAFF_REQUEST' ? staffCount : durationDays,
           advanceAmount,
           reason: finalReason,
+          targetRole: requestType === 'STAFF_REQUEST' ? targetRole : null,
+          staffCount: requestType === 'STAFF_REQUEST' ? parseInt(staffCount, 10) : 1,
         }),
       });
 
@@ -76,7 +110,9 @@ export default function EmployeeRequestsPage() {
       setStatusMsg({
         type: 'ok',
         text:
-          requestType === 'COMPLAINT'
+          requestType === 'STAFF_REQUEST'
+            ? `تم إرسال طلب العمالة (${staffCount} ${targetRole}) بنجاح إلى مدير النظام وإدارة الموارد البشرية (HR).`
+            : requestType === 'COMPLAINT'
             ? 'تم إرسال الشكوى بنجاح إلى الإدارة المختصة.'
             : requestType === 'PERMISSION'
             ? `تم إرسال طلب إذن (${permissionDuration}) بنجاح للمراجعة والاعتماد.`
@@ -97,7 +133,7 @@ export default function EmployeeRequestsPage() {
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl">
         <h1 className="text-xl sm:text-2xl font-black text-white">تقديم الطلبات والشكاوى</h1>
         <p className="text-xs text-slate-400 mt-1">
-          تقديم الإجازات، أذونات التأخير والمغادرة المحددة بوقت، طلبات السلف، أو إرسال شكوى للإدارة
+          تقديم الإجازات، أذونات التأخير والمغادرة، طلبات السلف، أو طلبات احتياج العمالة للمديرين
         </p>
       </div>
 
@@ -119,29 +155,87 @@ export default function EmployeeRequestsPage() {
           {/* اختيار نوع الطلب */}
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">نوع الطلب</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
               {[
-                { id: 'LEAVE', label: 'طلب إجازة', icon: Calendar },
-                { id: 'PERMISSION', label: 'إذن تأخير / مغادرة', icon: Clock },
-                { id: 'ADVANCE', label: 'سلفة مالية', icon: DollarSign },
-                { id: 'COMPLAINT', label: 'شكوى', icon: MessageSquare },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setRequestType(t.id as any)}
-                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                    requestType === t.id
-                      ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white border-orange-500 shadow-md'
-                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <t.icon size={15} />
-                  <span>{t.label}</span>
-                </button>
-              ))}
+                { id: 'LEAVE', label: 'طلب إجازة', icon: Calendar, visible: true },
+                { id: 'PERMISSION', label: 'إذن تأخير/مغادرة', icon: Clock, visible: true },
+                { id: 'ADVANCE', label: 'سلفة مالية', icon: DollarSign, visible: true },
+                { id: 'COMPLAINT', label: 'شكوى', icon: MessageSquare, visible: true },
+                { id: 'STAFF_REQUEST', label: 'طلب عمالة', icon: Users2, visible: isManager },
+              ]
+                .filter((t) => t.visible)
+                .map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setRequestType(t.id as any)}
+                    className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      requestType === t.id
+                        ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white border-orange-500 shadow-md'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <t.icon size={15} />
+                    <span>{t.label}</span>
+                  </button>
+                ))}
             </div>
           </div>
+
+          {/* في حالة طلب عمالة (للمديرين فقط) */}
+          {requestType === 'STAFF_REQUEST' && (
+            <div className="sm:col-span-2 bg-orange-500/5 border border-orange-500/20 p-5 rounded-2xl space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-orange-400 border-b border-orange-500/10 pb-2">
+                <Users2 size={16} />
+                <span>بيانات احتياج العمالة المطلوب توفيرها من الـ HR:</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">الوظيفة المطلوبة</label>
+                  <select
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="عضو مطبخ">عضو مطبخ</option>
+                    <option value="شيف / طاهي">شيف / طاهي</option>
+                    <option value="كابتن صالة وويتر">كابتن صالة وويتر</option>
+                    <option value="كاشير">كاشير</option>
+                    <option value="كول سنتر">كول سنتر</option>
+                    <option value="دليفري / طيار">دليفري / طيار</option>
+                    <option value="مشرف وردية">مشرف وردية</option>
+                    <option value="عامل نظافة وخدمات">عامل نظافة وخدمات</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">العدد المطلوب</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    required
+                    value={staffCount}
+                    onChange={(e) => setStaffCount(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white font-mono font-bold rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">فرع / مكان الاحتياج</label>
+                  <input
+                    type="text"
+                    required
+                    value={targetBranch}
+                    onChange={(e) => setTargetBranch(e.target.value)}
+                    placeholder="مثال: فرع دسوق / كفر الشيخ"
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* في حالة الإذن: تحديد المدة والوقت */}
           {requestType === 'PERMISSION' && (
@@ -236,7 +330,11 @@ export default function EmployeeRequestsPage() {
 
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              {requestType === 'COMPLAINT' ? 'تفاصيل الشكوى' : 'سبب الطلب والتفاصيل'}
+              {requestType === 'STAFF_REQUEST'
+                ? 'أسباب ومبررات طلب العمالة والوردية المستهدفة'
+                : requestType === 'COMPLAINT'
+                ? 'تفاصيل الشكوى'
+                : 'سبب الطلب والتفاصيل'}
             </label>
             <textarea
               rows={3}
