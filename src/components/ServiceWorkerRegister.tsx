@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { syncOfflineAttendance } from '@/utils/offlineSync';
+import { syncOfflineAttendance } from '@/offlineSync';
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {
