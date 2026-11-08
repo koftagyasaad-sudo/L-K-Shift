@@ -19,9 +19,11 @@ import {
   Clock,
   ShieldCheck,
   Loader2,
-  Download,
-  AlertCircle,
+  Plus,
+  Save,
   CheckCircle2,
+  AlertCircle,
+  Timer,
 } from 'lucide-react';
 
 interface EmployeeItem {
@@ -59,6 +61,9 @@ interface EmployeeItem {
   branchId: number;
   branchName: string;
   hireDate: string;
+  shiftName?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
 }
 
 export default function EmployeesManagementPage() {
@@ -79,6 +84,12 @@ export default function EmployeesManagementPage() {
   const [zkRecords, setZkRecords] = useState<any[]>([]);
   const [zkLoading, setZkLoading] = useState(false);
 
+  // مودال التعديل وإضافة الموظف والشيفت
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<Partial<EmployeeItem>>({});
+  const [savingEmp, setSavingEmp] = useState(false);
+  const [modalStatusMsg, setModalStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
   const fetchEmployees = async () => {
     try {
       setLoading(true);
@@ -98,12 +109,11 @@ export default function EmployeesManagementPage() {
     fetchEmployees();
   }, []);
 
-  // فتح شيت ZK للموظف
   const handleOpenZkSheet = async (emp: EmployeeItem) => {
     setSelectedZkEmployee(emp);
     setZkLoading(true);
     try {
-      const res = await fetch(`/api/attendance/review/all?userId=${emp.id}`, { cache: 'no-store' });
+      const res = await fetch(`/api/attendance?userId=${emp.id}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         setZkRecords(Array.isArray(data) ? data : []);
@@ -112,6 +122,71 @@ export default function EmployeesManagementPage() {
       setZkRecords([]);
     } finally {
       setZkLoading(false);
+    }
+  };
+
+  // فتح مودال التعديل
+  const handleOpenEditModal = (emp?: EmployeeItem) => {
+    setModalStatusMsg(null);
+    if (emp) {
+      setEditingEmp({
+        id: emp.id,
+        fullNameAr: emp.fullNameAr,
+        phone: emp.phone,
+        employeeCode: emp.employeeCode,
+        role: emp.role,
+        branchId: emp.branchId || 1,
+        monthlySalary: emp.monthlySalary || 5000,
+        workingHoursPerDay: emp.workingHoursPerDay || 8,
+        isActive: emp.isActive !== false,
+        shiftName: emp.shiftName || 'الشيفت الصباحي (10 ص - 6 م)',
+        shiftStartTime: emp.shiftStartTime || '10:00',
+        shiftEndTime: emp.shiftEndTime || '18:00',
+      });
+    } else {
+      setEditingEmp({
+        id: undefined,
+        fullNameAr: '',
+        phone: '',
+        employeeCode: '',
+        role: 'عضو مطبخ',
+        branchId: 1,
+        monthlySalary: 5000,
+        workingHoursPerDay: 8,
+        isActive: true,
+        shiftName: 'الشيفت الصباحي (10 ص - 6 م)',
+        shiftStartTime: '10:00',
+        shiftEndTime: '18:00',
+      });
+    }
+    setIsEditModalOpen(true);
+  };
+
+  // حفظ التعديلات والشيفت المخصص
+  const handleSaveEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingEmp(true);
+    setModalStatusMsg(null);
+
+    try {
+      const res = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingEmp),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'فشل حفظ بيانات الموظف والشيفت');
+
+      setModalStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الموظف والشيفت بنجاح!' });
+      setTimeout(() => {
+        setIsEditModalOpen(false);
+        fetchEmployees();
+      }, 1000);
+    } catch (err: any) {
+      setModalStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
+    } finally {
+      setSavingEmp(false);
     }
   };
 
@@ -131,33 +206,44 @@ export default function EmployeesManagementPage() {
   );
 
   return (
-    <div className="space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* الترويسة الرئيسية */}
-      <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* الترويسة الرئيسية بلون رصاصي فاتح */}
+      <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-400 rounded-2xl">
+          <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-600 rounded-2xl">
             <Users size={22} />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white">إدارة شؤون الموظفين</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              تفريغ شيتات الحضور ZK، طباعة ملفات الـ HR الرسمية، والتحكم بالصلاحيات
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة شؤون الموظفين والورديات</h1>
+            <p className="text-xs text-slate-500 mt-1">
+              تحديد شيفت كل موظف، تفعيل التنبيهات المسبقة، تفريغ شيتات ZK، وطباعة ملفات HR
             </p>
           </div>
         </div>
 
-        <div className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs font-bold text-orange-400">
-          إجمالي الموظفين المسجلين: {employees.length}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => handleOpenEditModal()}
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-5 py-2.5 rounded-2xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer"
+          >
+            <Plus size={15} />
+            <span>إضافة موظف جديد</span>
+          </button>
+
+          <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700">
+            إجمالي الموظفين: {employees.length}
+          </div>
         </div>
       </div>
 
-      {/* البحث وفلتر الفرع */}
-      <div className="bg-[#0c0e18] border border-white/5 p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row gap-3 items-center">
+      {/* شريط البحث وفلتر الفرع */}
+      <div className="bg-slate-100 border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row gap-3 items-center">
         <div className="w-full sm:w-60">
           <select
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
+            className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
           >
             <option value="ALL">جميع الفروع</option>
             {uniqueBranches.map((b) => (
@@ -174,58 +260,76 @@ export default function EmployeesManagementPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="البحث بالاسم، رقم التليفون، أو الكود الوظيفي..."
-            className="w-full bg-slate-900 border border-slate-800 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-xs pl-8 focus:outline-none focus:border-orange-500"
+            className="w-full bg-white border border-slate-300 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-2.5 text-xs pl-8 focus:outline-none focus:border-orange-500"
           />
-          <Search size={14} className="absolute left-3 top-3 text-slate-500" />
+          <Search size={14} className="absolute left-3 top-3 text-slate-400" />
         </div>
       </div>
 
       {/* جدول الموظفين */}
       {loading ? (
-        <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-[#0c0e18] border border-white/5 rounded-3xl p-12">
+        <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-slate-100 border border-slate-200 rounded-3xl p-12">
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-          <p className="text-xs font-semibold text-slate-400">جاري تحميل بيانات الموظفين...</p>
+          <p className="text-xs font-semibold text-slate-500">جاري تحميل بيانات الموظفين...</p>
         </div>
       ) : (
-        <div className="bg-[#0c0e18] border border-white/5 rounded-3xl overflow-hidden shadow-xl">
+        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-900/80 border-b border-white/5 text-slate-400 font-bold">
+              <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold">
                 <tr>
                   <th className="p-4">الموظف والكود</th>
                   <th className="p-4">رقم الهاتف</th>
                   <th className="p-4">الفرع</th>
-                  <th className="p-4">الدور والصلاحية</th>
+                  <th className="p-4">وردية الشيفت المحددة</th>
+                  <th className="p-4">الدور الوظيفي</th>
                   <th className="p-4 text-center">الحالة</th>
                   <th className="p-4 text-center">الإجراءات والتقارير</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5 text-slate-300">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredEmployees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-white/5 transition">
+                  <tr key={emp.id} className="hover:bg-slate-50 transition">
                     <td className="p-4">
-                      <div className="font-bold text-white text-sm">{emp.fullNameAr}</div>
-                      <div className="text-[11px] font-mono text-orange-400 font-bold">#{emp.employeeCode}</div>
+                      <div className="font-bold text-slate-900 text-sm">{emp.fullNameAr}</div>
+                      <div className="text-[11px] font-mono text-orange-600 font-bold">#{emp.employeeCode}</div>
                     </td>
-                    <td className="p-4 font-mono text-slate-300">{emp.phone}</td>
-                    <td className="p-4 font-semibold text-slate-200">{emp.branchName}</td>
+                    <td className="p-4 font-mono text-slate-600">{emp.phone}</td>
+                    <td className="p-4 font-semibold text-slate-800">{emp.branchName}</td>
                     <td className="p-4">
-                      <span className="inline-block px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 font-bold text-[11px]">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 font-bold text-[11px]">
+                        <Timer size={12} />
+                        <span>{emp.shiftStartTime || '10:00'} - {emp.shiftEndTime || '18:00'}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[11px]">
                         {emp.role}
                       </span>
                     </td>
                     <td className="p-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
                         ✓ نشط
                       </span>
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-2">
+                        {/* زر التعديل الأصلي المعتمد */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(emp)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer"
+                          title="تعديل بيانات الموظف والفرع والشيفت"
+                        >
+                          <Edit2 size={13} />
+                          <span>تعديل</span>
+                        </button>
+
                         {/* زر شيت ZK */}
                         <button
                           type="button"
                           onClick={() => handleOpenZkSheet(emp)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-bold transition cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition cursor-pointer"
                           title="عرض وتفريغ شيت بصمات ZK للموظف"
                         >
                           <FileText size={13} />
@@ -236,7 +340,7 @@ export default function EmployeesManagementPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedHrEmployee(emp)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-xs font-bold transition cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition cursor-pointer"
                           title="عرض وطباعة الاستمارة الرسمية للموارد البشرية"
                         >
                           <UserCheck size={13} />
@@ -252,18 +356,174 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* 1. مودال شيت ZK المتكامل */}
+      {/* مودال تعديل بيانات الموظف والشيفت */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Edit2 size={18} className="text-orange-500" />
+                <span>{editingEmp.id ? `تعديل بيانات الموظف (#${editingEmp.employeeCode || ''})` : 'إضافة موظف جديد'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {modalStatusMsg && (
+              <div
+                className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                  modalStatusMsg.type === 'ok'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}
+              >
+                {modalStatusMsg.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                <span>{modalStatusMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEmployee} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الاسم بالكامل (رباعي) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingEmp.fullNameAr || ''}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, fullNameAr: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف (اسم الدخول) *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editingEmp.phone || ''}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, phone: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">فرع العمل *</label>
+                  <select
+                    value={editingEmp.branchId || 1}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, branchId: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-orange-500"
+                  >
+                    {uniqueBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الدور الوظيفي</label>
+                  <input
+                    type="text"
+                    value={editingEmp.role || 'عضو مطبخ'}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, role: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              {/* اختيار وتحديد الشيفت المخصص للموظف */}
+              <div className="bg-orange-50/70 border border-orange-200 p-4 rounded-2xl space-y-3">
+                <div className="flex items-center gap-2 text-xs font-black text-orange-700">
+                  <Timer size={16} />
+                  <span>تحديد مواعيد وردية الشيفت الخاصة بهذا الموظف:</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">بداية الشيفت (ساعة الحضور):</label>
+                    <input
+                      type="time"
+                      value={editingEmp.shiftStartTime || '10:00'}
+                      onChange={(e) => setEditingEmp({ ...editingEmp, shiftStartTime: e.target.value })}
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">نهاية الشيفت (ساعة الانصراف):</label>
+                    <input
+                      type="time"
+                      value={editingEmp.shiftEndTime || '18:00'}
+                      onChange={(e) => setEditingEmp({ ...editingEmp, shiftEndTime: e.target.value })}
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الراتب الشهري (جنيه)</label>
+                  <input
+                    type="number"
+                    value={editingEmp.monthlySalary || 5000}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, monthlySalary: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">ساعات العمل اليومية</label>
+                  <input
+                    type="number"
+                    value={editingEmp.workingHoursPerDay || 8}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, workingHoursPerDay: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEmp}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer disabled:opacity-50"
+                >
+                  {savingEmp ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>حفظ البيانات والشيفت</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* مودال شيت ZK */}
       {selectedZkEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0c0e18] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 custom-scrollbar">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 custom-scrollbar text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <FileText size={18} className="text-blue-400" />
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <FileText size={18} className="text-blue-600" />
                   <span>تفريغ شيت حضور ZK - {selectedZkEmployee.fullNameAr}</span>
                 </h3>
-                <span className="text-xs text-slate-400 font-mono mt-0.5 block">
-                  كود الموظف: #{selectedZkEmployee.employeeCode} | الفرع: {selectedZkEmployee.branchName}
+                <span className="text-xs text-slate-500 font-mono mt-0.5 block">
+                  #{selectedZkEmployee.employeeCode} | {selectedZkEmployee.branchName}
                 </span>
               </div>
 
@@ -276,77 +536,60 @@ export default function EmployeesManagementPage() {
                   <Printer size={13} />
                   <span>طباعة الشيت</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setSelectedZkEmployee(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+                  className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
             </div>
 
-            {/* بطاقة ملخص ساعات الراتب (ثابت 30 يوماً) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900/60 p-4 rounded-2xl border border-white/5 text-xs">
-              <div>
-                <span className="text-slate-400 block">الراتب الأساسي:</span>
-                <span className="font-mono font-bold text-emerald-400 text-sm">{selectedZkEmployee.monthlySalary} ج.م</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block">أجر اليوم (ثابت 30 يوم):</span>
-                <span className="font-mono font-bold text-slate-200 text-sm">{(selectedZkEmployee.monthlySalary / 30).toFixed(2)} ج.م</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block">إجمالي البصمات المسجلة:</span>
-                <span className="font-mono font-bold text-white text-sm">{zkRecords.length} وردية</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block">إجمالي الساعات الفعلية:</span>
-                <span className="font-mono font-bold text-orange-400 text-sm">
-                  {(zkRecords.reduce((acc, r) => acc + (r.workedMinutes || 0), 0) / 60).toFixed(1)} ساعة
-                </span>
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+              <div><span className="text-slate-500 block">الراتب الأساسي:</span><span className="font-mono font-bold text-emerald-600 text-sm">{selectedZkEmployee.monthlySalary} ج.م</span></div>
+              <div><span className="text-slate-500 block">أجر اليوم (30 يوم):</span><span className="font-mono font-bold text-slate-800 text-sm">{(selectedZkEmployee.monthlySalary / 30).toFixed(2)} ج.م</span></div>
+              <div><span className="text-slate-500 block">إجمالي البصمات:</span><span className="font-mono font-bold text-slate-900 text-sm">{zkRecords.length} وردية</span></div>
+              <div><span className="text-slate-500 block">إجمالي الساعات:</span><span className="font-mono font-bold text-orange-600 text-sm">{(zkRecords.reduce((acc, r) => acc + (r.workedMinutes || 0), 0) / 60).toFixed(1)} ساعة</span></div>
             </div>
 
-            {/* جدول حركات البصمة */}
             {zkLoading ? (
-              <div className="py-12 text-center text-xs text-slate-400">
-                <Loader2 size={24} className="animate-spin mx-auto text-blue-400 mb-2" />
+              <div className="py-12 text-center text-xs text-slate-500">
+                <Loader2 size={24} className="animate-spin mx-auto text-blue-600 mb-2" />
                 جاري سحب حركات الـ ZK...
               </div>
             ) : zkRecords.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400">لا توجد حركات بصمة مسجلة لهذا الموظف</div>
+              <div className="py-12 text-center text-xs text-slate-500">لا توجد حركات بصمة مسجلة لهذا الموظف</div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-white/5">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-900 text-slate-300 font-bold">
+                  <thead className="bg-slate-100 text-slate-700 font-bold">
                     <tr>
                       <th className="p-3">تاريخ الوردية</th>
                       <th className="p-3 text-center">وقت الحضور</th>
                       <th className="p-3 text-center">وقت الانصراف (الأخير)</th>
                       <th className="p-3 text-center">ساعات العمل</th>
                       <th className="p-3 text-center">التأخير</th>
-                      <th className="p-3 text-center">المسافة الجغرافية</th>
+                      <th className="p-3 text-center">المسافة</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5 text-slate-300">
+                  <tbody className="divide-y divide-slate-100">
                     {zkRecords.map((r) => (
-                      <tr key={r.id} className="hover:bg-white/5">
+                      <tr key={r.id} className="hover:bg-slate-50">
                         <td className="p-3 font-mono font-semibold">{r.workDate}</td>
-                        <td className="p-3 text-center font-mono font-bold text-emerald-400">
+                        <td className="p-3 text-center font-mono font-bold text-emerald-600">
                           {r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
-                        <td className="p-3 text-center font-mono font-bold text-orange-400">
+                        <td className="p-3 text-center font-mono font-bold text-orange-600">
                           {r.checkOutTime ? new Date(r.checkOutTime).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : '—'}
                         </td>
-                        <td className="p-3 text-center font-mono font-bold text-white">
+                        <td className="p-3 text-center font-mono font-bold text-slate-900">
                           {r.workedMinutes > 0 ? `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د` : '—'}
                         </td>
-                        <td className="p-3 text-center font-mono text-rose-400">
+                        <td className="p-3 text-center font-mono text-rose-600 font-bold">
                           {r.lateMinutes > 0 ? `${r.lateMinutes} دقيقة` : 'لا يوجد'}
                         </td>
-                        <td className="p-3 text-center font-mono text-slate-400">{Math.round(r.gpsDistance || 0)}م</td>
+                        <td className="p-3 text-center font-mono text-slate-500">{Math.round(r.gpsDistance || 0)}م</td>
                       </tr>
                     ))}
                   </tbody>
@@ -357,13 +600,13 @@ export default function EmployeesManagementPage() {
         </div>
       )}
 
-      {/* 2. مودال ملف HR الرسمي الكامل */}
+      {/* مودال ملف HR الرسمي الكامل */}
       {selectedHrEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#0c0e18] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 custom-scrollbar">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <UserCheck size={18} className="text-emerald-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 custom-scrollbar text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <UserCheck size={18} className="text-emerald-600" />
                 <span>ملف الموظف واستمارة الموارد البشرية (HR Record)</span>
               </h3>
 
@@ -376,84 +619,68 @@ export default function EmployeesManagementPage() {
                   <Printer size={13} />
                   <span>طباعة ملف HR</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setSelectedHrEmployee(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+                  className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
                 >
                   <X size={16} />
                 </button>
               </div>
             </div>
 
-            {/* بيانات الترويسة والصورة الشخصية */}
-            <div className="flex items-center gap-5 bg-slate-900/60 p-5 rounded-2xl border border-white/5">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-800 border border-orange-500/40 flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-5 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-200 border border-orange-500/40 flex items-center justify-center shrink-0">
                 {selectedHrEmployee.avatarUrl ? (
                   <img src={selectedHrEmployee.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-2xl font-black text-white">{selectedHrEmployee.fullNameAr.charAt(0)}</span>
+                  <span className="text-2xl font-black text-slate-700">{selectedHrEmployee.fullNameAr.charAt(0)}</span>
                 )}
               </div>
 
               <div>
-                <h2 className="text-base font-bold text-white">{selectedHrEmployee.fullNameAr}</h2>
-                <span className="text-xs text-orange-400 font-mono font-bold block">
+                <h2 className="text-base font-bold text-slate-900">{selectedHrEmployee.fullNameAr}</h2>
+                <span className="text-xs text-orange-600 font-mono font-bold block">
                   #{selectedHrEmployee.employeeCode} - {selectedHrEmployee.role}
                 </span>
-                <span className="text-[11px] text-slate-400 block mt-1">الفرع: {selectedHrEmployee.branchName}</span>
+                <span className="text-[11px] text-slate-500 block mt-1">الفرع: {selectedHrEmployee.branchName}</span>
               </div>
             </div>
 
-            {/* تفاصيل أقسام استمارة HR */}
             <div className="space-y-4 text-xs">
-              {/* القسم 1 */}
-              <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 space-y-2.5">
-                <h4 className="font-bold text-orange-400 border-b border-white/5 pb-1">1. البيانات المدنية والهوية:</h4>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <h4 className="font-bold text-orange-600 border-b border-slate-200 pb-1">1. البيانات المدنية والهوية:</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div><span className="text-slate-400 block">الرقم القومي:</span><span className="font-mono font-bold text-white">{selectedHrEmployee.nationalId || '—'}</span></div>
-                  <div><span className="text-slate-400 block">تاريخ الميلاد:</span><span className="font-mono text-white">{selectedHrEmployee.birthDate || '—'}</span></div>
-                  <div><span className="text-slate-400 block">النوع / الجنس:</span><span className="text-white">{selectedHrEmployee.gender === 'FEMALE' ? 'أنثى' : 'ذكر'}</span></div>
-                  <div><span className="text-slate-400 block">الحالة الاجتماعية:</span><span className="text-white">{selectedHrEmployee.maritalStatus || '—'}</span></div>
-                  <div><span className="text-slate-400 block">الموقف التجنيدي:</span><span className="text-white">{selectedHrEmployee.militaryStatus || '—'}</span></div>
-                  <div><span className="text-slate-400 block">رخصة القيادة:</span><span className="text-white">{selectedHrEmployee.drivingLicense || 'لا يوجد'}</span></div>
+                  <div><span className="text-slate-500 block">الرقم القومي:</span><span className="font-mono font-bold text-slate-900">{selectedHrEmployee.nationalId || '—'}</span></div>
+                  <div><span className="text-slate-500 block">تاريخ الميلاد:</span><span className="font-mono text-slate-900">{selectedHrEmployee.birthDate || '—'}</span></div>
+                  <div><span className="text-slate-500 block">النوع / الجنس:</span><span className="text-slate-900">{selectedHrEmployee.gender === 'FEMALE' ? 'أنثى' : 'ذكر'}</span></div>
+                  <div><span className="text-slate-500 block">الحالة الاجتماعية:</span><span className="text-slate-900">{selectedHrEmployee.maritalStatus || '—'}</span></div>
+                  <div><span className="text-slate-500 block">الموقف التجنيدي:</span><span className="text-slate-900">{selectedHrEmployee.militaryStatus || '—'}</span></div>
+                  <div><span className="text-slate-500 block">رخصة القيادة:</span><span className="text-slate-900">{selectedHrEmployee.drivingLicense || 'لا يوجد'}</span></div>
                 </div>
               </div>
 
-              {/* القسم 2 */}
-              <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 space-y-2.5">
-                <h4 className="font-bold text-orange-400 border-b border-white/5 pb-1">2. الاتصال والإقامة والطوارئ:</h4>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <h4 className="font-bold text-orange-600 border-b border-slate-200 pb-1">2. الاتصال والإقامة والطوارئ:</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div><span className="text-slate-400 block">رقم الهاتف:</span><span className="font-mono font-bold text-white">{selectedHrEmployee.phone}</span></div>
-                  <div><span className="text-slate-400 block">هاتف إضافي / واتساب:</span><span className="font-mono text-white">{selectedHrEmployee.phoneAlt || '—'}</span></div>
-                  <div><span className="text-slate-400 block">العنوان بالتفصيل:</span><span className="text-white">{selectedHrEmployee.address || '—'}</span></div>
-                  <div><span className="text-slate-400 block">جهة الطوارئ (الاسم):</span><span className="text-white">{selectedHrEmployee.emergencyName || '—'}</span></div>
-                  <div><span className="text-slate-400 block">صلة القرابة:</span><span className="text-white">{selectedHrEmployee.emergencyRelation || '—'}</span></div>
-                  <div><span className="text-slate-400 block">رقم هاتف الطوارئ:</span><span className="font-mono text-white">{selectedHrEmployee.emergencyContact || '—'}</span></div>
+                  <div><span className="text-slate-500 block">رقم الهاتف:</span><span className="font-mono font-bold text-slate-900">{selectedHrEmployee.phone}</span></div>
+                  <div><span className="text-slate-500 block">هاتف إضافي / واتساب:</span><span className="font-mono text-slate-900">{selectedHrEmployee.phoneAlt || '—'}</span></div>
+                  <div><span className="text-slate-500 block">العنوان بالتفصيل:</span><span className="text-slate-900">{selectedHrEmployee.address || '—'}</span></div>
+                  <div><span className="text-slate-500 block">جهة الطوارئ (الاسم):</span><span className="text-slate-900">{selectedHrEmployee.emergencyName || '—'}</span></div>
+                  <div><span className="text-slate-500 block">صلة القرابة:</span><span className="text-slate-900">{selectedHrEmployee.emergencyRelation || '—'}</span></div>
+                  <div><span className="text-slate-500 block">رقم هاتف الطوارئ:</span><span className="font-mono text-slate-900">{selectedHrEmployee.emergencyContact || '—'}</span></div>
                 </div>
               </div>
 
-              {/* القسم 3 */}
-              <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 space-y-2.5">
-                <h4 className="font-bold text-orange-400 border-b border-white/5 pb-1">3. المستحقات المالية وطريقة الصرف:</h4>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <h4 className="font-bold text-orange-600 border-b border-slate-200 pb-1">3. المستحقات المالية وطريقة الصرف:</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div><span className="text-slate-400 block">الراتب الشهري التعاقدي:</span><span className="font-mono font-bold text-emerald-400">{selectedHrEmployee.monthlySalary} ج.م</span></div>
-                  <div><span className="text-slate-400 block">طريقة التحويل المفضلة:</span><span className="text-white font-bold">{selectedHrEmployee.payoutMethod}</span></div>
-                  <div><span className="text-slate-400 block">رقم الحساب / إنستاباي:</span><span className="font-mono text-white">{selectedHrEmployee.payoutAccount || '—'}</span></div>
-                  <div><span className="text-slate-400 block">اسم البنك / الشبكة:</span><span className="text-white">{selectedHrEmployee.bankName || '—'}</span></div>
-                  <div><span className="text-slate-400 block">الرقم التأميني:</span><span className="font-mono text-white">{selectedHrEmployee.socialInsuranceNo || '—'}</span></div>
-                  <div><span className="text-slate-400 block">ساعات العمل اليومية:</span><span className="text-white font-mono">{selectedHrEmployee.workingHoursPerDay} ساعات</span></div>
-                </div>
-              </div>
-
-              {/* القسم 4 */}
-              <div className="bg-slate-900/40 p-4 rounded-2xl border border-white/5 space-y-2.5">
-                <h4 className="font-bold text-orange-400 border-b border-white/5 pb-1">4. المؤهل الدراسي والتعليم:</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div><span className="text-slate-400 block">المستوى التعليمي:</span><span className="text-white">{selectedHrEmployee.educationLevel || '—'}</span></div>
-                  <div><span className="text-slate-400 block">التخصص / الكلية:</span><span className="text-white">{selectedHrEmployee.educationField || '—'}</span></div>
-                  <div><span className="text-slate-400 block">سنة التخرج:</span><span className="font-mono text-white">{selectedHrEmployee.graduationYear || '—'}</span></div>
+                  <div><span className="text-slate-500 block">الراتب الشهري التعاقدي:</span><span className="font-mono font-bold text-emerald-600">{selectedHrEmployee.monthlySalary} ج.م</span></div>
+                  <div><span className="text-slate-500 block">طريقة التحويل المفضلة:</span><span className="text-slate-900 font-bold">{selectedHrEmployee.payoutMethod}</span></div>
+                  <div><span className="text-slate-500 block">رقم الحساب / إنستاباي:</span><span className="font-mono text-slate-900">{selectedHrEmployee.payoutAccount || '—'}</span></div>
+                  <div><span className="text-slate-500 block">اسم البنك / الشبكة:</span><span className="text-slate-900">{selectedHrEmployee.bankName || '—'}</span></div>
+                  <div><span className="text-slate-500 block">الرقم التأميني:</span><span className="font-mono text-slate-900">{selectedHrEmployee.socialInsuranceNo || '—'}</span></div>
+                  <div><span className="text-slate-500 block">ساعات العمل اليومية:</span><span className="text-slate-900 font-mono">{selectedHrEmployee.workingHoursPerDay} ساعات</span></div>
                 </div>
               </div>
             </div>
