@@ -112,9 +112,28 @@ const INITIAL_ROLES = [
   },
 ];
 
+function sanitizePermissions(perms: any): string[] {
+  if (!perms) return [];
+  if (Array.isArray(perms)) return perms;
+  if (typeof perms === 'string') {
+    try {
+      const parsed = JSON.parse(perms);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'object' && parsed !== null) {
+        return Object.keys(parsed).filter((k) => (parsed as any)[k]);
+      }
+    } catch {
+      return perms ? [perms] : [];
+    }
+  }
+  if (typeof perms === 'object' && perms !== null) {
+    return Object.keys(perms).filter((k) => (perms as any)[k]);
+  }
+  return [];
+}
+
 export async function GET() {
   try {
-    // 1. التأكد من إنشاء جدول custom_roles
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS custom_roles (
         id SERIAL PRIMARY KEY,
@@ -127,7 +146,6 @@ export async function GET() {
       );
     `);
 
-    // 2. التحقق من وجود الأدوار وتثبيتها إن كان الجدول فارغاً
     const existing = await db.execute(sql`SELECT COUNT(*)::int as count FROM custom_roles;`);
     const count = (existing as any)?.rows?.[0]?.count ?? (existing as any)?.[0]?.count ?? 0;
 
@@ -150,19 +168,30 @@ export async function GET() {
     const raw = await db.execute(sql`
       SELECT 
         id,
-        name,
-        name_ar as "nameAr",
+        COALESCE(name, '') as name,
+        COALESCE(name_ar, name, '') as "nameAr",
         permissions,
-        is_system as "isSystem"
+        COALESCE(is_system, false) as "isSystem"
       FROM custom_roles
       ORDER BY id ASC;
     `);
 
     const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    return NextResponse.json(rows, { status: 200 });
+    const formatted = rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      nameAr: r.nameAr || r.name_ar || r.name,
+      permissions: sanitizePermissions(r.permissions),
+      isSystem: Boolean(r.isSystem ?? r.is_system),
+    }));
+
+    return NextResponse.json(formatted, { status: 200 });
   } catch (error: any) {
     console.error('Roles GET error:', error);
-    return NextResponse.json(INITIAL_ROLES.map((r, i) => ({ id: i + 1, ...r })), { status: 200 });
+    return NextResponse.json(
+      INITIAL_ROLES.map((r, i) => ({ id: i + 1, ...r })),
+      { status: 200 }
+    );
   }
 }
 
@@ -175,7 +204,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'اسم الدور والمعرف البرمجي مطلوبان' }, { status: 400 });
     }
 
-    const permsJson = JSON.stringify(Array.isArray(permissions) ? permissions : []);
+    const permsArray = sanitizePermissions(permissions);
+    const permsJson = JSON.stringify(permsArray);
 
     if (id) {
       await db.execute(sql`
