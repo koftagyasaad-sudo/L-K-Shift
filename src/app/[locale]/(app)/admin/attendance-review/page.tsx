@@ -17,6 +17,8 @@ import {
   Loader2,
   MapPin,
   Calendar,
+  X,
+  Maximize2,
 } from 'lucide-react';
 
 interface AttendanceRecord {
@@ -48,18 +50,19 @@ export default function AttendanceReviewPage() {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
 
+  // حالة مودال عرض الصورة والتفاصيل
+  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
+
   // الفلاتر
   const [selectedEmployee, setSelectedEmployee] = useState<string>('ALL');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // استدعاء البيانات من السيرفر
   const fetchRecords = async () => {
     try {
       setLoading(true);
-
-      let url = '/api/attendance/review/all?';
+      let url = '/api/attendance?';
       if (selectedEmployee !== 'ALL') url += `userId=${selectedEmployee}&`;
       if (fromDate) url += `from=${fromDate}&`;
       if (toDate) url += `to=${toDate}&`;
@@ -83,12 +86,10 @@ export default function AttendanceReviewPage() {
     fetchRecords();
   }, [selectedEmployee, fromDate, toDate]);
 
-  // قائمة الموظفين الفريدين للفلترة
   const uniqueEmployees = Array.from(
     new Map(records.map((r) => [r.userId, { id: r.userId, name: r.userName }])).values()
   );
 
-  // تصفية السجلات حسب البحث
   const filteredRecords = records.filter((r) => {
     const q = searchTerm.toLowerCase().trim();
     if (!q) return true;
@@ -112,14 +113,12 @@ export default function AttendanceReviewPage() {
             hour: '2-digit',
             minute: '2-digit',
             hour12: true,
-            timeZone: 'Africa/Cairo',
           });
     } catch {
       return '—';
     }
   };
 
-  // تصدير الشيت إلى ملف Excel / CSV
   const handleExportCSV = () => {
     const headers = [
       'الكود',
@@ -130,29 +129,20 @@ export default function AttendanceReviewPage() {
       'الانصراف',
       'ساعات العمل',
       'التأخير (د)',
-      'الإضافي (د)',
       'الراتب الأساسي',
-      'صافي المستحق',
     ];
 
-    const rows = filteredRecords.map((r) => {
-      const basic = Number(r.basicSalary) || 5000;
-      const hourly = basic / 26 / (Number(r.workingHoursPerDay) || 8);
-      const earned = ((r.workedMinutes / 60) * hourly).toFixed(2);
-      return [
-        r.employeeCode,
-        r.userName,
-        r.branchName,
-        r.workDate,
-        formatTime(r.checkInTime),
-        formatTime(r.checkOutTime),
-        `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د`,
-        r.lateMinutes,
-        r.overtimeMinutes,
-        basic,
-        earned,
-      ];
-    });
+    const rows = filteredRecords.map((r) => [
+      r.employeeCode,
+      r.userName,
+      r.branchName,
+      r.workDate,
+      formatTime(r.checkInTime),
+      formatTime(r.checkOutTime),
+      `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د`,
+      r.lateMinutes,
+      r.basicSalary,
+    ]);
 
     const csvContent =
       '\uFEFF' +
@@ -162,7 +152,7 @@ export default function AttendanceReviewPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `شيت_الحضور_والرواتب_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `شيت_الحضور_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -175,7 +165,7 @@ export default function AttendanceReviewPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">سجل بصمات الحضور ومسير الرواتب</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            متابعة لحظية لحركات البصمة الحية والسيلفي، وحساب استحقاقات الراتب وخصومات التأخير بدقة 100%
+            متابعة دقيقة لحركات الحضور والانصراف، اضغط على أي سيلفي لعرض تفاصيله كاملة
           </p>
         </div>
 
@@ -195,7 +185,7 @@ export default function AttendanceReviewPage() {
             className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-orange-500/20 transition cursor-pointer"
           >
             <Download size={14} />
-            <span>سحب شيت الحضور (Excel)</span>
+            <span>تصدير Excel</span>
           </button>
         </div>
       </div>
@@ -208,7 +198,7 @@ export default function AttendanceReviewPage() {
           className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition cursor-pointer ${
             activeTab === 'LOGS'
               ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-white'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/5'
           }`}
         >
           <Camera size={15} />
@@ -221,38 +211,18 @@ export default function AttendanceReviewPage() {
           className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition cursor-pointer ${
             activeTab === 'PAYROLL'
               ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-white'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/5'
           }`}
         >
           <DollarSign size={15} />
-          <span>شيت حساب الرواتب والخصومات بدقة 100%</span>
+          <span>شيت مسير الرواتب (ثابت 30 يوماً)</span>
         </button>
-      </div>
-
-      {/* كروت الإحصائيات الفورية */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-5 rounded-2xl shadow-sm dark:shadow-xl">
-          <span className="text-xs text-slate-500 dark:text-slate-400 block">إجمالي الحركات</span>
-          <span className="text-2xl font-black font-mono text-slate-900 dark:text-white mt-1 block">{totalMovements}</span>
-        </div>
-        <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-5 rounded-2xl shadow-sm dark:shadow-xl">
-          <span className="text-xs text-slate-500 dark:text-slate-400 block">حركات الحضور</span>
-          <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">{checkInCount}</span>
-        </div>
-        <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-5 rounded-2xl shadow-sm dark:shadow-xl">
-          <span className="text-xs text-slate-500 dark:text-slate-400 block">الموظفين المسجلين</span>
-          <span className="text-2xl font-black font-mono text-orange-600 dark:text-orange-400 mt-1 block">{uniqueEmployees.length}</span>
-        </div>
-        <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-5 rounded-2xl shadow-sm dark:shadow-xl">
-          <span className="text-xs text-slate-500 dark:text-slate-400 block">نطاق التوثيق</span>
-          <span className="text-sm font-bold text-slate-700 dark:text-slate-300 mt-1 block">GPS + كاميرا حية</span>
-        </div>
       </div>
 
       {/* شريط الفلاتر والبحث */}
       <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 p-4 rounded-2xl shadow-sm dark:shadow-xl grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
         <div>
-          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">تصفية حسب الموظف:</label>
+          <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block mb-1">الموظف:</label>
           <select
             value={selectedEmployee}
             onChange={(e) => setSelectedEmployee(e.target.value)}
@@ -302,19 +272,13 @@ export default function AttendanceReviewPage() {
         </div>
       </div>
 
-      {/* عرض البيانات */}
+      {/* جدول السجلات */}
       {loading ? (
-        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl p-12 shadow-sm dark:shadow-xl">
+        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl p-12">
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-          <p className="text-xs font-semibold text-slate-400">جاري تفريغ سجلات البصمات والبيانات...</p>
-        </div>
-      ) : filteredRecords.length === 0 ? (
-        <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl p-16 text-center text-slate-400 shadow-sm dark:shadow-xl">
-          <Calendar size={36} className="mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-          <p className="text-xs font-bold">لا توجد سجلات مطابقة للفترة المحددة</p>
+          <p className="text-xs font-semibold text-slate-400">جاري تفريغ البصمات...</p>
         </div>
       ) : activeTab === 'LOGS' ? (
-        /* جدول سجل البصمات والصور الحية */
         <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm dark:shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
@@ -324,9 +288,9 @@ export default function AttendanceReviewPage() {
                   <th className="p-4">الفرع</th>
                   <th className="p-4">تاريخ الوردية</th>
                   <th className="p-4 text-center">وقت الحضور</th>
-                  <th className="p-4 text-center">وقت الانصراف</th>
+                  <th className="p-4 text-center">وقت الانصراف (الأخير)</th>
                   <th className="p-4 text-center">صورة السيلفي</th>
-                  <th className="p-4 text-center">الموقع (GPS)</th>
+                  <th className="p-4 text-center">الموقع والمسافة</th>
                   <th className="p-4 text-center">ساعات العمل</th>
                 </tr>
               </thead>
@@ -347,27 +311,29 @@ export default function AttendanceReviewPage() {
                     </td>
                     <td className="p-4 text-center">
                       {r.photoUrl ? (
-                        <div className="inline-block relative group">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRecord(r)}
+                          className="relative group cursor-pointer inline-block"
+                          title="اضغط لتكبير الصورة وعرض التفاصيل"
+                        >
                           <img
                             src={r.photoUrl}
                             alt="Selfie"
-                            className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-white/10 shadow-xs mx-auto"
+                            className="w-11 h-11 rounded-xl object-cover border-2 border-orange-500/30 group-hover:scale-110 transition shadow-sm"
                           />
-                        </div>
+                          <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                            <Maximize2 size={13} />
+                          </div>
+                        </button>
                       ) : (
                         <span className="text-[11px] text-slate-400">—</span>
                       )}
                     </td>
                     <td className="p-4 text-center">
-                      {r.gpsDistance <= 150 ? (
-                        <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                          <CheckCircle2 size={11} /> داخل الفرع ({Math.round(r.gpsDistance)}م)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                          <MapPin size={11} /> خارج النطاق ({Math.round(r.gpsDistance)}م)
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                        <CheckCircle2 size={11} /> {Math.round(r.gpsDistance)}م
+                      </span>
                     </td>
                     <td className="p-4 text-center font-mono font-bold text-slate-900 dark:text-white">
                       {r.workedMinutes > 0 ? `${Math.floor(r.workedMinutes / 60)}س ${r.workedMinutes % 60}د` : '—'}
@@ -379,7 +345,7 @@ export default function AttendanceReviewPage() {
           </div>
         </div>
       ) : (
-        /* شيت حساب الرواتب والخصومات بدقة 100% */
+        /* شيت مسير الرواتب (المحسوب ثابتاً على 30 يوماً) */
         <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm dark:shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
@@ -388,11 +354,10 @@ export default function AttendanceReviewPage() {
                   <th className="p-4">الموظف</th>
                   <th className="p-4">الفرع</th>
                   <th className="p-4 text-center">إجمالي الساعات</th>
-                  <th className="p-4 text-center">الراتب التعاقدي</th>
-                  <th className="p-4 text-center">أجر الساعة</th>
+                  <th className="p-4 text-center">الراتب الأساسي</th>
+                  <th className="p-4 text-center">أجر اليوم (30 يوم)</th>
                   <th className="p-4 text-center">خصم التأخير</th>
-                  <th className="p-4 text-center">بدل الإضافي</th>
-                  <th className="p-4 text-center">صافي الراتب المستحق</th>
+                  <th className="p-4 text-center">الصافي التقريبي</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5 text-slate-700 dark:text-slate-300">
@@ -400,20 +365,9 @@ export default function AttendanceReviewPage() {
                   const empLogs = filteredRecords.filter((r) => r.userId === emp.id);
                   const first = empLogs[0];
                   const basic = Number(first?.basicSalary) || 5000;
-                  const hoursPerDay = Number(first?.workingHoursPerDay) || 8;
-                  const hourly = basic / 26 / hoursPerDay;
-
+                  const dailyRate = (basic / 30).toFixed(2);
                   const totalWorkedMins = empLogs.reduce((acc, r) => acc + r.workedMinutes, 0);
                   const totalLateMins = empLogs.reduce((acc, r) => acc + r.lateMinutes, 0);
-                  const totalOvertimeMins = empLogs.reduce((acc, r) => acc + r.overtimeMinutes, 0);
-
-                  const lateDeduction = (totalLateMins * (hourly / 60)).toFixed(2);
-                  const overtimePay = ((totalOvertimeMins / 60) * hourly * 1.5).toFixed(2);
-                  const earnedSalary = (
-                    (totalWorkedMins / 60) * hourly +
-                    parseFloat(overtimePay) -
-                    parseFloat(lateDeduction)
-                  ).toFixed(2);
 
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition">
@@ -426,17 +380,68 @@ export default function AttendanceReviewPage() {
                         {(totalWorkedMins / 60).toFixed(1)} ساعة
                       </td>
                       <td className="p-4 text-center font-mono font-bold text-slate-800 dark:text-slate-200">{basic} ج.م</td>
-                      <td className="p-4 text-center font-mono text-slate-500 dark:text-slate-400">{hourly.toFixed(2)} ج.م/س</td>
-                      <td className="p-4 text-center font-mono text-rose-600 dark:text-rose-400 font-bold">-{lateDeduction} ج.م</td>
-                      <td className="p-4 text-center font-mono text-emerald-600 dark:text-emerald-400 font-bold">+{overtimePay} ج.م</td>
+                      <td className="p-4 text-center font-mono text-slate-500 dark:text-slate-400">{dailyRate} ج.م/يوم</td>
+                      <td className="p-4 text-center font-mono text-rose-600 dark:text-rose-400 font-bold">-{totalLateMins} دقيقة</td>
                       <td className="p-4 text-center font-mono font-black text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10">
-                        {earnedSalary} ج.م
+                        {((totalWorkedMins / (8 * 60)) * parseFloat(dailyRate)).toFixed(2)} ج.م
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة تكبير الصورة والاطلاع على تفاصيل البصمة (Modal) */}
+      {selectedRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-[#0c0e18] border border-white/10 rounded-3xl p-6 shadow-2xl text-white space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white">{selectedRecord.userName}</h3>
+                <span className="text-[11px] text-orange-400 font-mono">وردية: {selectedRecord.workDate}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRecord(null)}
+                className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="aspect-square w-full rounded-2xl overflow-hidden bg-black border border-white/5 flex items-center justify-center">
+              {selectedRecord.photoUrl ? (
+                <img
+                  src={selectedRecord.photoUrl}
+                  alt="Full Selfie"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-xs text-slate-500">لا توجد صورة مسجلة</span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-900/60 p-4 rounded-2xl border border-white/5">
+              <div>
+                <span className="text-slate-400 block text-[11px]">وقت الحضور:</span>
+                <span className="font-mono font-bold text-emerald-400">{formatTime(selectedRecord.checkInTime)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">وقت الانصراف (الأخير):</span>
+                <span className="font-mono font-bold text-orange-400">{formatTime(selectedRecord.checkOutTime)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">الفرع:</span>
+                <span className="font-semibold text-slate-200">{selectedRecord.branchName}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">المسافة الجغرافية:</span>
+                <span className="font-mono font-bold text-slate-200">{Math.round(selectedRecord.gpsDistance)} متر</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
