@@ -19,6 +19,7 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return Math.round(R * c);
 }
 
+// 1. جلب كافة سجلات البصمات بدقة كاملة بدون دمج يحذف البيانات
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,101 +27,74 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get('from');
     const toDate = searchParams.get('to');
 
-    // 1. سحب السجلات من الجدول الأول attendance_logs
-    let logsA: any[] = [];
-    try {
-      const rawA = await db.execute(sql`
-        SELECT 
-          l.id,
-          l.user_id as "userId",
-          COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
-          COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as "employeeCode",
-          COALESCE(u.phone, '') as "userPhone",
-          COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
-          TO_CHAR(COALESCE(l.work_date, l.check_in_time::date, CURRENT_DATE), 'YYYY-MM-DD') as "workDate",
-          l.check_in_time as "checkInTime",
-          l.check_out_time as "checkOutTime",
-          COALESCE(l.check_in_distance, 0) as "gpsDistance",
-          COALESCE(l.check_in_photo_url, '') as "photoUrl",
-          COALESCE(l.actual_worked_minutes, 0) as "workedMinutes",
-          COALESCE(l.late_minutes, 0) as "lateMinutes",
-          COALESCE(l.overtime_minutes, 0) as "overtimeMinutes",
-          COALESCE(l.status, 'ON_TIME') as "status",
-          COALESCE(u.monthly_salary, 5000) as "basicSalary",
-          COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay"
-        FROM attendance_logs l
-        LEFT JOIN users u ON l.user_id = u.id
-        LEFT JOIN branches b ON COALESCE(l.branch_id, u.primary_branch_id) = b.id
-        ORDER BY l.id DESC;
-      `);
-      logsA = Array.isArray(rawA) ? rawA : (rawA as any)?.rows || [];
-    } catch {}
+    const raw = await db.execute(sql`
+      SELECT 
+        l.id,
+        l.user_id as "userId",
+        COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
+        COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as "employeeCode",
+        COALESCE(u.phone, '') as "userPhone",
+        COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
+        TO_CHAR(COALESCE(l.work_date, l.check_in_time::date, CURRENT_DATE), 'YYYY-MM-DD') as "workDate",
+        l.check_in_time as "checkInTime",
+        l.check_out_time as "checkOutTime",
+        COALESCE(l.check_in_distance, 0) as "gpsDistance",
+        COALESCE(l.check_in_photo_url, '') as "photoUrl",
+        COALESCE(l.actual_worked_minutes, 0) as "workedMinutes",
+        COALESCE(l.late_minutes, 0) as "lateMinutes",
+        COALESCE(l.overtime_minutes, 0) as "overtimeMinutes",
+        COALESCE(l.status, 'ON_TIME') as "status",
+        COALESCE(u.monthly_salary, 5000) as "basicSalary",
+        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay"
+      FROM attendance_logs l
+      LEFT JOIN users u ON (l.user_id = u.id OR l.user_id::text = u.employee_number)
+      LEFT JOIN branches b ON COALESCE(l.branch_id, u.primary_branch_id) = b.id
+      WHERE ${
+        userId && userId !== 'ALL'
+          ? sql`(l.user_id::text = ${userId} OR u.id::text = ${userId} OR u.employee_number = ${userId})`
+          : sql`1=1`
+      }
+      ORDER BY l.id DESC;
+    `);
 
-    // 2. سحب السجلات من الجدول الثاني attendance لضمان عدم ضياع أي بصمة
-    let logsB: any[] = [];
-    try {
-      const rawB = await db.execute(sql`
-        SELECT 
-          a.id,
-          a.user_id as "userId",
-          COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
-          COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as "employeeCode",
-          COALESCE(u.phone, '') as "userPhone",
-          COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
-          TO_CHAR(COALESCE(a.work_date, a.check_in_time::date, CURRENT_DATE), 'YYYY-MM-DD') as "workDate",
-          a.check_in_time as "checkInTime",
-          a.check_out_time as "checkOutTime",
-          COALESCE(a.check_in_distance, a.distance, 0) as "gpsDistance",
-          COALESCE(a.check_in_photo_url, a.photo_url, '') as "photoUrl",
-          COALESCE(a.actual_worked_minutes, a.worked_minutes, 0) as "workedMinutes",
-          COALESCE(a.late_minutes, 0) as "lateMinutes",
-          COALESCE(a.overtime_minutes, 0) as "overtimeMinutes",
-          COALESCE(a.status, 'ON_TIME') as "status",
-          COALESCE(u.monthly_salary, 5000) as "basicSalary",
-          COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay"
-        FROM attendance a
-        LEFT JOIN users u ON a.user_id = u.id
-        LEFT JOIN branches b ON COALESCE(a.branch_id, u.primary_branch_id) = b.id
-        ORDER BY a.id DESC;
-      `);
-      logsB = Array.isArray(rawB) ? rawB : (rawB as any)?.rows || [];
-    } catch {}
+    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
 
-    // دمج السجلات مع منع التكرار
-    const map = new Map();
-    logsB.forEach((item) => {
-      const key = `${item.userId}_${item.workDate}`;
-      map.set(key, item);
-    });
-    logsA.forEach((item) => {
-      const key = `${item.userId}_${item.workDate}`;
-      map.set(key, item);
-    });
+    // تسوية البيانات لضمان قراءتها بالحروف الكبيرة والصغيرة دون أي خطأ
+    let logs = rows.map((r: any) => ({
+      id: r.id,
+      userId: r.userId ?? r.user_id,
+      userName: r.userName ?? r.user_name ?? 'موظف',
+      employeeCode: r.employeeCode ?? r.employee_code ?? '001',
+      userPhone: r.userPhone ?? r.user_phone ?? '',
+      branchName: r.branchName ?? r.branch_name ?? 'الفرع الرئيسي',
+      workDate: r.workDate ?? r.work_date,
+      checkInTime: r.checkInTime ?? r.check_in_time ?? null,
+      checkOutTime: r.checkOutTime ?? r.check_out_time ?? null,
+      gpsDistance: Number(r.gpsDistance ?? r.gps_distance ?? 0),
+      photoUrl: r.photoUrl ?? r.photo_url ?? '',
+      workedMinutes: Number(r.workedMinutes ?? r.worked_minutes ?? 0),
+      lateMinutes: Number(r.lateMinutes ?? r.late_minutes ?? 0),
+      overtimeMinutes: Number(r.overtimeMinutes ?? r.overtime_minutes ?? 0),
+      status: r.status ?? 'ON_TIME',
+      basicSalary: Number(r.basicSalary ?? 5000),
+      workingHoursPerDay: Number(r.workingHoursPerDay ?? 8),
+    }));
 
-    let combined = Array.from(map.values());
-
-    // الفلترة بالموظف والتاريخ
-    if (userId && userId !== 'ALL') {
-      combined = combined.filter((r) => String(r.userId) === String(userId));
-    }
     if (fromDate) {
-      combined = combined.filter((r) => String(r.workDate) >= fromDate);
+      logs = logs.filter((r: any) => String(r.workDate) >= fromDate);
     }
     if (toDate) {
-      combined = combined.filter((r) => String(r.workDate) <= toDate);
+      logs = logs.filter((r: any) => String(r.workDate) <= toDate);
     }
 
-    combined.sort(
-      (a, b) => new Date(b.checkInTime || b.workDate).getTime() - new Date(a.checkInTime || a.workDate).getTime()
-    );
-
-    return NextResponse.json(combined, { status: 200 });
+    return NextResponse.json(logs, { status: 200 });
   } catch (error: any) {
     console.error('Attendance GET error:', error);
     return NextResponse.json([], { status: 200 });
   }
 }
 
+// 2. تسجيل حركة الحضور والانصراف
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -145,6 +119,7 @@ export async function POST(request: NextRequest) {
       if (authHeader) targetUserId = authHeader;
     }
 
+    // التحقق من هوية الموظف بالـ ID أو رقم الهاتف أو المسلسل الوظيفي
     const userRaw = await db.execute(sql`
       SELECT 
         u.id, 
@@ -157,7 +132,11 @@ export async function POST(request: NextRequest) {
         COALESCE(b.name_ar, b.name, 'الفرع') as branch_name
       FROM users u
       LEFT JOIN branches b ON b.id = COALESCE(${reqBranchId ? parseInt(reqBranchId, 10) : null}, u.primary_branch_id, u.branch_id, 1)
-      WHERE u.id::text = ${targetUserId ? targetUserId.toString() : '1'}
+      WHERE (
+        u.id::text = ${targetUserId ? targetUserId.toString() : '1'}
+        OR u.phone = ${targetUserId ? targetUserId.toString() : ''}
+        OR u.employee_number = ${targetUserId ? targetUserId.toString() : ''}
+      )
       LIMIT 1;
     `);
 
@@ -189,7 +168,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // قاعدة الشيفت العام للمطعم (10 ص إلى 4 فجراً لليوم التالي)
+    // الشيفت العام: من 10 ص حتى 4 فجراً لليوم التالي
     const now = offlineTimestamp ? new Date(offlineTimestamp) : new Date();
     const cairoHour = (now.getUTCHours() + 2) % 24;
     const cairoMinute = now.getUTCMinutes();
