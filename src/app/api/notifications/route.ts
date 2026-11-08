@@ -5,31 +5,30 @@ import { sql } from 'drizzle-orm';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 1. جلب إشعارات المستخدم الحالية
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
     if (!userId) {
-      return NextResponse.json({ message: 'معرف المستخدم غير محدد' }, { status: 400 });
+      return NextResponse.json([], { status: 200 });
     }
 
     const raw = await db.execute(sql`
       SELECT 
         id,
         user_id as "userId",
-        sender_id as "senderId",
+        COALESCE(sender_id, 0) as "senderId",
         title,
         message,
-        type,
-        link,
-        is_read as "isRead",
+        COALESCE(type, 'GENERAL') as "type",
+        COALESCE(link, '/admin/leave-requests') as "link",
+        COALESCE(is_read, false) as "isRead",
         created_at as "createdAt"
       FROM notifications
       WHERE user_id = ${parseInt(userId, 10)}
       ORDER BY id DESC
-      LIMIT 25;
+      LIMIT 30;
     `);
 
     const notifications = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
@@ -40,14 +39,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 2. إرسال إشعار جديد
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userId, senderId, title, message, type, link } = body;
 
     if (!userId || !title || !message) {
-      return NextResponse.json({ message: 'البيانات الأساسية للإشعار ناقصة' }, { status: 400 });
+      return NextResponse.json({ message: 'بيانات الإشعار غير مكتملة' }, { status: 400 });
     }
 
     await db.execute(sql`
@@ -71,7 +69,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 3. تحديد الإشعار كمقروء
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
@@ -83,7 +80,7 @@ export async function PATCH(request: NextRequest) {
         SET is_read = true 
         WHERE user_id = ${parseInt(userId, 10)};
       `);
-      return NextResponse.json({ success: true, message: 'تم تحديد الكل كمقروء' });
+      return NextResponse.json({ success: true, message: 'تم تحديد جميع الإشعارات كمقروءة' });
     }
 
     if (notificationId) {
@@ -95,7 +92,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'تم تحديث الإشعار' });
     }
 
-    return NextResponse.json({ message: 'معرف غير محدد' }, { status: 400 });
+    return NextResponse.json({ message: 'طلب غير محدد' }, { status: 400 });
   } catch (error: any) {
     console.error('Notifications PATCH Error:', error);
     return NextResponse.json({ message: error?.message || 'فشل التحديث' }, { status: 500 });
