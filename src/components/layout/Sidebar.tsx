@@ -30,6 +30,7 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  requiredPermission?: string;
 }
 
 const navItems: NavItem[] = [
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
     href: '/admin/dashboard',
     icon: LayoutDashboard,
     adminOnly: true,
+    requiredPermission: 'dashboard.view',
   },
   {
     titleAr: 'الحضور والانصراف',
@@ -67,6 +69,7 @@ const navItems: NavItem[] = [
     href: '/admin/attendance-review',
     icon: ClipboardCheck,
     adminOnly: true,
+    requiredPermission: 'attendance.review', // تظهر لليوزر العادي إن تم تحديد الصلاحية له
   },
   {
     titleAr: 'الموظفين',
@@ -74,6 +77,7 @@ const navItems: NavItem[] = [
     href: '/admin/employees',
     icon: Users,
     adminOnly: true,
+    requiredPermission: 'employees.view',
   },
   {
     titleAr: 'الفروع والورديات',
@@ -81,6 +85,7 @@ const navItems: NavItem[] = [
     href: '/admin/branches',
     icon: Building2,
     adminOnly: true,
+    requiredPermission: 'branches.view',
   },
   {
     titleAr: 'الأدوار',
@@ -88,6 +93,7 @@ const navItems: NavItem[] = [
     href: '/admin/roles',
     icon: Shield,
     adminOnly: true,
+    requiredPermission: 'roles.view',
   },
   {
     titleAr: 'التوظيف واستمارات التقديم',
@@ -95,6 +101,7 @@ const navItems: NavItem[] = [
     href: '/admin/recruitment',
     icon: Briefcase,
     adminOnly: true,
+    requiredPermission: 'recruitment.view',
   },
   {
     titleAr: 'اعتماد الإجازات والطلبات',
@@ -102,6 +109,7 @@ const navItems: NavItem[] = [
     href: '/admin/leave-requests',
     icon: CheckCircle2,
     adminOnly: true,
+    requiredPermission: 'leaves.approve',
   },
 ];
 
@@ -114,19 +122,21 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
   const isRtl = locale === 'ar';
 
   const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('مدير النظام');
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [userRole, setUserRole] = useState('موظف');
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isOpenMobile, setIsOpenMobile] = useState(false);
 
   useEffect(() => {
     try {
       const storedName = localStorage.getItem('userName') || '';
-      const storedRole = localStorage.getItem('userRole') || 'مدير النظام';
+      const storedRole = localStorage.getItem('userRole') || 'موظف';
       const permsRaw = localStorage.getItem('userPermissions') || '[]';
       const perms: string[] = JSON.parse(permsRaw);
 
       setUserName(storedName);
       setUserRole(storedRole);
+      setUserPermissions(perms);
 
       const hasAdminPrivilege =
         perms.includes('*') ||
@@ -137,7 +147,7 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
 
       setIsAdmin(hasAdminPrivilege);
     } catch {
-      setIsAdmin(true);
+      setIsAdmin(false);
     }
   }, []);
 
@@ -151,14 +161,21 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
     }
   };
 
+  // إظهار العنصر إذا كان عاماً، أو المستخدم مدير، أو محدد له الصلاحية بدقة
   const visibleNavItems = navItems.filter((item) => {
     if (!item.adminOnly) return true;
-    return isAdmin;
+    if (isAdmin || userPermissions.includes('*')) return true;
+    if (item.requiredPermission) {
+      return (
+        userPermissions.includes(item.requiredPermission) ||
+        userPermissions.includes('attendance.view')
+      );
+    }
+    return false;
   });
 
   return (
     <>
-      {/* زر الموبايل للشاشات الصغيرة */}
       <button
         type="button"
         onClick={() => setIsOpenMobile(!isOpenMobile)}
@@ -175,7 +192,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         />
       )}
 
-      {/* السايدبار المعتمد */}
       <aside
         className={`fixed inset-y-0 ${
           isRtl ? 'right-0 border-l' : 'left-0 border-r'
@@ -188,7 +204,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
-        {/* الترويسة العلوية للقائمة والشعار */}
         <div className="flex flex-col border-b border-slate-100 p-6 dark:border-white/5">
           <Link
             href={`/${locale}/profile`}
@@ -207,13 +222,12 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
                 L-K Shift
               </h2>
               <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600 dark:text-orange-400">
-                {userRole || 'مدير النظام'}
+                {userRole || 'موظف'}
               </span>
             </div>
           </Link>
         </div>
 
-        {/* روابط التنقل */}
         <div className="flex-1 overflow-y-auto px-4 py-5 space-y-1.5 custom-scrollbar">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
@@ -246,7 +260,6 @@ export default function Sidebar({ locale: propLocale }: SidebarProps) {
           })}
         </div>
 
-        {/* زر تسجيل الخروج */}
         <div className="border-t border-slate-100 p-4 dark:border-white/5">
           <button
             type="button"
