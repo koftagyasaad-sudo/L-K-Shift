@@ -1,182 +1,377 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
+import {
+  Building2,
+  Plus,
+  Search,
+  MapPin,
+  Phone,
+  UserCheck,
+  Edit2,
+  Loader2,
+  Save,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Navigation,
+} from 'lucide-react';
 
 interface BranchItem {
-  id: number | string;
-  name?: string;
-  nameAr?: string;
-  nameEn?: string;
-  address?: string;
-  radiusMeters?: number;
-  isActive?: boolean;
+  id: number;
+  name: string;
+  nameAr: string;
+  latitude: number;
+  longitude: number;
+  geofenceRadius: number;
+  managerId: number | null;
+  managerName?: string;
+  phone?: string;
 }
 
-interface PageProps {
-  params: Promise<{
-    locale: string;
-  }>;
+interface UserOption {
+  id: number;
+  name: string;
+  fullNameAr?: string;
+  role: string;
 }
 
-export default function AdminBranchesPage({ params }: PageProps) {
-  const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
+export default function BranchesManagementPage() {
+  const params = useParams();
+  const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
-  const [branchesList, setBranchesList] = useState<BranchItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [deletingId, setDeletingId] = useState<number | string | null>(null);
+  const [branches, setBranches] = useState<BranchItem[]>([]);
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const fetchBranches = async () => {
+  // حالة مودال الإضافة / التعديل
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<Partial<BranchItem>>({});
+  const [saving, setSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const fetchBranchesData = async () => {
     try {
-      setIsLoading(true);
-      const res = await fetch('/api/branches', { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        setBranchesList(Array.isArray(data) ? data : []);
+      setLoading(true);
+      const resB = await fetch('/api/branches', { cache: 'no-store' });
+      if (resB.ok) {
+        const dataB = await resB.json();
+        setBranches(Array.isArray(dataB) ? dataB : []);
+      }
+
+      // جلب الموظفين لاختيار مدير الفرع
+      const resU = await fetch('/api/employees', { cache: 'no-store' });
+      if (resU.ok) {
+        const dataU = await resU.json();
+        const mappedUsers: UserOption[] = (Array.isArray(dataU) ? dataU : []).map((u: any) => ({
+          id: u.id,
+          name: u.fullNameAr || u.name || u.fullName || 'موظف',
+          role: u.role || 'موظف',
+        }));
+        setUsers(mappedUsers);
       }
     } catch (err) {
-      console.error('Failed to load branches:', err);
+      console.error('Error loading branches/users:', err);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchBranches();
+    fetchBranchesData();
   }, []);
 
-  const handleDeleteBranch = async (id: number | string, name?: string) => {
-    const confirmMessage = isRtl
-      ? `هل أنت متأكد من حذف الفرع "${name || 'المحدد'}" نهائياً؟`
-      : `Are you sure you want to delete branch "${name || 'selected'}"?`;
+  const handleOpenModal = (branch?: BranchItem) => {
+    setStatusMsg(null);
+    if (branch) {
+      setEditingBranch({
+        id: branch.id,
+        name: branch.name,
+        nameAr: branch.nameAr,
+        latitude: branch.latitude,
+        longitude: branch.longitude,
+        geofenceRadius: branch.geofenceRadius || 150,
+        managerId: branch.managerId,
+        phone: branch.phone || '',
+      });
+    } else {
+      setEditingBranch({
+        id: undefined,
+        name: '',
+        nameAr: '',
+        latitude: 31.1308,
+        longitude: 30.6475,
+        geofenceRadius: 150,
+        managerId: null,
+        phone: '',
+      });
+    }
+    setIsModalOpen(true);
+  };
 
-    if (!window.confirm(confirmMessage)) return;
+  const handleSaveBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setStatusMsg(null);
 
     try {
-      setDeletingId(id);
-      const res = await fetch(`/api/branches?id=${id}`, {
-        method: 'DELETE',
+      const res = await fetch('/api/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingBranch),
       });
 
-      if (!res.ok) {
-        throw new Error('فشل حذف الفرع');
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'فشل حفظ بيانات الفرع');
 
-      setBranchesList((prev) => prev.filter((item) => String(item.id) !== String(id)));
-    } catch (err) {
-      alert(isRtl ? 'حدث خطأ أثناء محاولة حذف الفرع' : 'Failed to delete branch');
+      setStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الفرع بنجاح!' });
+      setTimeout(() => {
+        setIsModalOpen(false);
+        fetchBranchesData();
+      }, 700);
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
     } finally {
-      setDeletingId(null);
+      setSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
-            {isRtl ? 'إدارة الفروع ونطاق الـ Geofence' : 'Branch Management'}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {isRtl
-              ? 'متابعة الفروع المسجلة، إحداثيات GPS، ونصف قطر بصمة الحضور'
-              : 'Registered locations, GPS coordinates, and geofence radiuses'}
-          </p>
+    <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
+      {/* الترويسة الرئيسية */}
+      <div className="bg-slate-100 border border-slate-200 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-orange-500/10 border border-orange-500/20 text-orange-600 rounded-2xl">
+            <Building2 size={22} />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900">إدارة الفروع والورديات</h1>
+            <p className="text-xs text-slate-500 mt-1">
+              تحديد النطاق الجغرافي للـ GPS لكل فرع، تعيين مديري الفروع، وأرقام التواصل
+            </p>
+          </div>
         </div>
 
-        <Link
-          href={`/${locale}/admin/branches/new`}
-          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 focus:outline-none"
+        <button
+          type="button"
+          onClick={() => handleOpenModal()}
+          className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-5 py-2.5 rounded-2xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer"
         >
-          {isRtl ? '+ إضافة فرع جديد' : '+ Add New Branch'}
-        </Link>
+          <Plus size={15} />
+          <span>إضافة فرع جديد</span>
+        </button>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition dark:border-white/5 dark:bg-[#121526]/80 dark:shadow-xl dark:backdrop-blur-md">
-        {isLoading ? (
-          <div className="flex min-h-[300px] items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
-          </div>
-        ) : branchesList.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 dark:text-slate-400">
-            <p className="text-base font-medium">
-              {isRtl ? 'لا توجد فروع مسجلة حالياً.' : 'No branches found.'}
-            </p>
-            <Link
-              href={`/${locale}/admin/branches/new`}
-              className="mt-4 inline-block text-sm font-bold text-orange-600 hover:underline dark:text-orange-400"
+      {/* قائمة الفروع */}
+      {loading ? (
+        <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 bg-slate-100 border border-slate-200 rounded-3xl p-12">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+          <p className="text-xs font-semibold text-slate-500">جاري تحميل الفروع...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {branches.map((b) => (
+            <div
+              key={b.id}
+              className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4 hover:border-orange-500/40 transition"
             >
-              {isRtl ? 'ابدأ بإضافة أول فرع الآن' : 'Create your first branch'} &larr;
-            </Link>
+              <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">{b.nameAr}</h3>
+                  <span className="text-xs text-slate-400 font-mono">{b.name}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenModal(b)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-bold transition cursor-pointer"
+                >
+                  <Edit2 size={13} />
+                  <span>تعديل</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <UserCheck size={15} className="text-orange-500 shrink-0" />
+                  <span>مدير الفرع: <strong>{b.managerName || 'غير محدد'}</strong></span>
+                </div>
+
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Phone size={15} className="text-emerald-500 shrink-0" />
+                  <span>الهاتف: <strong className="font-mono">{b.phone || '—'}</strong></span>
+                </div>
+
+                <div className="flex items-center gap-2 text-slate-600 sm:col-span-2">
+                  <Navigation size={15} className="text-blue-500 shrink-0" />
+                  <span>
+                    نطاق الـ Geofence: <strong className="font-mono text-orange-600">{b.geofenceRadius} متر</strong>
+                    {' '}(إحداثيات: {b.latitude.toFixed(4)}, {b.longitude.toFixed(4)})
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* مودال تعديل وإضافة الفرع واختيار المدير بأسماء صريحة */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Building2 size={18} className="text-orange-500" />
+                <span>{editingBranch.id ? 'تعديل بيانات الفرع' : 'إضافة فرع جديد'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {statusMsg && (
+              <div
+                className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                  statusMsg.type === 'ok'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}
+              >
+                {statusMsg.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                <span>{statusMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBranch} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم الفرع (بالعربية) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingBranch.nameAr || ''}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, nameAr: e.target.value })}
+                    placeholder="مثال: الكفتجي - دسوق"
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">اسم الفرع بالإنجليزية</label>
+                  <input
+                    type="text"
+                    value={editingBranch.name || ''}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, name: e.target.value })}
+                    placeholder="Koftagi - Desouk"
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs text-left focus:outline-none focus:border-orange-500"
+                    dir="ltr"
+                  />
+                </div>
+
+                {/* اختيار مدير الفرع بأسماء الأشخاص الصريحة */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    اختر مدير الفرع (الاسم الصريح والدور):
+                  </label>
+                  <select
+                    value={editingBranch.managerId || ''}
+                    onChange={(e) =>
+                      setEditingBranch({
+                        ...editingBranch,
+                        managerId: e.target.value ? Number(e.target.value) : null,
+                      })
+                    }
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-bold rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-orange-500 cursor-pointer"
+                  >
+                    <option value="">-- بدون مدير حالياً --</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">خط العرض (Latitude)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editingBranch.latitude ?? 31.1308}
+                    onChange={(e) =>
+                      setEditingBranch({ ...editingBranch, latitude: parseFloat(e.target.value) })
+                    }
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">خط الطول (Longitude)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editingBranch.longitude ?? 30.6475}
+                    onChange={(e) =>
+                      setEditingBranch({ ...editingBranch, longitude: parseFloat(e.target.value) })
+                    }
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">نطاق البصمة (Geofence بالمتر)</label>
+                  <input
+                    type="number"
+                    value={editingBranch.geofenceRadius ?? 150}
+                    onChange={(e) =>
+                      setEditingBranch({ ...editingBranch, geofenceRadius: parseInt(e.target.value, 10) })
+                    }
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم هاتف الفرع</label>
+                  <input
+                    type="tel"
+                    value={editingBranch.phone || ''}
+                    onChange={(e) => setEditingBranch({ ...editingBranch, phone: e.target.value })}
+                    placeholder="01xxxxxxxxx"
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-mono rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>حفظ الفرع</span>
+                </button>
+              </div>
+            </form>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-right text-sm dark:divide-white/5" dir={isRtl ? 'rtl' : 'ltr'}>
-              <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
-                <tr>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'اسم الفرع' : 'Branch'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'العنوان' : 'Address'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'نصف القطر (GPS)' : 'Geofence'}</th>
-                  <th className="px-6 py-4 font-semibold">{isRtl ? 'الحالة' : 'Status'}</th>
-                  <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {branchesList.map((branch) => {
-                  const bName = branch.nameAr || branch.name || 'فرع بدون اسم';
-                  return (
-                    <tr key={branch.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
-                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                        <div>{bName}</div>
-                        {branch.nameEn && (
-                          <div className="text-xs font-normal text-slate-400">{branch.nameEn}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-xs truncate">
-                        {branch.address || '—'}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-300">
-                        {branch.radiusMeters || 100} م
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                            branch.isActive ?? true
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'
-                          }`}
-                        >
-                          {branch.isActive ?? true ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'معطل' : 'Inactive')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-3">
-                          <Link
-                            href={`/${locale}/admin/branches/${branch.id}`}
-                            className="text-xs font-bold text-orange-600 hover:underline dark:text-orange-400"
-                          >
-                            {isRtl ? 'تعديل' : 'Edit'}
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBranch(branch.id, bName)}
-                            disabled={deletingId === branch.id}
-                            className="text-xs font-bold text-rose-600 hover:underline disabled:opacity-50 dark:text-rose-400"
-                          >
-                            {deletingId === branch.id ? (isRtl ? 'جاري الحذف...' : 'Deleting...') : (isRtl ? 'حذف' : 'Delete')}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
