@@ -49,8 +49,6 @@ export default function AttendanceReviewPage() {
   const [activeTab, setActiveTab] = useState<'LOGS' | 'PAYROLL'>('LOGS');
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
-
-  // حالة مودال عرض الصورة والتفاصيل
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
 
   // الفلاتر
@@ -62,7 +60,7 @@ export default function AttendanceReviewPage() {
   const fetchRecords = async () => {
     try {
       setLoading(true);
-      let url = '/api/attendance?';
+      let url = '/api/attendance/review/all?';
       if (selectedEmployee !== 'ALL') url += `userId=${selectedEmployee}&`;
       if (fromDate) url += `from=${fromDate}&`;
       if (toDate) url += `to=${toDate}&`;
@@ -126,7 +124,7 @@ export default function AttendanceReviewPage() {
       'الفرع',
       'التاريخ',
       'الحضور',
-      'الانصراف',
+      'الانصراف (الأخير)',
       'ساعات العمل',
       'التأخير (د)',
       'الراتب الأساسي',
@@ -165,7 +163,7 @@ export default function AttendanceReviewPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">سجل بصمات الحضور ومسير الرواتب</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            متابعة دقيقة لحركات الحضور والانصراف، اضغط على أي سيلفي لعرض تفاصيله كاملة
+            متابعة دقيقة للبصمات والشيفتات الليلية، اضغط على أي سيلفي لعرض الصورة والتفاصيل بدقة عالية
           </p>
         </div>
 
@@ -345,7 +343,7 @@ export default function AttendanceReviewPage() {
           </div>
         </div>
       ) : (
-        /* شيت مسير الرواتب (المحسوب ثابتاً على 30 يوماً) */
+        /* شيت مسير الرواتب */
         <div className="bg-white dark:bg-[#0c0e18] border border-slate-200 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm dark:shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
@@ -394,7 +392,7 @@ export default function AttendanceReviewPage() {
         </div>
       )}
 
-      {/* نافذة تكبير الصورة والاطلاع على تفاصيل البصمة (Modal) */}
+      {/* مودال تكبير الصورة */}
       {selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-lg bg-[#0c0e18] border border-white/10 rounded-3xl p-6 shadow-2xl text-white space-y-4">
