@@ -10,8 +10,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  ShieldAlert,
-  FileText,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function EmployeeRequestsPage() {
@@ -20,9 +19,6 @@ export default function EmployeeRequestsPage() {
   const isRtl = locale === 'ar';
 
   const [userId, setUserId] = useState('');
-  const [userName, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('موظف');
-
   const [requestType, setRequestType] = useState<'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT'>('LEAVE');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -32,28 +28,11 @@ export default function EmployeeRequestsPage() {
 
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  const [myRequests, setMyRequests] = useState<any[]>([]);
 
   useEffect(() => {
     const uid = localStorage.getItem('userId') || '';
-    const uname = localStorage.getItem('userName') || '';
-    const urole = localStorage.getItem('userRole') || 'موظف';
     setUserId(uid);
-    setUserName(uname);
-    setUserRole(urole);
-
-    if (uid) fetchMyRequests(uid, urole);
   }, []);
-
-  const fetchMyRequests = async (uid: string, urole: string) => {
-    try {
-      const res = await fetch(`/api/requests?userId=${uid}&role=${urole}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMyRequests(Array.isArray(data) ? data : []);
-      }
-    } catch {}
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,13 +60,12 @@ export default function EmployeeRequestsPage() {
       setStatusMsg({
         type: 'ok',
         text: requestType === 'COMPLAINT'
-          ? 'تم إرسال شكواك السرية بنجاح إلى إدارة الموارد البشرية ومدير النظام فقط.'
+          ? 'تم إرسال الشكوى بنجاح إلى الإدارة المختصة.'
           : 'تم إرسال طلبك بنجاح، ووصل إشعار للمسؤولين لمراجعته.',
       });
 
       setReason('');
       setAdvanceAmount('');
-      fetchMyRequests(userId, userRole);
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الإرسال' });
     } finally {
@@ -98,9 +76,9 @@ export default function EmployeeRequestsPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl shadow-xl">
-        <h1 className="text-xl sm:text-2xl font-black text-white">تقديم الطلبات والشكاوى السرية</h1>
+        <h1 className="text-xl sm:text-2xl font-black text-white">تقديم الطلبات والشكاوى</h1>
         <p className="text-xs text-slate-400 mt-1">
-          تقديم الإجازات، الأذونات، طلبات السلف المالية، أو تقديم شكاوى سرية مشفرة لإدارة الـ HR
+          تقديم الإجازات، الأذونات، طلبات السلف المالية، أو إرسال شكوى للإدارة
         </p>
       </div>
 
@@ -117,7 +95,6 @@ export default function EmployeeRequestsPage() {
         </div>
       )}
 
-      {/* نموذج التقديم */}
       <form onSubmit={handleSubmit} className="bg-[#0c0e18] border border-white/5 p-6 sm:p-8 rounded-3xl space-y-5 shadow-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="sm:col-span-2">
@@ -127,7 +104,7 @@ export default function EmployeeRequestsPage() {
                 { id: 'LEAVE', label: 'طلب إجازة', icon: Calendar },
                 { id: 'PERMISSION', label: 'إذن تأخير/مغادرة', icon: Clock },
                 { id: 'ADVANCE', label: 'سلفة مالية', icon: DollarSign },
-                { id: 'COMPLAINT', label: 'شكوى سرية (HR)', icon: ShieldAlert },
+                { id: 'COMPLAINT', label: 'شكوى', icon: MessageSquare },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -135,9 +112,7 @@ export default function EmployeeRequestsPage() {
                   onClick={() => setRequestType(t.id as any)}
                   className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
                     requestType === t.id
-                      ? t.id === 'COMPLAINT'
-                        ? 'bg-rose-600 text-white border-rose-500 shadow-md'
-                        : 'bg-gradient-to-r from-orange-500 to-rose-600 text-white border-orange-500 shadow-md'
+                      ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white border-orange-500 shadow-md'
                       : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
                   }`}
                 >
@@ -147,15 +122,6 @@ export default function EmployeeRequestsPage() {
               ))}
             </div>
           </div>
-
-          {requestType === 'COMPLAINT' && (
-            <div className="sm:col-span-2 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs font-semibold leading-relaxed flex items-center gap-2">
-              <ShieldAlert size={18} className="shrink-0" />
-              <span>
-                تنبيه سرية: هذه الشكوى لن تظهر لمدير الفرع أو زملائك، وتصل مشفرة مباشرة لمدير النظام ومسؤول الموارد البشرية (HR) فقط.
-              </span>
-            </div>
-          )}
 
           {requestType !== 'COMPLAINT' && (
             <div>
@@ -199,14 +165,14 @@ export default function EmployeeRequestsPage() {
 
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              {requestType === 'COMPLAINT' ? 'تفاصيل الشكوى والواقعة بالتفصيل' : 'سبب الطلب والتفاصيل'}
+              {requestType === 'COMPLAINT' ? 'تفاصيل الشكوى' : 'سبب الطلب والتفاصيل'}
             </label>
             <textarea
               rows={3}
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder={requestType === 'COMPLAINT' ? 'اكتب شكواك بكل حرية وأمان...' : 'اكتب الأسباب هنا...'}
+              placeholder="اكتب التفاصيل هنا..."
               className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl p-3 text-xs focus:outline-none focus:border-orange-500 resize-none"
             />
           </div>
