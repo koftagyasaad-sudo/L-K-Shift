@@ -19,75 +19,134 @@ function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2:
   return Math.round(R * c);
 }
 
-// 1. جلب كافة سجلات البصمات بدقة كاملة بدون دمج يحذف البيانات
+// دالة تسوية الحقول لتجنب مشاكل تسميات الـ SQL
+function normalizeAttendanceRow(r: any) {
+  return {
+    id: r.id,
+    userId: r.userId ?? r.user_id,
+    userName: r.userName ?? r.user_name ?? r.full_name_ar ?? 'موظف',
+    employeeCode: r.employeeCode ?? r.employee_code ?? r.employee_number ?? '001',
+    userPhone: r.userPhone ?? r.user_phone ?? r.phone ?? '',
+    branchName: r.branchName ?? r.branch_name ?? 'الفرع الرئيسي',
+    workDate: r.workDate ?? r.work_date ?? (r.check_in_time ? String(r.check_in_time).slice(0, 10) : ''),
+    checkInTime: r.checkInTime ?? r.check_in_time ?? null,
+    checkOutTime: r.checkOutTime ?? r.check_out_time ?? null,
+    gpsDistance: Number(r.gpsDistance ?? r.gps_distance ?? r.check_in_distance ?? r.distance ?? 0),
+    photoUrl: r.photoUrl ?? r.photo_url ?? r.check_in_photo_url ?? '',
+    workedMinutes: Number(r.workedMinutes ?? r.worked_minutes ?? r.actual_worked_minutes ?? 0),
+    lateMinutes: Number(r.lateMinutes ?? r.late_minutes ?? 0),
+    overtimeMinutes: Number(r.overtimeMinutes ?? r.overtime_minutes ?? 0),
+    status: r.status ?? 'ON_TIME',
+    basicSalary: Number(r.basicSalary ?? r.monthly_salary ?? 5000),
+    workingHoursPerDay: Number(r.workingHoursPerDay ?? r.working_hours_per_day ?? 8),
+  };
+}
+
+// 1. جلب سجلات البصمات من كلا الجدولين
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
+    const code = searchParams.get('code');
+    const phone = searchParams.get('phone');
     const fromDate = searchParams.get('from');
     const toDate = searchParams.get('to');
 
-    const raw = await db.execute(sql`
-      SELECT 
-        l.id,
-        l.user_id as "userId",
-        COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
-        COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as "employeeCode",
-        COALESCE(u.phone, '') as "userPhone",
-        COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
-        TO_CHAR(COALESCE(l.work_date, l.check_in_time::date, CURRENT_DATE), 'YYYY-MM-DD') as "workDate",
-        l.check_in_time as "checkInTime",
-        l.check_out_time as "checkOutTime",
-        COALESCE(l.check_in_distance, 0) as "gpsDistance",
-        COALESCE(l.check_in_photo_url, '') as "photoUrl",
-        COALESCE(l.actual_worked_minutes, 0) as "workedMinutes",
-        COALESCE(l.late_minutes, 0) as "lateMinutes",
-        COALESCE(l.overtime_minutes, 0) as "overtimeMinutes",
-        COALESCE(l.status, 'ON_TIME') as "status",
-        COALESCE(u.monthly_salary, 5000) as "basicSalary",
-        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay"
-      FROM attendance_logs l
-      LEFT JOIN users u ON (l.user_id = u.id OR l.user_id::text = u.employee_number)
-      LEFT JOIN branches b ON COALESCE(l.branch_id, u.primary_branch_id) = b.id
-      WHERE ${
-        userId && userId !== 'ALL'
-          ? sql`(l.user_id::text = ${userId} OR u.id::text = ${userId} OR u.employee_number = ${userId})`
-          : sql`1=1`
-      }
-      ORDER BY l.id DESC;
-    `);
+    // أ) سحب جدول attendance_logs
+    let logsA: any[] = [];
+    try {
+      const rawA = await db.execute(sql`
+        SELECT 
+          l.id,
+          l.user_id,
+          COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
+          COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as employee_code,
+          COALESCE(u.phone, '') as user_phone,
+          COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as branch_name,
+          TO_CHAR(COALESCE(l.work_date, l.check_in_time::date, CURRENT_DATE), 'YYYY-MM-DD') as work_date,
+          l.check_in_time,
+          l.check_out_time,
+          COALESCE(l.check_in_distance, 0) as check_in_distance,
+          COALESCE(l.check_in_photo_url, '') as check_in_photo_url,
+          COALESCE(l.actual_worked_minutes, 0) as actual_worked_minutes,
+          COALESCE(l.late_minutes, 0) as late_minutes,
+          COALESCE(l.overtime_minutes, 0) as overtime_minutes,
+          COALESCE(l.status, 'ON_TIME') as status,
+          COALESCE(u.monthly_salary, 5000) as monthly_salary,
+          COALESCE(u.working_hours_per_day, 8) as working_hours_per_day
+        FROM attendance_logs l
+        LEFT JOIN users u ON (l.user_id = u.id OR l.user_id::text = u.employee_number)
+        LEFT JOIN branches b ON COALESCE(l.branch_id, u.primary_branch_id) = b.id
+        ORDER BY l.id DESC;
+      `);
+      logsA = Array.isArray(rawA) ? rawA : (rawA as any)?.rows || [];
+    } catch {}
 
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    // ب) سحب جدول attendance القديم لضمان حركات الأيام السابقة
+    let logsB: any[] = [];
+    try {
+      const rawB = await db.execute(sql`
+        SELECT 
+          a.id,
+          a.user_id,
+          COALESCE(u.full_name_ar, u.name, 'موظف') as user_name,
+          COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as employee_code,
+          COALESCE(u.phone, '') as user_phone,
+          COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as branch_name,
+          TO_CHAR(COALESCE(a.work_date, a.check_in_time::date, CURRENT_DATE), 'YYYY-MM-DD') as work_date,
+          a.check_in_time,
+          a.check_out_time,
+          COALESCE(a.distance, 0) as check_in_distance,
+          COALESCE(a.photo_url, '') as check_in_photo_url,
+          COALESCE(a.worked_minutes, 0) as actual_worked_minutes,
+          COALESCE(a.late_minutes, 0) as late_minutes,
+          COALESCE(a.overtime_minutes, 0) as overtime_minutes,
+          COALESCE(a.status, 'ON_TIME') as status,
+          COALESCE(u.monthly_salary, 5000) as monthly_salary,
+          COALESCE(u.working_hours_per_day, 8) as working_hours_per_day
+        FROM attendance a
+        LEFT JOIN users u ON (a.user_id = u.id OR a.user_id::text = u.employee_number)
+        LEFT JOIN branches b ON COALESCE(a.branch_id, u.primary_branch_id) = b.id
+        ORDER BY a.id DESC;
+      `);
+      logsB = Array.isArray(rawB) ? rawB : (rawB as any)?.rows || [];
+    } catch {}
 
-    // تسوية البيانات لضمان قراءتها بالحروف الكبيرة والصغيرة دون أي خطأ
-    let logs = rows.map((r: any) => ({
-      id: r.id,
-      userId: r.userId ?? r.user_id,
-      userName: r.userName ?? r.user_name ?? 'موظف',
-      employeeCode: r.employeeCode ?? r.employee_code ?? '001',
-      userPhone: r.userPhone ?? r.user_phone ?? '',
-      branchName: r.branchName ?? r.branch_name ?? 'الفرع الرئيسي',
-      workDate: r.workDate ?? r.work_date,
-      checkInTime: r.checkInTime ?? r.check_in_time ?? null,
-      checkOutTime: r.checkOutTime ?? r.check_out_time ?? null,
-      gpsDistance: Number(r.gpsDistance ?? r.gps_distance ?? 0),
-      photoUrl: r.photoUrl ?? r.photo_url ?? '',
-      workedMinutes: Number(r.workedMinutes ?? r.worked_minutes ?? 0),
-      lateMinutes: Number(r.lateMinutes ?? r.late_minutes ?? 0),
-      overtimeMinutes: Number(r.overtimeMinutes ?? r.overtime_minutes ?? 0),
-      status: r.status ?? 'ON_TIME',
-      basicSalary: Number(r.basicSalary ?? 5000),
-      workingHoursPerDay: Number(r.workingHoursPerDay ?? 8),
-    }));
+    // دمج الحركات مع الاحتفاظ بكل بصمة عبر ID الفريد
+    const recordsMap = new Map();
+    logsB.map(normalizeAttendanceRow).forEach((r) => {
+      const key = `${r.userId}_${r.workDate}_${r.id}`;
+      recordsMap.set(key, r);
+    });
+    logsA.map(normalizeAttendanceRow).forEach((r) => {
+      const key = `${r.userId}_${r.workDate}_${r.id}`;
+      recordsMap.set(key, r);
+    });
+
+    let combined = Array.from(recordsMap.values());
+
+    // الفلترة المرنة
+    if (userId && userId !== 'ALL') {
+      combined = combined.filter((r) => {
+        const matchId = String(r.userId) === String(userId);
+        const matchCode = code && String(r.employeeCode) === String(code);
+        const matchPhone = phone && String(r.userPhone) === String(phone);
+        return matchId || matchCode || matchPhone;
+      });
+    }
 
     if (fromDate) {
-      logs = logs.filter((r: any) => String(r.workDate) >= fromDate);
+      combined = combined.filter((r) => String(r.workDate) >= fromDate);
     }
     if (toDate) {
-      logs = logs.filter((r: any) => String(r.workDate) <= toDate);
+      combined = combined.filter((r) => String(r.workDate) <= toDate);
     }
 
-    return NextResponse.json(logs, { status: 200 });
+    combined.sort(
+      (a, b) => new Date(b.checkInTime || b.workDate).getTime() - new Date(a.checkInTime || a.workDate).getTime()
+    );
+
+    return NextResponse.json(combined, { status: 200 });
   } catch (error: any) {
     console.error('Attendance GET error:', error);
     return NextResponse.json([], { status: 200 });
@@ -119,7 +178,6 @@ export async function POST(request: NextRequest) {
       if (authHeader) targetUserId = authHeader;
     }
 
-    // التحقق من هوية الموظف بالـ ID أو رقم الهاتف أو المسلسل الوظيفي
     const userRaw = await db.execute(sql`
       SELECT 
         u.id, 
