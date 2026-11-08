@@ -16,13 +16,13 @@ export async function GET(request: NextRequest) {
         r.user_id as "userId",
         COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
         COALESCE(b.name_ar, 'الإدارة') as "branchName",
-        r.request_type as "requestType",
-        r.start_date as "startDate",
-        r.end_date as "endDate",
-        COALESCE(r.duration_days, 1) as "durationDays",
+        COALESCE(r.request_type, r.leave_type, 'LEAVE') as "requestType",
+        TO_CHAR(r.start_date, 'YYYY-MM-DD') as "startDate",
+        TO_CHAR(r.end_date, 'YYYY-MM-DD') as "endDate",
+        COALESCE(r.duration_days, r.total_days, 1) as "durationDays",
         COALESCE(r.advance_amount, 0) as "advanceAmount",
         r.reason,
-        COALESCE(r.status, 'PENDING') as "status",
+        COALESCE(r.status::text, 'PENDING') as "status",
         r.created_at as "createdAt"
       FROM leave_requests r
       LEFT JOIN users u ON r.user_id = u.id
@@ -48,12 +48,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'البيانات غير مكتملة' }, { status: 400 });
     }
 
-    const inserted = await db.execute(sql`
+    const sDate = startDate || new Date().toISOString().slice(0, 10);
+    const eDate = endDate || sDate;
+    const days = durationDays ? parseInt(durationDays, 10) : 1;
+    const amount = advanceAmount ? parseFloat(advanceAmount) : 0;
+
+    // إدراج الطلب مع ملء العمودين القديم والجديد لضمان القراءة في كل الشاشات
+    await db.execute(sql`
       INSERT INTO leave_requests (
         user_id,
+        leave_type,
         request_type,
         start_date,
         end_date,
+        total_days,
         duration_days,
         advance_amount,
         reason,
@@ -62,25 +70,37 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         ${parseInt(userId, 10)},
         ${requestType},
-        ${startDate || null},
-        ${endDate || null},
-        ${durationDays ? parseInt(durationDays, 10) : 1},
-        ${advanceAmount ? parseFloat(advanceAmount) : 0},
+        ${requestType},
+        ${sDate}::date,
+        ${eDate}::date,
+        ${days},
+        ${days},
+        ${amount},
         ${reason},
         'PENDING',
         NOW()
-      ) RETURNING id;
+      );
     `);
 
-    // إرسال الإشعار للمسؤولين مع حماية شاملة من نقص الأعمدة
+    // إرسال الإشعار التفاعلي لمديري النظام والـ HR
     try {
-      const notifTitle = requestType === 'COMPLAINT' ? 'شكوى موظف جديدة' : 'طلب موظف جديد';
-      const notifMsg = `تم استلام ${requestType === 'COMPLAINT' ? 'شكوى' : 'طلب'} جديد من أحد الموظفين: ${reason.slice(0, 50)}`;
+      const notifTitle =
+        requestType === 'COMPLAINT'
+          ? 'شكوى موظف جديدة'
+          : requestType === 'ADVANCE'
+          ? 'طلب سلفة مالية'
+          : requestType === 'PERMISSION'
+          ? 'طلب إذن جديد'
+          : 'طلب إجازة جديد';
+
+      const notifMsg = `تم تقديم ${notifTitle}: "${reason.slice(0, 50)}..."`;
 
       await db.execute(sql`
-        INSERT INTO notifications (user_id, title, message, is_read, link, created_at)
-        SELECT id, ${notifTitle}, ${notifMsg}, false, '/admin/leave-requests', NOW()
-        FROM users WHERE role IN ('SUPER_ADMIN', 'مدير النظام', 'HR', 'مدير فرع') AND id != ${parseInt(userId, 10)};
+        INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
+        SELECT id, ${parseInt(userId, 10)}, ${notifTitle}, ${notifMsg}, ${requestType}, '/admin/leave-requests', false, NOW()
+        FROM users 
+        WHERE (system_role = 'SUPER_ADMIN' OR job_role ILIKE '%مدير%' OR job_role ILIKE '%HR%')
+          AND id != ${parseInt(userId, 10)};
       `);
     } catch (notifErr) {
       console.warn('Notification insert skipped:', notifErr);
