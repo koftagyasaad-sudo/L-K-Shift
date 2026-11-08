@@ -55,10 +55,8 @@ export default function BranchesManagementPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // وضع العرض: 'EDIT' للاستمارة الكاملة، أو 'LIST' لبطاقات الفروع
   const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('EDIT');
 
-  // بيانات الفرع الجاري تعديله
   const [editingBranch, setEditingBranch] = useState<Partial<BranchItem>>({
     nameAr: '',
     nameEn: '',
@@ -90,13 +88,11 @@ export default function BranchesManagementPage() {
         const list: BranchItem[] = Array.isArray(dataB) ? dataB : [];
         setBranches(list);
 
-        // تحميل بيانات الفرع الأول تلقائياً في شاشة التعديل إذا كانت الحقول فارغة
         if (list.length > 0) {
           loadBranchForEdit(list[0]);
         }
       }
 
-      // جلب الموظفين لملء قائمة مدير الفرع بالأسماء الصريحة
       const resU = await fetch('/api/employees', { cache: 'no-store' });
       if (resU.ok) {
         const dataU = await resU.json();
@@ -164,7 +160,6 @@ export default function BranchesManagementPage() {
     setViewMode('EDIT');
   };
 
-  // تثبيت الموقع الحالي للفرع
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert('خاصية تحديد الموقع الجغرافي غير مدعومة في جهازك');
@@ -188,7 +183,6 @@ export default function BranchesManagementPage() {
     );
   };
 
-  // حفظ بيانات الفرع والورديات
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -234,7 +228,7 @@ export default function BranchesManagementPage() {
 
   return (
     <div className="space-y-6 pb-20 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* 1. الترويسة العلوية مع زر العودة للفروع */}
+      {/* 1. الترويسة العلوية */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -280,7 +274,7 @@ export default function BranchesManagementPage() {
         </div>
       )}
 
-      {/* شريط تبويبات سريع لاختيار الفرع الجاري تعديله بنقرة واحدة */}
+      {/* شريط تبويبات سريع لاختيار الفرع للتعديل */}
       {viewMode === 'EDIT' && branches.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-2 rounded-2xl border border-slate-200">
           <span className="text-xs font-bold text-slate-500 px-2">اختر فرعاً للتعديل:</span>
@@ -313,11 +307,10 @@ export default function BranchesManagementPage() {
         </div>
       )}
 
-      {/* 2. شاشة التعديل الكاملة بنفس تصميم وحقول الصورة الأصلية */}
+      {/* 2. شاشة الاستمارة المطابقة للصورة */}
       {viewMode === 'EDIT' ? (
         <form onSubmit={handleSave} className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-            {/* الصف الأول: اسما الفرع بالعربي والإنجليزي */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
@@ -348,7 +341,6 @@ export default function BranchesManagementPage() {
               </div>
             </div>
 
-            {/* الصف الثاني: مدير الفرع المسؤول ورقم هاتف الفرع */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
@@ -388,16 +380,14 @@ export default function BranchesManagementPage() {
               </div>
             </div>
 
-            {/* الصندوق الأرجواني الخفيف: مواعيد ورديات الفرع الثلاث وفترة السماح */}
+            {/* الصندوق الأرجواني لمواعيد الورديات الثلاث */}
             <div className="bg-[#faf5ff] border border-purple-200/80 rounded-3xl p-5 sm:p-7 space-y-5">
               <div className="flex items-center gap-2 text-sm font-black text-slate-900">
                 <span className="text-base">⏰</span>
                 <span>مواعيد ورديات الفرع الثلاث (صباحية، بينية، مسائية)</span>
               </div>
 
-              {/* بطاقات الورديات الثلاث */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* 1. الوردية الصباحية */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="block text-xs font-black text-amber-700">
                     1. الوردية الصباحية
@@ -428,7 +418,6 @@ export default function BranchesManagementPage() {
                   </div>
                 </div>
 
-                {/* 2. الوردية البينية (Between) */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="block text-xs font-black text-blue-700">
                     2. الوردية البينية (Between)
@@ -459,7 +448,6 @@ export default function BranchesManagementPage() {
                   </div>
                 </div>
 
-                {/* 3. الوردية المسائية */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
                   <span className="block text-xs font-black text-purple-700">
                     3. الوردية المسائية
@@ -491,7 +479,6 @@ export default function BranchesManagementPage() {
                 </div>
               </div>
 
-              {/* فترة السماح قبل احتساب تأخير */}
               <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-700 pt-2">
                 <span>فترة السماح قبل احتساب تأخير:</span>
                 <input
@@ -511,7 +498,6 @@ export default function BranchesManagementPage() {
               </div>
             </div>
 
-            {/* الصف الرابع: خط العرض وخط الطول */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">
@@ -548,7 +534,6 @@ export default function BranchesManagementPage() {
               </div>
             </div>
 
-            {/* الصف الخامس: نصف قطر نطاق البصمة الجغرافي */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 نصف قطر نطاق البصمة الجغرافي (بالمتر) *
@@ -570,7 +555,6 @@ export default function BranchesManagementPage() {
               </p>
             </div>
 
-            {/* زر تثبيت موقعي الحالي كإحداثيات للفرع */}
             <div className="flex justify-start pt-1">
               <button
                 type="button"
@@ -587,7 +571,6 @@ export default function BranchesManagementPage() {
               </button>
             </div>
 
-            {/* العنوان النصي للفرع */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">
                 العنوان النصي للفرع
@@ -602,7 +585,6 @@ export default function BranchesManagementPage() {
             </div>
           </div>
 
-          {/* أزرار الحفظ والإلغاء في الأسفل */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
@@ -622,7 +604,6 @@ export default function BranchesManagementPage() {
           </div>
         </form>
       ) : (
-        /* 3. شاشة استعراض الفروع في شكل بطاقات عند الضغط على "العودة للفروع" */
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {branches.map((b) => (
