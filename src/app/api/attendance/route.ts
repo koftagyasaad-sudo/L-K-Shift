@@ -28,23 +28,18 @@ export async function GET(request: NextRequest) {
     const fromDate = searchParams.get('from');
     const toDate = searchParams.get('to');
 
-    // 1. جلب سجلات البصمات مباشرة مع حماية من أخطاء الـ JOIN
     let rawLogs: any[] = [];
     try {
       const res = await db.execute(sql`SELECT * FROM attendance_logs ORDER BY id DESC;`);
       rawLogs = Array.isArray(res) ? res : (res as any)?.rows || [];
-    } catch (e) {
-      console.warn('attendance_logs raw select fallback:', e);
-    }
+    } catch {}
 
-    // فحص جدول attendance الإضافي إن وجد
     let rawAltLogs: any[] = [];
     try {
       const resAlt = await db.execute(sql`SELECT * FROM attendance ORDER BY id DESC;`);
       rawAltLogs = Array.isArray(resAlt) ? resAlt : (resAlt as any)?.rows || [];
     } catch {}
 
-    // 2. جلب بيانات الموظفين والفروع للمطابقة البرمجية في الذاكرة (Memory Join)
     let usersList: any[] = [];
     try {
       const resU = await db.execute(sql`
@@ -81,7 +76,6 @@ export async function GET(request: NextRequest) {
     const branchMap = new Map();
     branchesList.forEach((b) => branchMap.set(String(b.id), b.name));
 
-    // دمج وتنسيق السجلات
     const allRecords = [...rawLogs, ...rawAltLogs];
     const uniqueMap = new Map();
 
@@ -97,9 +91,15 @@ export async function GET(request: NextRequest) {
         wDate = String(l.work_date).slice(0, 10);
       } else if (l.check_in_time) {
         wDate = String(l.check_in_time).slice(0, 10);
+      } else if (l.created_at) {
+        wDate = String(l.created_at).slice(0, 10);
       } else {
         wDate = new Date().toISOString().slice(0, 10);
       }
+
+      // قراءة الوقت مع التأكد من عدم رجوعه فارغاً إذا كان مسجلاً في created_at
+      const rawCheckIn = l.check_in_time || l.checkInTime || l.created_at || null;
+      const rawCheckOut = l.check_out_time || l.checkOutTime || null;
 
       const item = {
         id: l.id,
@@ -109,8 +109,8 @@ export async function GET(request: NextRequest) {
         userPhone: u.phone || l.user_phone || '',
         branchName: branchName,
         workDate: wDate,
-        checkInTime: l.check_in_time || l.checkInTime || null,
-        checkOutTime: l.check_out_time || l.checkOutTime || null,
+        checkInTime: rawCheckIn,
+        checkOutTime: rawCheckOut,
         gpsDistance: Number(l.check_in_distance || l.gps_distance || l.distance || 0),
         photoUrl: l.check_in_photo_url || l.photo_url || '',
         workedMinutes: Number(l.actual_worked_minutes || l.worked_minutes || 0),
@@ -127,7 +127,6 @@ export async function GET(request: NextRequest) {
 
     let result = Array.from(uniqueMap.values());
 
-    // الفلترة المرنة
     if (userId && userId !== 'ALL') {
       result = result.filter((r) => {
         const matchId = String(r.userId) === String(userId);
