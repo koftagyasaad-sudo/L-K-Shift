@@ -34,16 +34,27 @@ interface NotificationItem {
   createdAt: string;
 }
 
-// دالة توليد نغمة التنبيه الإلكترونية عبر مذبذب الصوت في الهاتف
-function playNotificationChime() {
-  try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+// محرك صوت دائم واحد فقط لتفادي حد المتصفح (AudioContext Singleton)
+let sharedAudioCtx: AudioContext | null = null;
 
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (!sharedAudioCtx) {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass) {
+      sharedAudioCtx = new AudioContextClass();
     }
+  }
+  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume().catch(() => {});
+  }
+  return sharedAudioCtx;
+}
+
+function playPermanentChime() {
+  try {
+    const ctx = getSharedAudioContext();
+    if (!ctx) return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -61,11 +72,11 @@ function playNotificationChime() {
     osc.start();
     osc.stop(ctx.currentTime + 0.5);
 
-    if (navigator.vibrate) {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([150, 80, 150]);
     }
   } catch (e) {
-    console.warn('Audio play error:', e);
+    console.warn('Audio play warning:', e);
   }
 }
 
@@ -84,7 +95,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const prevUnreadCountRef = useRef<number>(0);
-  const [hasSoundPermission, setHasSoundPermission] = useState<boolean>(true);
+  const [hasAudioUnlocked, setHasAudioUnlocked] = useState<boolean>(true);
   const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
@@ -96,38 +107,35 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
       if (storedRole) setUserRole(storedRole);
       if (storedId) setUserId(storedId);
 
-      const soundEnabled = localStorage.getItem('sound_notifications_unlocked');
-      if (!soundEnabled || (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted')) {
-        setHasSoundPermission(false);
+      const unlocked = localStorage.getItem('audio_notifications_unlocked');
+      if (!unlocked) {
+        setHasAudioUnlocked(false);
       }
     } catch {}
   }, []);
 
-  // فك قفل الصوت وطلب إذن الإشعارات بنقرة واحدة من المستخدم
-  const handleEnableAudioAndNotifications = async () => {
+  // فك قفل الصوت وطلب إذن الإشعارات من النظام بضغطة واحدة
+  const handleUnlockAudioAndPush = async () => {
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const ctx = new AudioContextClass();
-        if (ctx.state === 'suspended') {
-          await ctx.resume();
-        }
+      const ctx = getSharedAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        await ctx.resume();
       }
-      playNotificationChime();
-      localStorage.setItem('sound_notifications_unlocked', 'true');
+      playPermanentChime();
+      localStorage.setItem('audio_notifications_unlocked', 'true');
+      setHasAudioUnlocked(true);
 
       if (typeof window !== 'undefined' && 'Notification' in window) {
         const perm = await Notification.requestPermission();
         if (perm === 'granted') {
-          new Notification('L-K Shift', {
+          new Notification('L-K Shift Core', {
             body: 'تم تفعيل التنبيهات الصوتية وإشعارات الهاتف بنجاح!',
             icon: '/Logo.png',
           });
         }
       }
-      setHasSoundPermission(true);
-    } catch (err) {
-      console.warn('Audio activation error:', err);
+    } catch (e) {
+      console.warn('Audio unlock error:', e);
     }
   };
 
@@ -144,7 +152,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
         const currentUnread = items.filter((n) => !n.isRead).length;
         if (currentUnread > prevUnreadCountRef.current && prevUnreadCountRef.current !== 0) {
-          playNotificationChime();
+          playPermanentChime();
 
           const newest = items.find((n) => !n.isRead);
           if (newest && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -175,7 +183,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // منبه الوردية
+  // منبه الشيفت الصوتي
   useEffect(() => {
     const checkShiftAlarm = () => {
       const branchShift = localStorage.getItem('userBranchShift') || '10:00';
@@ -193,7 +201,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
 
       [60, 30, 15].forEach((intervalMinutes) => {
         if (diffMinutes === intervalMinutes && !shiftNotified[`${intervalMinutes}`]) {
-          playNotificationChime();
+          playPermanentChime();
 
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             new Notification('منبه بداية الشيفت - L-K Shift', {
@@ -304,25 +312,23 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
       </div>
 
       <div className="flex items-center gap-2.5">
-        {/* زر تفعيل الصوت والإشعارات على الهاتف إذا لم تكن مفعلة */}
-        {!hasSoundPermission && (
+        {!hasAudioUnlocked && (
           <button
             type="button"
-            onClick={handleEnableAudioAndNotifications}
+            onClick={handleUnlockAudioAndPush}
             className="flex items-center gap-1.5 bg-orange-50 border border-orange-300 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-orange-100 transition cursor-pointer animate-pulse"
-            title="انقر هنا لفك قفل الصوت وتفعيل إشعارات الهاتف"
+            title="انقر لتفعيل صوت التنبيهات وإشعارات الهاتف"
           >
             <Volume2 size={14} />
             <span className="hidden sm:inline">تفعيل صوت التنبيهات 🔔</span>
           </button>
         )}
 
-        {/* جرس الإشعارات */}
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
             onClick={() => {
-              if (!hasSoundPermission) handleEnableAudioAndNotifications();
+              if (!hasAudioUnlocked) handleUnlockAudioAndPush();
               setShowDropdown(!showDropdown);
             }}
             className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
