@@ -15,21 +15,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
+  // حالة طي السايدبار (تجعله شريط مصغر بالأيقونات بدلاً من إخفائه)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div
-      className="min-h-screen bg-slate-50 dark:bg-[#080911] text-slate-900 dark:text-white flex flex-row"
+      className="min-h-screen bg-slate-50 text-slate-900 flex flex-row"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      {/* مشغل ومراقب الأوفلاين في الخلفية */}
       <ServiceWorkerRegister />
 
-      {/* 1. السايدبار المعتمد على اليمين */}
-      {!sidebarCollapsed && <Sidebar locale={locale} />}
+      {/* 1. السايدبار (يعرض الأيقونات فقط عند الطي) */}
+      <Sidebar locale={locale} collapsed={sidebarCollapsed} />
 
-      {/* 2. منطقة العمل والشاشات على اليسار */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* 2. منطقة العمل والمحتوى */}
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         <GlobalHeader
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
