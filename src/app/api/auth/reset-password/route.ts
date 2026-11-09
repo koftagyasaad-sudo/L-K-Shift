@@ -3,15 +3,10 @@ import { and, eq, gt } from 'drizzle-orm';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import { hashPassword } from '@/lib/passwords';
+import { meetsPasswordMinimum } from '@/lib/password-policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-// فحص قوة كلمة المرور: 8 خانات، حرف كبير، حرف صغير، رقم، رمز خاص
-function isPasswordStrong(pass: string): boolean {
-  const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,}$/;
-  return strongRegex.test(pass);
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,11 +25,9 @@ export async function POST(request: NextRequest) {
     }
 
     // التحقق الصارم من شروط الباسورد القوي
-    if (!isPasswordStrong(cleanPass)) {
+    if (!meetsPasswordMinimum(cleanPass)) {
       return NextResponse.json(
-        {
-          message: 'كلمة المرور غير مطابقة للشروط! يجب أن تتكون من 8 خانات على الأقل، وتحتوي على حرف كبير (Capital)، وحرف صغير (Small)، ورقم، ورمز خاص (مثل: @, #, $, %).',
-        },
+        { message: 'يجب أن تتكون كلمة المرور من 6 محارف على الأقل.' },
         { status: 400 }
       );
     }

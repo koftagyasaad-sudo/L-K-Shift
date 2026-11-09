@@ -15,6 +15,13 @@
       "when": 1794211314061,
       "tag": "0001_add_query_indexes_and_phone_constraint",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794219225689,
+      "tag": "0002_ensure_password_reset_columns",
+      "breakpoints": true
     }
   ]
 }

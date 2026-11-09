@@ -5,7 +5,6 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Phone,
-  KeyRound,
   Lock,
   ArrowRight,
   ShieldCheck,
@@ -17,6 +16,7 @@ import {
   EyeOff,
   RefreshCw,
 } from 'lucide-react';
+import { meetsPasswordMinimum } from '@/lib/password-policy';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -119,16 +119,10 @@ export default function ForgotPasswordPage() {
       return;
     }
 
-    // فحص شروط القوة
-    const hasUpper = /[A-Z]/.test(newPassword);
-    const hasLower = /[a-z]/.test(newPassword);
-    const hasNumber = /\d/.test(newPassword);
-    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword);
-
-    if (newPassword.length < 8 || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+    if (!meetsPasswordMinimum(newPassword)) {
       setStatusMsg({
         type: 'err',
-        text: 'كلمة المرور يجب أن تتكون من 8 خانات على الأقل، وتحتوي على حرف كبير، وحرف صغير، ورقم، ورمز خاص (مثل: @, #, $, %).',
+        text: 'يجب أن تتكون كلمة المرور من 6 محارف على الأقل.',
       });
       return;
     }
@@ -326,23 +320,11 @@ export default function ForgotPasswordPage() {
               />
             </div>
 
-            {/* شروط الأمان الإلزامية */}
+            {/* الحد الأدنى لطول كلمة المرور */}
             <div className="bg-[#0c0e18] p-3 rounded-2xl border border-white/5 space-y-1 text-[11px]">
-              <span className="font-bold text-slate-300 block mb-1">شروط كلمة المرور القوية:</span>
-              <p className={newPassword.length >= 8 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                ✓ 8 خانات على الأقل
-              </p>
-              <p className={/[A-Z]/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                ✓ حرف كبير واحد على الأقل (Capital)
-              </p>
-              <p className={/[a-z]/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                ✓ حرف صغير واحد على الأقل (Small)
-              </p>
-              <p className={/\d/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                ✓ رقم واحد على الأقل (0-9)
-              </p>
-              <p className={/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                ✓ رمز خاص واحد على الأقل (مثل: @, #, $, %)
+              <span className="font-bold text-slate-300 block mb-1">الحد الأدنى لطول كلمة المرور:</span>
+              <p className={meetsPasswordMinimum(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                ✓ 6 محارف على الأقل
               </p>
             </div>
 

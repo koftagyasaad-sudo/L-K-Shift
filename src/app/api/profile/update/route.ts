@@ -3,6 +3,7 @@ import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { authorizeApi } from '@/lib/api-auth';
+import { meetsPasswordMinimum } from '@/lib/password-policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -154,10 +155,10 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // 2. تطبيق قاعدة كلمة المرور القوية الصارمة
-      if (!isPasswordStrong(trimmedNewPass)) {
+      // 2. تطبيق الحد الأدنى لطول كلمة المرور
+      if (!meetsPasswordMinimum(trimmedNewPass)) {
         return NextResponse.json({
-          message: 'كلمة المرور ضعيفة! يجب ألا تقل عن 8 خانات، وتحتوي على حرف كبير (Capital)، وحرف صغير (Small)، ورقم، ورمز خاص (مثل: @, $, !, #, %).',
+          message: 'يجب أن تتكون كلمة المرور من 6 محارف على الأقل.',
         }, { status: 400 });
       }
 

@@ -11,6 +11,14 @@ existing codebase. CI fails if that baseline grows; reduce the budget as legacy
 warnings are fixed. `next build` also runs lint and type validation; the
 standalone lint command additionally enforces the warning budget.
 
+## Passwords and initial admin
+
+Passwords must contain at least 6 characters. The first super-admin can be
+created through `POST /api/setup-admin` after setting `SETUP_ADMIN_TOKEN` in the
+deployment environment. Send the admin phone and password in the request body
+over HTTPS; omit `fullNameAr` to use the display name `Admin`. Never commit
+credentials or place them in source code.
+
 ## Database migrations
 
 Schema changes are versioned in `drizzle/`. Generate and review migrations with
@@ -25,6 +33,8 @@ and enforces unique phone numbers, which are used as login identifiers. Drizzle
 applies migrations in a transaction, so PostgreSQL's `CREATE INDEX CONCURRENTLY`
 cannot be used here; schedule this migration during a low-traffic window because
 index creation can block writes.
+`drizzle/0002_ensure_password_reset_columns.sql` idempotently adds the password
+reset OTP fields for databases whose existing `users` table predates them.
 
 Before adopting this migration history for an existing staging or production
 database:

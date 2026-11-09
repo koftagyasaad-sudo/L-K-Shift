@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { branches, users } from "@/db/schema";
 import { hashPassword } from "@/lib/passwords";
+import { meetsPasswordMinimum } from "@/lib/password-policy";
 
 export async function POST(request: NextRequest) {
   const setupToken = process.env.SETUP_ADMIN_TOKEN;
@@ -34,10 +35,12 @@ export async function POST(request: NextRequest) {
     const values = body as Record<string, unknown>;
     const phone = typeof values.phone === "string" ? values.phone.trim() : "";
     const password = typeof values.password === "string" ? values.password : "";
-    const fullNameAr = typeof values.fullNameAr === "string" ? values.fullNameAr.trim() : "";
-    if (!phone || password.length < 12 || !fullNameAr) {
+    const fullNameAr = typeof values.fullNameAr === "string" && values.fullNameAr.trim()
+      ? values.fullNameAr.trim()
+      : "Admin";
+    if (!phone || !meetsPasswordMinimum(password)) {
       return NextResponse.json(
-        { message: "الاسم ورقم الهاتف وكلمة مرور من 12 محرفًا على الأقل مطلوبة." },
+        { message: "رقم الهاتف وكلمة مرور من 6 محارف على الأقل مطلوبان." },
         { status: 400 }
       );
     }
