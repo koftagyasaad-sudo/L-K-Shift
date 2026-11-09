@@ -7,7 +7,19 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
-  // Migrations executed in Neon
+  try {
+    const authorization = await authorizeApi([
+      'branches.view',
+      'branches.manage',
+      'employees.view',
+      'employees.manage',
+      'attendance.view',
+    ]);
+    if ('response' in authorization) return authorization.response;
+
+    try {
+      await db.execute(sql`SELECT 1`);
+    } catch {}
 
     const raw = await db.execute(sql`
       SELECT 
@@ -48,7 +60,45 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  // Migrations executed in Neon
+  try {
+    const authorization = await authorizeApi('branches.manage');
+    if ('response' in authorization) return authorization.response;
+
+    const body = await request.json();
+    const {
+      id,
+      name,
+      nameEn,
+      nameAr,
+      latitude,
+      longitude,
+      geofenceRadius,
+      managerId,
+      phone,
+      address,
+      shift1Start,
+      shift1End,
+      shift2Start,
+      shift2End,
+      shift3Start,
+      shift3End,
+      gracePeriodMinutes,
+    } = body;
+
+    if (!nameAr) {
+      return NextResponse.json({ message: 'اسم الفرع بالعربية مطلوب' }, { status: 400 });
+    }
+
+    if (id && !canAccessBranch(authorization.principal, Number(id))) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
+    if (!id && authorization.principal.branchScope !== 'ALL') {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
+
+    try {
+      await db.execute(sql`SELECT 1`);
+    } catch {}
 
     const enName = nameEn || name || 'Branch';
     const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
