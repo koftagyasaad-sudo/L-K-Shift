@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, or } , sql } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { customRoles, users } from "@/db/schema";
@@ -91,7 +91,7 @@ export async function authorizeApi(
       isActive: users.isActive,
     })
     .from(users)
-    .where(and(eq(users.id, userId), eq(users.isActive, true)))
+    .where(and(sql`${users.id}::text = ${rawUserId}`, eq(users.isActive, true)))
     .limit(1);
 
   if (!user) {
