@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { hashPassword, verifyPassword } from "@/lib/passwords";
 
 export async function POST(req: Request) {
   try {
-    const body: unknown = await req.json();
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json(
-        { message: "بيانات تسجيل الدخول غير صالحة" },
-        { status: 400 }
-      );
-    }
-
-    const values = body as Record<string, unknown>;
-    const phone = typeof values.phone === "string" ? values.phone.trim() : "";
-    const password = typeof values.password === "string" ? values.password : "";
+    const body = await req.json();
+    const phone = (body.phone || body.username || "").trim();
+    const password = body.password || "";
 
     if (!phone || !password) {
       return NextResponse.json(
@@ -26,66 +17,69 @@ export async function POST(req: Request) {
       );
     }
 
-    const userRecords = await db
-      .select()
-      .from(users)
-      .where(eq(users.phone, phone))
-      .limit(1);
+    // استعلام SQL مباشر يتجاوز مشاكل تطابق Drizzle Schema ويقرأ من Neon مباشرة
+    const result: any = await db.execute(sql`
+      SELECT 
+        id, 
+        COALESCE(name, '') as name,
+        phone, 
+        COALESCE(password_hash, password, '') as "passwordHash",
+        is_active as "isActive"
+      FROM users 
+      WHERE phone = ${phone}
+      LIMIT 1;
+    `);
 
-    const user = userRecords[0];
+    const rows = Array.isArray(result) ? result : result?.rows || [];
+    const user = rows[0];
 
+    // 1. التحقق من وجود المستخدم
     if (!user) {
       return NextResponse.json(
-        { message: "بيانات الدخول غير صحيحة" },
+        { message: "بيانات الدخول غير صحيحة", debug_reason: "USER_NOT_FOUND" },
         { status: 401 }
       );
     }
 
-    if (!user.passwordHash) {
+    // 2. التحقق من حالة التفعيل
+    if (user.isActive === false) {
       return NextResponse.json(
-        { message: "حساب المستخدم غير مهيأ بكلمة مرور" },
-        { status: 401 }
-      );
-    }
-
-    const verification = await verifyPassword(password, user.passwordHash);
-    if (!verification.isValid) {
-      return NextResponse.json(
-        { message: "بيانات الدخول غير صحيحة" },
-        { status: 401 }
-      );
-    }
-
-    if (!user.isActive) {
-      return NextResponse.json(
-        { message: "هذا الحساب معطل حالياً" },
+        { message: "هذا الحساب معطل حالياً", debug_reason: "ACCOUNT_INACTIVE" },
         { status: 403 }
       );
     }
 
-    if (verification.needsRehash) {
-      await db
-        .update(users)
-        .set({ passwordHash: await hashPassword(password), updatedAt: new Date() })
-        .where(eq(users.id, user.id));
+    // 3. التحقق من وجود الهاش في قاعدة البيانات
+    if (!user.passwordHash) {
+      return NextResponse.json(
+        { message: "حساب المستخدم غير مهيأ بكلمة مرور", debug_reason: "NO_HASH_FOUND" },
+        { status: 401 }
+      );
     }
 
-    const name = user.fullNameAr || "Admin";
+    // 4. مطابقة كلمة المرور مع الهاش الحقيقي
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return NextResponse.json(
+        { message: "بيانات الدخول غير صحيحة", debug_reason: "HASH_MISMATCH" },
+        { status: 401 }
+      );
+    }
 
-    // حفظ الجلسة
+    // 5. حفظ الجلسة الرسمية في الكوكيز
     const cookieStore = await cookies();
     cookieStore.set(
       "auth_session",
       JSON.stringify({
         id: user.id,
         phone: user.phone,
-        name,
+        name: user.name,
       }),
       {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         path: "/",
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: 60 * 60 * 24 * 7, // أسبوع
       }
     );
 
@@ -93,14 +87,14 @@ export async function POST(req: Request) {
       success: true,
       user: {
         id: user.id,
-        name,
+        name: user.name,
         phone: user.phone,
       },
     });
-  } catch (error) {
-    console.error("Login Route Error:", error);
+  } catch (error: any) {
+    console.error("Login System Error:", error);
     return NextResponse.json(
-      { message: "حدث خطأ داخلي في الخادم" },
+      { message: "حدث خطأ في الخادم", error: error.message },
       { status: 500 }
     );
   }
