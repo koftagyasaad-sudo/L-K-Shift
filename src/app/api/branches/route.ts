@@ -7,22 +7,48 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
-  try {
-    const authorization = await authorizeApi([
-      'branches.view',
-      'branches.manage',
-      'employees.view',
-      'employees.manage',
-      'attendance.view',
-    ]);
-    if ('response' in authorization) return authorization.response;
+  // Migrations executed in Neon
 
-    try {
-      // Migrations already executed in Neon
-    } catch {}
+    const raw = await db.execute(sql`
+      SELECT 
+        b.id,
+        COALESCE(b.name, 'Branch') as name,
+        COALESCE(b.name_en, b.name, 'Branch') as "nameEn",
+        COALESCE(b.name_ar, b.name, 'فرع') as name_ar,
+        COALESCE(b.name_ar, b.name, 'فرع') as "nameAr",
+        COALESCE(b.latitude, 31.1308) as latitude,
+        COALESCE(b.longitude, 30.6475) as longitude,
+        COALESCE(b.geofence_radius, 100) as geofence_radius,
+        COALESCE(b.geofence_radius, 100) as "geofenceRadius",
+        b.manager_id as "managerId",
+        COALESCE(u.full_name_ar, u.name, '') as "managerName",
+        COALESCE(b.phone, '') as phone,
+        COALESCE(b.address, '') as address,
+        COALESCE(b.shift1_start::text, '09:00') as "shift1Start",
+        COALESCE(b.shift1_end::text, '17:00') as "shift1End",
+        COALESCE(b.shift2_start::text, '13:00') as "shift2Start",
+        COALESCE(b.shift2_end::text, '21:00') as "shift2End",
+        COALESCE(b.shift3_start::text, '17:00') as "shift3Start",
+        COALESCE(b.shift3_end::text, '01:00') as "shift3End",
+        COALESCE(b.grace_period_minutes, 15) as "gracePeriodMinutes"
+      FROM branches b
+      LEFT JOIN users u ON b.manager_id::text = u.id::text
+      ORDER BY b.id ASC;
+    `);
 
-    const raw = // Migrations already executed in Neon
-    } catch {}
+    const branches = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    const visibleBranches = branches.filter((branch: any) =>
+      canAccessBranch(authorization.principal, Number(branch.id))
+    );
+    return NextResponse.json(visibleBranches, { status: 200 });
+  } catch (error: any) {
+    console.error('Branches GET error:', error);
+    return NextResponse.json([], { status: 200 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  // Migrations executed in Neon
 
     const enName = nameEn || name || 'Branch';
     const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
