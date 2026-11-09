@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       FROM users u
       LEFT JOIN branches b ON b.id = COALESCE(u.primary_branch_id, u.branch_id, 1)
       WHERE ${empId ? sql`u.id::text = ${empId}` : sql`1=1`}
-      ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, u.id) ASC;
+      ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, 999999) ASC, u.id ASC;
     `);
 
     const employees = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
