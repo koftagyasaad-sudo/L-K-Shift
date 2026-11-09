@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
         COALESCE(u.shift_start_time, '10:00') as "shiftStartTime",
         COALESCE(u.shift_end_time, '18:00') as "shiftEndTime"
       FROM users u
-      LEFT JOIN branches b ON b.id = COALESCE(u.primary_branch_id, u.branch_id, 1)
+      LEFT JOIN branches b ON b.id::text = COALESCE(u.primary_branch_id::text, u.branch_id::text, '')
       WHERE ${empId ? sql`u.id::text = ${empId}` : sql`1=1`}
       ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, 999999) ASC, u.id ASC;
     `);
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     const employees = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
     const visibleEmployees = employees.filter((employee: any) => {
       const branchId = employee.branchId == null ? null : Number(employee.branchId);
-      return canAccessBranch(authorization.principal, branchId);
+      if (authorization.principal.systemRole === 'SUPER_ADMIN') return true; return canAccessBranch(authorization.principal, branchId);
     }).map((employee: any) => ({
       ...employee,
       monthlySalary: hasApiPermission(authorization.principal, 'payroll.view')

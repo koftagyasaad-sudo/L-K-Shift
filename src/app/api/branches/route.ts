@@ -50,7 +50,7 @@ export async function GET() {
 
     const branches = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
     const visibleBranches = branches.filter((branch: any) =>
-      canAccessBranch(authorization.principal, Number(branch.id))
+      authorization.principal.systemRole === 'SUPER_ADMIN' || canAccessBranch(authorization.principal, branch.id)
     );
     return NextResponse.json(visibleBranches, { status: 200 });
   } catch (error: any) {

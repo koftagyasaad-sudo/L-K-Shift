@@ -55,7 +55,7 @@ export default function BranchesManagementPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('LIST');
+  const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('EDIT');
 
   const [editingBranch, setEditingBranch] = useState<Partial<BranchItem>>({
     nameAr: '',
