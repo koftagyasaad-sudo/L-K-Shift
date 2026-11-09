@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
-import { and, eq, or } , sql } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { customRoles, users } from "@/db/schema";
@@ -77,6 +77,12 @@ export async function authorizeApi(
   const userId = Number(sessionUserId);
 
   if (!session?.user || !Number.isSafeInteger(userId) || userId < 1) {
+    console.warn("[API_AUTH_BLOCKED_GATE_1]", { 
+      hasSession: !!session, 
+      sessionUser: session?.user, 
+      sessionUserId, 
+      userId 
+    });
     return {
       response: NextResponse.json({ message: "غير مصرح" }, { status: 401 }),
     };
@@ -91,7 +97,7 @@ export async function authorizeApi(
       isActive: users.isActive,
     })
     .from(users)
-    .where(and(sql`${users.id}::text = ${rawUserId}`, eq(users.isActive, true)))
+    .where(and(eq(users.id, userId), eq(users.isActive, true)))
     .limit(1);
 
   if (!user) {
