@@ -73,20 +73,20 @@ export async function authorizeApi(
   requiredPermissions?: string | string[]
 ): Promise<ApiAuthorization> {
   const session = await getServerSession(authOptions);
-  const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
-  const userId = Number(sessionUserId);
+  const sessionUser = session?.user as any;
+  const sessionPhone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
+  const rawId = sessionUser?.id ? Number(sessionUser.id) : null;
+  const validId = rawId && Number.isSafeInteger(rawId) && rawId > 0 ? rawId : null;
 
-  if (!session?.user || !Number.isSafeInteger(userId) || userId < 1) {
-    console.warn("[API_AUTH_BLOCKED_GATE_1]", { 
-      hasSession: !!session, 
-      sessionUser: session?.user, 
-      sessionUserId, 
-      userId 
-    });
+  if (!session?.user || (!sessionPhone && !validId)) {
     return {
       response: NextResponse.json({ message: "غير مصرح" }, { status: 401 }),
     };
   }
+
+  const lookupConditions = [];
+  if (validId) lookupConditions.push(eq(users.id, validId));
+  if (sessionPhone) lookupConditions.push(eq(users.phone, sessionPhone));
 
   const [user] = await db
     .select({
@@ -97,7 +97,7 @@ export async function authorizeApi(
       isActive: users.isActive,
     })
     .from(users)
-    .where(and(eq(users.id, userId), eq(users.isActive, true)))
+    .where(and(lookupConditions.length > 1 ? or(...lookupConditions) : lookupConditions[0], eq(users.isActive, true)))
     .limit(1);
 
   if (!user) {

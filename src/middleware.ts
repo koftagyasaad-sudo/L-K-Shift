@@ -22,7 +22,7 @@ export async function middleware(request: NextRequest) {
   const isLocaleRoot = pathname === "/" || pathname === "/ar" || pathname === "/en";
   const token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: process.env.NEXTAUTH_SECRET || "lk-shift-super-secret-jwt-key-prod-2026",
   });
 
   if (!token && !isAuthPage && !isLocaleRoot) {
