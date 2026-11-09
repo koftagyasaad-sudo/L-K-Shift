@@ -126,8 +126,8 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         const u = user as AppUser;
         token.id = String(u.id);
-        token.phone = u.phone ?? null;
-        token.role = u.role ?? null;
+        token.phone = String(u.phone || "");
+        token.role = String(u.role || "SUPER_ADMIN");
         token.systemRole = (u.systemRole ?? u.role ?? "SUPER_ADMIN") as any;
         token.fullNameAr = u.fullNameAr ?? null;
         token.fullNameEn = u.fullNameEn ?? null;
@@ -139,9 +139,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
         const sUser = session.user as AppUser;
-        sUser.id = toNullableString(token.id) || sUser.id || "";
-        sUser.phone = toNullableString(token.phone);
-        sUser.role = toNullableString(token.role) || "SUPER_ADMIN";
+        sUser.id = String(token.id || sUser.id || "");
+        sUser.phone = String(token.phone || sUser.phone || "");
+        sUser.role = String(token.role || "SUPER_ADMIN");
         sUser.systemRole = (token.systemRole as any) || "SUPER_ADMIN";
         sUser.fullNameAr = toNullableString(token.fullNameAr);
         sUser.fullNameEn = toNullableString(token.fullNameEn);
