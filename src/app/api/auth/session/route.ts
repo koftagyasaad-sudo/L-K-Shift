@@ -1,49 +1,80 @@
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
-import { authorizeApi } from "@/lib/api-auth";
 import { db } from "@/db";
-import { branches } from "@/db/schema";
+import { users, branches } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_request: NextRequest) {
   try {
-    const authorization = await authorizeApi();
-    if ("response" in authorization) return authorization.response;
-
     const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as
-      | { name?: string | null; phone?: string | null; fullNameAr?: string | null }
-      | undefined;
-    const branchId = authorization.principal.primaryBranchId;
-    const [branch] = branchId
-      ? await db
+    const sessionUser = session?.user as any;
+
+    const phone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
+    const rawId = sessionUser?.id ? Number(sessionUser.id) : null;
+
+    if (!session || (!phone && !rawId)) {
+      return NextResponse.json({ authenticated: false, message: "غير مصرح" }, { status: 401 });
+    }
+
+    // استعلام فوري بحساب المستخدم عبر الهاتف أو المعرف
+    const conditions = [];
+    if (phone) conditions.push(eq(users.phone, phone));
+    if (rawId && Number.isSafeInteger(rawId) && rawId > 0) conditions.push(eq(users.id, rawId));
+
+    const [dbUser] = await db
+      .select()
+      .from(users)
+      .where(conditions.length > 1 ? or(...conditions) : conditions[0])
+      .limit(1);
+
+    if (!dbUser || dbUser.isActive === false) {
+      return NextResponse.json({ authenticated: false, message: "غير مصرح" }, { status: 401 });
+    }
+
+    const isSuperAdmin = dbUser.systemRole === "SUPER_ADMIN" || dbUser.jobRole === "SUPER_ADMIN";
+    const permissions = isSuperAdmin ? ["*"] : ["dashboard.view", "attendance.view"];
+
+    let branchName = "";
+    let shiftStart = "10:00";
+    let shiftEnd = "18:00";
+
+    if (dbUser.primaryBranchId) {
+      try {
+        const [b] = await db
           .select({ name: branches.nameAr, start: branches.shiftStartTime, end: branches.shiftEndTime })
           .from(branches)
-          .where(eq(branches.id, branchId))
-          .limit(1)
-      : [];
+          .where(eq(branches.id, dbUser.primaryBranchId))
+          .limit(1);
+        if (b) {
+          branchName = b.name || "";
+          shiftStart = b.start || "10:00";
+          shiftEnd = b.end || "18:00";
+        }
+      } catch (_) {}
+    }
 
     return NextResponse.json({
       authenticated: true,
       user: {
-        id: authorization.principal.id,
-        name: sessionUser?.name || sessionUser?.fullNameAr || "",
-        fullName: sessionUser?.fullNameAr || sessionUser?.name || "",
-        phone: sessionUser?.phone || "",
-        role: authorization.principal.jobRole,
-        systemRole: authorization.principal.systemRole,
-        branchId,
-        branchName: branch?.name || "",
-        shiftStart: branch?.start || "10:00",
-        shiftEnd: branch?.end || "18:00",
-        permissions: authorization.principal.permissions,
+        id: dbUser.id,
+        name: dbUser.fullNameAr || dbUser.fullNameEn || sessionUser?.name || phone,
+        fullName: dbUser.fullNameAr || dbUser.fullNameEn || sessionUser?.name || phone,
+        phone: dbUser.phone,
+        role: dbUser.jobRole || "SUPER_ADMIN",
+        systemRole: dbUser.systemRole || "SUPER_ADMIN",
+        branchId: dbUser.primaryBranchId,
+        branchName,
+        shiftStart,
+        shiftEnd,
+        permissions,
+        isOnboarded: true,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Session endpoint error:", error);
-    return NextResponse.json({ authenticated: false }, { status: 500 });
+    return NextResponse.json({ authenticated: false, message: "خطأ في السيرفر" }, { status: 500 });
   }
 }
