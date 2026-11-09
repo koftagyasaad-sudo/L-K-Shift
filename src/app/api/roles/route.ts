@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -88,6 +89,7 @@ const INITIAL_ROLES = [
       'dashboard.analytics',
       'attendance.review',
       'attendance.zk_sheet',
+      'payroll.view',
       'employees.view',
       'hr_files.view',
       'branches.view',
@@ -112,6 +114,8 @@ const INITIAL_ROLES = [
       'branches.view',
       'branches.manage',
       'roles.view',
+      'payroll.view',
+      'payroll.export',
       'recruitment.view',
       'leaves.approve',
     ],
@@ -131,7 +135,7 @@ const INITIAL_ROLES = [
 
 function sanitizePermissions(perms: any): string[] {
   if (!perms) return [];
-  if (Array.isArray(perms)) return perms;
+  if (Array.isArray(perms)) return perms.filter((permission): permission is string => typeof permission === 'string');
   if (typeof perms === 'string') {
     try {
       const parsed = JSON.parse(perms);
@@ -151,11 +155,15 @@ function sanitizePermissions(perms: any): string[] {
 
 function sanitizeBranchIds(ids: any): number[] {
   if (!ids) return [];
-  if (Array.isArray(ids)) return ids.map((x) => Number(x)).filter((n) => !isNaN(n));
+  if (Array.isArray(ids)) {
+    return ids.map((x) => Number(x)).filter((n) => Number.isSafeInteger(n) && n > 0);
+  }
   if (typeof ids === 'string') {
     try {
       const parsed = JSON.parse(ids);
-      if (Array.isArray(parsed)) return parsed.map((x) => Number(x)).filter((n) => !isNaN(n));
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => Number(x)).filter((n) => Number.isSafeInteger(n) && n > 0);
+      }
     } catch {
       return [];
     }
@@ -165,6 +173,9 @@ function sanitizeBranchIds(ids: any): number[] {
 
 export async function GET() {
   try {
+    const authorization = await authorizeApi(['roles.view', 'roles.manage']);
+    if ('response' in authorization) return authorization.response;
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS custom_roles (
         id SERIAL PRIMARY KEY,
@@ -179,14 +190,12 @@ export async function GET() {
       );
     `);
 
-    try {
-      await db.execute(sql`
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS branch_scope VARCHAR(50) DEFAULT 'ALL';
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS allowed_branch_ids JSONB DEFAULT '[]'::jsonb;
-      `);
-    } catch {}
+    await db.execute(sql`
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS branch_scope VARCHAR(50) DEFAULT 'ALL';
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS allowed_branch_ids JSONB DEFAULT '[]'::jsonb;
+    `);
 
     const existing = await db.execute(sql`SELECT COUNT(*)::int as count FROM custom_roles;`);
     const count = (existing as any)?.rows?.[0]?.count ?? (existing as any)?.[0]?.count ?? 0;
@@ -236,37 +245,82 @@ export async function GET() {
     return NextResponse.json(formatted, { status: 200 });
   } catch (error: any) {
     console.error('Roles GET error:', error);
-    return NextResponse.json(
-      INITIAL_ROLES.map((r, i) => ({ id: i + 1, ...r })),
-      { status: 200 }
-    );
+    return NextResponse.json({ message: 'تعذر تحميل الأدوار.' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { id, name, nameAr, permissions, branchScope, allowedBranchIds } = body;
+    const authorization = await authorizeApi('roles.manage');
+    if ('response' in authorization) return authorization.response;
 
-    if (!name || !nameAr) {
+    const body: unknown = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ message: 'بيانات الدور غير صالحة' }, { status: 400 });
+    }
+    const { id, name, nameAr, permissions, branchScope, allowedBranchIds } =
+      body as Record<string, unknown>;
+
+    if (typeof name !== 'string' || !name.trim() || typeof nameAr !== 'string' || !nameAr.trim()) {
       return NextResponse.json({ message: 'اسم الدور والمعرف البرمجي مطلوبان' }, { status: 400 });
     }
 
-    // التأكد التلقائي في السيرفر من وجود الأعمدة حتى لا يفشل الـ UPDATE
-    try {
-      await db.execute(sql`
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS branch_scope VARCHAR(50) DEFAULT 'ALL';
-        ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS allowed_branch_ids JSONB DEFAULT '[]'::jsonb;
-      `);
-    } catch {}
+    await db.execute(sql`
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS branch_scope VARCHAR(50) DEFAULT 'ALL';
+      ALTER TABLE custom_roles ADD COLUMN IF NOT EXISTS allowed_branch_ids JSONB DEFAULT '[]'::jsonb;
+    `);
 
     const permsArray = sanitizePermissions(permissions);
+    if (permsArray.includes('*')) {
+      return NextResponse.json({ message: 'لا يمكن منح صلاحية المدير العام لدور مخصص' }, { status: 400 });
+    }
+    if (
+      authorization.principal.systemRole !== 'SUPER_ADMIN' &&
+      permsArray.some((permission) => !authorization.principal.permissions.includes(permission))
+    ) {
+      return NextResponse.json({ message: 'لا يمكن منح صلاحيات غير متاحة لك' }, { status: 403 });
+    }
     const permsJson = JSON.stringify(permsArray);
-    const scope = branchScope || 'ALL';
-    const branchIdsJson = JSON.stringify(sanitizeBranchIds(allowedBranchIds));
+    const scope = branchScope === undefined ? 'ALL' : branchScope;
+    if (typeof scope !== 'string') {
+      return NextResponse.json({ message: 'نطاق الفروع غير صالح' }, { status: 400 });
+    }
+    if (!['ALL', 'OWN_BRANCH', 'CUSTOM'].includes(scope)) {
+      return NextResponse.json({ message: 'نطاق الفروع غير صالح' }, { status: 400 });
+    }
+    if (
+      authorization.principal.systemRole !== 'SUPER_ADMIN' &&
+      scope === 'ALL' &&
+      authorization.principal.branchScope !== 'ALL'
+    ) {
+      return NextResponse.json({ message: 'لا يمكن توسيع نطاق الفروع' }, { status: 403 });
+    }
+    const branchIds = sanitizeBranchIds(allowedBranchIds);
+    if (
+      authorization.principal.systemRole !== 'SUPER_ADMIN' &&
+      branchIds.some((branchId) => !canAccessBranch(authorization.principal, branchId))
+    ) {
+      return NextResponse.json({ message: 'لا يمكن منح نطاق فروع غير متاح لك' }, { status: 403 });
+    }
+    const branchIdsJson = JSON.stringify(branchIds);
 
     if (id) {
+      const roleId = Number(id);
+      if (!Number.isSafeInteger(roleId) || roleId < 1) {
+        return NextResponse.json({ message: 'معرف الدور غير صالح' }, { status: 400 });
+      }
+      if (authorization.principal.systemRole !== 'SUPER_ADMIN') {
+        const result = await db.execute(sql`
+          SELECT is_system FROM custom_roles WHERE id = ${roleId} LIMIT 1;
+        `);
+        const role = (result as unknown as { rows?: { is_system: boolean }[] }).rows?.[0]
+          ?? (Array.isArray(result) ? result[0] as { is_system: boolean } | undefined : undefined);
+        if (!role) return NextResponse.json({ message: 'الدور غير موجود' }, { status: 404 });
+        if (role.is_system) {
+          return NextResponse.json({ message: 'لا يمكن تعديل دور نظامي' }, { status: 403 });
+        }
+      }
       await db.execute(sql`
         UPDATE custom_roles
         SET 
@@ -276,7 +330,7 @@ export async function POST(request: NextRequest) {
           branch_scope = ${scope},
           allowed_branch_ids = ${branchIdsJson}::jsonb,
           updated_at = NOW()
-        WHERE id = ${parseInt(id, 10)};
+        WHERE id = ${roleId} AND (${authorization.principal.systemRole === 'SUPER_ADMIN'} OR is_system = false);
       `);
       return NextResponse.json({ success: true, message: 'تم تحديث الدور والصلاحيات بنجاح' });
     } else {
@@ -303,16 +357,23 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const authorization = await authorizeApi('roles.manage');
+    if ('response' in authorization) return authorization.response;
 
-    if (!id) {
+    const { searchParams } = new URL(request.url);
+    const idParam = searchParams.get('id');
+
+    if (!idParam) {
       return NextResponse.json({ message: 'معرف الدور مطلوب' }, { status: 400 });
+    }
+    const id = Number(idParam);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return NextResponse.json({ message: 'معرف الدور غير صالح' }, { status: 400 });
     }
 
     await db.execute(sql`
       DELETE FROM custom_roles 
-      WHERE id = ${parseInt(id, 10)} AND is_system = false;
+      WHERE id = ${id} AND is_system = false;
     `);
 
     return NextResponse.json({ success: true, message: 'تم حذف الدور بنجاح' });

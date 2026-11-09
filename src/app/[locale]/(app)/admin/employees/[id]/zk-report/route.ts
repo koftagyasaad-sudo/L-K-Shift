@@ -1,17 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { users } from '@/db/schema';
+import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id?: string; locale?: string }> }
 ) {
   try {
+    const authorization = await authorizeApi(['payroll.view', 'reports.view']);
+    if ('response' in authorization) return authorization.response;
+
     const resolvedParams = await context.params;
     const id = resolvedParams?.id || request.nextUrl.searchParams.get('id');
 
     if (!id) {
       return NextResponse.json({ message: 'معرف الموظف غير محدد' }, { status: 400 });
+    }
+    const employeeId = Number(id);
+    if (!Number.isSafeInteger(employeeId) || employeeId < 1) {
+      return NextResponse.json({ message: 'معرف الموظف غير صالح' }, { status: 400 });
+    }
+
+    const [scopedEmployee] = await db
+      .select({ branchId: users.primaryBranchId })
+      .from(users)
+      .where(eq(users.id, employeeId))
+      .limit(1);
+    if (!scopedEmployee) {
+      return NextResponse.json({ message: 'الموظف غير موجود بالنظام' }, { status: 404 });
+    }
+    if (!canAccessBranch(authorization.principal, scopedEmployee.branchId)) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
 
     const now = new Date();
@@ -22,7 +44,7 @@ export async function GET(
     const empRaw = await db.execute(sql`
       SELECT 
         u.id, 
-        COALESCE(u.full_name_ar, u.name, 'موظف') as name,
+        COALESCE(u.full_name_ar, 'موظف') as name,
         COALESCE(
           NULLIF(TRIM(u.employee_number), ''), 
           NULLIF(TRIM(u.employee_code), ''), 
@@ -30,7 +52,7 @@ export async function GET(
         ) as "employeeCode",
         u.phone,
         COALESCE(u.job_role, 'موظف') as role,
-        COALESCE(b.name_ar, b.name, 'الإدارة') as "branchName",
+        COALESCE(b.name_ar, 'الإدارة') as "branchName",
         COALESCE(u.monthly_salary, 5000) as "basicSalary",
         COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
         COALESCE(
@@ -40,8 +62,8 @@ export async function GET(
           '09:00 ص - 07:00 م'
         ) as "branchShift"
       FROM users u
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
-      WHERE u.id::text = ${id} OR CAST(u.id AS TEXT) = ${id}
+      LEFT JOIN branches b ON u.primary_branch_id = b.id
+      WHERE u.id = ${employeeId}
       LIMIT 1;
     `);
 
@@ -69,10 +91,7 @@ export async function GET(
         COALESCE(overtime_minutes, 0) as "overtimeMinutes",
         status
       FROM attendance_logs
-      WHERE user_id::text = ${id}
-         OR CAST(user_id AS TEXT) = ${id}
-         OR user_id::text = ${empCode}
-         OR user_id::text = ${empPhone}
+      WHERE user_id = ${employeeId}
       ORDER BY id ASC;
     `);
     const allLogs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
@@ -87,7 +106,7 @@ export async function GET(
         COALESCE(advance_amount, 0) as "advanceAmount",
         final_status
       FROM leave_requests
-      WHERE (user_id::text = ${id} OR CAST(user_id AS TEXT) = ${id} OR user_id::text = ${empCode})
+      WHERE user_id = ${employeeId}
         AND (final_status = 'APPROVED' OR status::text = 'APPROVED');
     `);
     const allLeaves = Array.isArray(leavesRaw) ? leavesRaw : (leavesRaw as any)?.rows || [];
@@ -133,8 +152,8 @@ export async function GET(
       const distance = Number(dayLog?.gpsDistance || 0);
       const photoUrl = dayLog?.photoUrl || null;
       let workedMinutes = Number(dayLog?.workedMinutes || 0);
-      let lateMinutes = Number(dayLog?.lateMinutes || 0);
-      let overtimeMinutes = Number(dayLog?.overtimeMinutes || 0);
+      const lateMinutes = Number(dayLog?.lateMinutes || 0);
+      const overtimeMinutes = Number(dayLog?.overtimeMinutes || 0);
 
       // احتساب دقائق العمل وتفادي الانقطاع
       if (workedMinutes === 0 && checkInRaw) {

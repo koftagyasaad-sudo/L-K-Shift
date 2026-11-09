@@ -4,6 +4,19 @@ import { db } from '@/db';
 import { users, branches } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { canAccessBranch, hasApiPermission, requireApiPrincipal } from '@/lib/api-auth';
+import type { ApiPrincipal } from '@/lib/api-auth';
+
+async function assertEmployeeBranchAccess(principal: ApiPrincipal, employeeId: number) {
+  const [employee] = await db
+    .select({ branchId: users.primaryBranchId })
+    .from(users)
+    .where(eq(users.id, employeeId))
+    .limit(1);
+  if (!employee || !canAccessBranch(principal, employee.branchId)) {
+    throw new Error('ممنوع الوصول إلى بيانات هذا الموظف');
+  }
+}
 
 export interface EmployeeData {
   id: number;
@@ -33,6 +46,9 @@ export interface EmployeeData {
 }
 
 export async function getEmployeesAction(): Promise<EmployeeData[]> {
+  const principal = await requireApiPrincipal(['employees.view', 'employees.manage']);
+  const canViewPayroll = hasApiPermission(principal, 'payroll.view')
+    || hasApiPermission(principal, 'reports.view');
   try {
     const rows = await db
       .select({
@@ -60,7 +76,9 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
       .leftJoin(branches, eq(users.primaryBranchId, branches.id))
       .orderBy(desc(users.createdAt));
 
-    return rows.map((u) => ({
+    return rows
+      .filter((user) => canAccessBranch(principal, user.primaryBranchId))
+      .map((u) => ({
       id: u.id,
       name: u.fullNameAr,
       fullName: u.fullNameAr,
@@ -74,8 +92,8 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
       employeeNumber: u.employeeNumber,
       branchId: u.primaryBranchId,
       branchName: u.branchName || 'الفرع الرئيسي',
-      basicSalary: Number(u.monthlySalary) || 0,
-      monthlySalary: u.monthlySalary,
+      basicSalary: canViewPayroll ? Number(u.monthlySalary) || 0 : 0,
+      monthlySalary: canViewPayroll ? u.monthlySalary : null,
       workingHoursPerDay: u.workingHoursPerDay || 8,
       annualLeaveDays: 21,
       nationalId: u.nationalId,
@@ -85,7 +103,7 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
       isActive: u.isActive,
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,
-    }));
+      }));
   } catch (error) {
     console.error('Error fetching employees:', error);
     return [];
@@ -93,9 +111,12 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
 }
 
 export async function getEmployeeByIdAction(id: string | number): Promise<EmployeeData | null> {
+  const principal = await requireApiPrincipal();
+  const canViewPayroll = hasApiPermission(principal, 'payroll.view')
+    || hasApiPermission(principal, 'reports.view');
   try {
     const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) return null;
+    if (!Number.isSafeInteger(numericId) || numericId < 1) return null;
 
     const result = await db
       .select({
@@ -126,6 +147,16 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
 
     if (!result || result.length === 0) return null;
     const u = result[0];
+    if (
+      numericId !== principal.id &&
+      !hasApiPermission(principal, 'employees.view') &&
+      !hasApiPermission(principal, 'employees.manage')
+    ) {
+      throw new Error('ممنوع الوصول إلى بيانات هذا الموظف');
+    }
+    if (!canAccessBranch(principal, u.primaryBranchId)) {
+      throw new Error('ممنوع الوصول إلى بيانات هذا الموظف');
+    }
 
     return {
       id: u.id,
@@ -141,8 +172,8 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
       employeeNumber: u.employeeNumber,
       branchId: u.primaryBranchId,
       branchName: u.branchName || 'الفرع الرئيسي',
-      basicSalary: Number(u.monthlySalary) || 0,
-      monthlySalary: u.monthlySalary,
+      basicSalary: numericId === principal.id || canViewPayroll ? Number(u.monthlySalary) || 0 : 0,
+      monthlySalary: numericId === principal.id || canViewPayroll ? u.monthlySalary : null,
       workingHoursPerDay: u.workingHoursPerDay || 8,
       annualLeaveDays: 21,
       nationalId: u.nationalId,
@@ -163,10 +194,19 @@ export async function updateEmployeeAction(
   id: string | number,
   data: Partial<EmployeeData>
 ): Promise<{ success: boolean; message?: string }> {
+  const principal = await requireApiPrincipal('employees.manage');
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+    return { success: false, message: 'معرف الموظف غير صالح' };
+  }
+  await assertEmployeeBranchAccess(principal, numericId);
+  if (data.branchId !== undefined && data.branchId !== null) {
+    const targetBranchId = Number(data.branchId);
+    if (!Number.isSafeInteger(targetBranchId) || !canAccessBranch(principal, targetBranchId)) {
+      throw new Error('ممنوع تعيين الموظف إلى هذا الفرع');
+    }
+  }
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) return { success: false, message: 'معرف الموظف غير صالح' };
-
     await db
       .update(users)
       .set({
@@ -197,10 +237,13 @@ export async function updateEmployeeAction(
 }
 
 export async function deleteEmployeeAction(id: string | number): Promise<{ success: boolean; message?: string }> {
+  const principal = await requireApiPrincipal('employees.manage');
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+    return { success: false, message: 'معرف الموظف غير صالح' };
+  }
+  await assertEmployeeBranchAccess(principal, numericId);
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) return { success: false, message: 'معرف الموظف غير صالح' };
-
     await db.delete(users).where(eq(users.id, numericId));
     revalidatePath('/[locale]/admin/employees', 'page');
     return { success: true };

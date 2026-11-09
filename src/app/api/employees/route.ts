@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await authorizeApi('employees.view');
+    if ('response' in authorization) return authorization.response;
+
     const { searchParams } = new URL(request.url);
     const empId = searchParams.get('id');
 
@@ -61,7 +65,17 @@ export async function GET(request: NextRequest) {
     `);
 
     const employees = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    return NextResponse.json(employees, { status: 200 });
+    const visibleEmployees = employees.filter((employee: any) => {
+      const branchId = employee.branchId == null ? null : Number(employee.branchId);
+      return canAccessBranch(authorization.principal, branchId);
+    }).map((employee: any) => ({
+      ...employee,
+      monthlySalary: hasApiPermission(authorization.principal, 'payroll.view')
+        || hasApiPermission(authorization.principal, 'reports.view')
+        ? employee.monthlySalary
+        : null,
+    }));
+    return NextResponse.json(visibleEmployees, { status: 200 });
   } catch (error: any) {
     console.error('Employees GET error:', error);
     return NextResponse.json([], { status: 200 });
@@ -70,6 +84,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await authorizeApi('employees.manage');
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
     const {
       id,
@@ -90,7 +107,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'الاسم ورقم الهاتف مطلوبان' }, { status: 400 });
     }
 
+    const requestedBranchId = branchId
+      ? Number.parseInt(String(branchId), 10)
+      : authorization.principal.primaryBranchId;
+    if (requestedBranchId !== null && !Number.isSafeInteger(requestedBranchId)) {
+      return NextResponse.json({ message: 'معرف الفرع غير صالح' }, { status: 400 });
+    }
+    if (!canAccessBranch(authorization.principal, requestedBranchId)) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
+
     if (id) {
+      const currentRaw = await db.execute(sql`
+        SELECT COALESCE(primary_branch_id, branch_id) AS branch_id
+        FROM users WHERE id = ${parseInt(id, 10)} LIMIT 1;
+      `);
+      const currentRows = Array.isArray(currentRaw) ? currentRaw : (currentRaw as any)?.rows || [];
+      if (!currentRows.length) {
+        return NextResponse.json({ message: 'الموظف غير موجود' }, { status: 404 });
+      }
+      const currentBranchId = currentRows[0].branch_id == null ? null : Number(currentRows[0].branch_id);
+      if (!canAccessBranch(authorization.principal, currentBranchId)) {
+        return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+      }
+
       await db.execute(sql`
         UPDATE users
         SET 

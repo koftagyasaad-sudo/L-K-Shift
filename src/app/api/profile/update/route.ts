@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import crypto from 'crypto';
+import { authorizeApi } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -30,12 +31,15 @@ function isPasswordStrong(pass: string): boolean {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('id');
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
 
-    if (!userId) {
-      return NextResponse.json({ message: 'User ID is required' }, { status: 400 });
+    const { searchParams } = new URL(request.url);
+    const requestedUserId = searchParams.get('id');
+    if (requestedUserId && Number(requestedUserId) !== authorization.principal.id) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
+    const userId = String(authorization.principal.id);
 
     const raw = await db.execute(sql`
       SELECT 
@@ -90,9 +94,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
     const {
-      userId,
       fullName,
       fullNameEn,
       phone,
@@ -120,9 +126,7 @@ export async function POST(request: NextRequest) {
       newPassword,
     } = body;
 
-    if (!userId) {
-      return NextResponse.json({ message: 'معرف المستخدم مفقود' }, { status: 400 });
-    }
+    const userId = String(authorization.principal.id);
 
     // جلب الباسورد الحالي من قاعدة البيانات للتحقق الدقيق
     const currentQuery = await db.execute(sql`

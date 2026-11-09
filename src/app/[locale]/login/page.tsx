@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { UserPlus, ArrowRight, Loader2 } from 'lucide-react';
+import { signIn } from 'next-auth/react';
 
 export default function LoginPage() {
   const params = useParams();
@@ -32,15 +33,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: username.trim(), password: password.trim() }),
+      const result = await signIn('credentials', {
+        phone: username.trim(),
+        password,
+        redirect: false,
       });
 
+      if (!result || result.error) {
+        throw new Error(isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials');
+      }
+
+      const res = await fetch('/api/auth/session', { cache: 'no-store' });
       const data = await res.json();
 
-      if (!res.ok || !data.success) {
+      if (!res.ok || !data.authenticated || !data.user) {
         throw new Error(data.message || (isRtl ? 'بيانات الدخول غير صحيحة' : 'Invalid credentials'));
       }
 

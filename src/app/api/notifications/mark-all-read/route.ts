@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authorizeApi } from "@/lib/api-auth";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    const userId = (session.user as any).id as string;
+    const authorization = await authorizeApi();
+    if ("response" in authorization) return authorization.response;
+    const userId = authorization.principal.id;
 
     await db
       .update(notifications)

@@ -1,36 +1,41 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/serve';
+import { getToken } from "next-auth/jwt";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // استثناء ملفات الصور، الـ Service Worker، الأصول الثابتة، واستمارة التوظيف العامة
   if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
     pathname.includes('.') ||
-    pathname.includes('/apply') ||
-    pathname === '/favicon.ico' ||
-    pathname === '/Logo.png' ||
-    pathname === '/sw.js' ||
-    pathname === '/manifest.json'
+    pathname.includes("/apply") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/Logo.png" ||
+    pathname === "/sw.js" ||
+    pathname === "/manifest.json"
   ) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get('lk_session_token')?.value;
-  const isAuthPage = pathname.includes('/login') || pathname.includes('/forgot-password');
+  const isAuthPage = pathname.includes("/login") || pathname.includes("/forgot-password");
+  const isLocaleRoot = pathname === "/" || pathname === "/ar" || pathname === "/en";
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
 
-  // إذا كان المستخدم غير مسجل ويحاول الوصول لصفحات التطبيق الداخلية
-  if (!token && !isAuthPage && pathname !== '/' && !pathname.endsWith('/ar') && !pathname.endsWith('/en')) {
-    const locale = pathname.startsWith('/en') ? 'en' : 'ar';
+  if (!token && !isAuthPage && !isLocaleRoot) {
+    const locale = pathname.startsWith("/en") ? "en" : "ar";
     const loginUrl = new URL(`/${locale}/login`, request.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-lk-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

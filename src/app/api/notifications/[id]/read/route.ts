@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authorizeApi } from "@/lib/api-auth";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -10,24 +9,21 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const authorization = await authorizeApi();
+    if ("response" in authorization) return authorization.response;
     const { id } = await params;
-
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+    const notificationId = Number(id);
+    if (!Number.isSafeInteger(notificationId) || notificationId < 1) {
+      return NextResponse.json({ success: false, error: "Invalid notification ID" }, { status: 400 });
     }
-
-    const userId = (session.user as any).id as string;
+    const userId = authorization.principal.id;
 
     await db
       .update(notifications)
       .set({ isRead: true })
       .where(
         and(
-          eq(notifications.id, id),
+          eq(notifications.id, notificationId),
           eq(notifications.userId, userId)
         )
       );

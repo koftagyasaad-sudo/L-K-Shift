@@ -1,14 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
+
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const requestedUserId = searchParams.get('userId');
+    const requestedId = requestedUserId ? Number(requestedUserId) : null;
+    if (requestedId !== null && (!Number.isSafeInteger(requestedId) || requestedId < 1)) {
+      return NextResponse.json({ message: 'معرف المستخدم غير صالح' }, { status: 400 });
+    }
+    const isSelf = requestedId === authorization.principal.id;
+    const canView = ['leaves.view', 'leaves.approve', 'staff_requests.manage'].some((permission) =>
+      hasApiPermission(authorization.principal, permission)
+    );
+    if (!isSelf && !canView) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
+
+    const branchFilter = isSelf || authorization.principal.branchScope === 'ALL'
+      ? sql`1=1`
+      : authorization.principal.branchScope === 'CUSTOM'
+        ? sql`COALESCE(u.primary_branch_id, u.branch_id) = ANY(${authorization.principal.allowedBranchIds}::int[])`
+        : authorization.principal.primaryBranchId
+          ? sql`COALESCE(u.primary_branch_id, u.branch_id) = ${authorization.principal.primaryBranchId}`
+          : sql`1=0`;
 
     const raw = await db.execute(sql`
       SELECT 
@@ -29,7 +52,8 @@ export async function GET(request: NextRequest) {
       FROM leave_requests r
       LEFT JOIN users u ON r.user_id = u.id
       LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
-      WHERE ${userId ? sql`r.user_id::text = ${userId}` : sql`1=1`}
+      WHERE ${requestedId !== null ? sql`r.user_id = ${requestedId}` : sql`1=1`}
+        AND ${branchFilter}
       ORDER BY r.id DESC;
     `);
 
@@ -43,8 +67,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
-    const { userId, requestType, startDate, endDate, durationDays, advanceAmount, reason } = body;
+    const { requestType, startDate, endDate, durationDays, advanceAmount, reason } = body;
+    const userId = authorization.principal.id;
 
     if (!userId || !requestType || !reason) {
       return NextResponse.json({ message: 'البيانات غير مكتملة' }, { status: 400 });
@@ -69,7 +97,7 @@ export async function POST(request: NextRequest) {
         status,
         created_at
       ) VALUES (
-        ${parseInt(userId, 10)},
+        ${userId},
         ${requestType},
         ${requestType},
         ${sDate}::date,
@@ -92,18 +120,28 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
-    const { requestId, status: newStatus, rejectionReason, adminId } = body;
+    const { requestId, status: newStatus, rejectionReason } = body;
 
     if (!requestId || !newStatus || (newStatus !== 'APPROVED' && newStatus !== 'REJECTED')) {
       return NextResponse.json({ message: 'بيانات غير صحيحة' }, { status: 400 });
     }
 
-    const reqNumericId = parseInt(requestId, 10);
-    const adminNumericId = adminId ? parseInt(adminId, 10) : null;
+    const reqNumericId = Number(requestId);
+    if (!Number.isSafeInteger(reqNumericId) || reqNumericId < 1) {
+      return NextResponse.json({ message: 'معرف الطلب غير صالح' }, { status: 400 });
+    }
+    const adminNumericId = authorization.principal.id;
 
     const targetReq = await db.execute(sql`
-      SELECT user_id, request_type, leave_type FROM leave_requests WHERE id = ${reqNumericId} LIMIT 1;
+      SELECT r.user_id, r.request_type, r.leave_type,
+             COALESCE(u.primary_branch_id, u.branch_id) AS branch_id
+      FROM leave_requests r
+      LEFT JOIN users u ON u.id = r.user_id
+      WHERE r.id = ${reqNumericId} LIMIT 1;
     `);
     const reqRows = Array.isArray(targetReq) ? targetReq : (targetReq as any)?.rows || [];
     if (!reqRows.length) {
@@ -112,6 +150,16 @@ export async function PATCH(request: NextRequest) {
 
     const employeeUserId = reqRows[0].user_id;
     const rawType = reqRows[0].request_type || reqRows[0].leave_type || 'LEAVE';
+    const requiredPermission = rawType === 'STAFF_REQUEST' || rawType === 'COMPLAINT'
+      ? 'staff_requests.manage'
+      : 'leaves.approve';
+    const targetBranchId = reqRows[0].branch_id == null ? null : Number(reqRows[0].branch_id);
+    if (
+      !hasApiPermission(authorization.principal, requiredPermission) ||
+      !canAccessBranch(authorization.principal, targetBranchId)
+    ) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
 
     try {
       await db.execute(sql`

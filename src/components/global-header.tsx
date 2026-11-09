@@ -99,9 +99,7 @@ function triggerSystemOSNotification(title: string, message: string) {
           body: message,
           icon: '/Logo.png',
           badge: '/Logo.png',
-          vibrate: [300, 150, 300],
           tag: 'lk-shift-os-alert',
-          renotify: true,
           requireInteraction: true,
         });
       }).catch(() => {

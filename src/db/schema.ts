@@ -1,6 +1,6 @@
 import { 
   pgTable, serial, text, integer, boolean, 
-  timestamp, doublePrecision, numeric, pgEnum, jsonb 
+  timestamp, doublePrecision, numeric, pgEnum, jsonb, index, uniqueIndex
 } from 'drizzle-orm/pg-core';
 
 // 1. تعريف الـ Enums
@@ -35,7 +35,10 @@ export const users = pgTable('users', {
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex('users_phone_unique_idx').on(table.phone),
+  index('users_primary_branch_id_idx').on(table.primaryBranchId),
+]);
 
 // 3. جدول الفروع (branches)
 export const branches = pgTable('branches', {
@@ -77,7 +80,11 @@ export const attendanceLogs = pgTable('attendance_logs', {
   lateMinutes: integer('late_minutes').default(0).notNull(),
   overtimeMinutes: integer('overtime_minutes').default(0).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('attendance_logs_user_work_date_idx').on(table.userId, table.workDate),
+  index('attendance_logs_branch_work_date_idx').on(table.branchId, table.workDate),
+  index('attendance_logs_work_date_idx').on(table.workDate),
+]);
 
 // 5. جدول طلبات الإجازات والسلف (leave_requests)
 export const leaveRequests = pgTable('leave_requests', {
@@ -96,17 +103,24 @@ export const leaveRequests = pgTable('leave_requests', {
   status: leaveStatusEnum('status').default('PENDING').notNull(),
   finalStatus: text('final_status').default('PENDING'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('leave_requests_user_start_date_idx').on(table.userId, table.startDate),
+]);
 
 // 6. جدول الأدوار المخصصة (custom_roles)
 export const customRoles = pgTable('custom_roles', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+  name: text('name').notNull().unique(),
   nameAr: text('name_ar').notNull(),
   permissions: jsonb('permissions').notNull(),
+  branchScope: text('branch_scope').default('ALL').notNull(),
+  allowedBranchIds: jsonb('allowed_branch_ids').$type<number[]>().default([]).notNull(),
   isSystem: boolean('is_system').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('custom_roles_name_ar_idx').on(table.nameAr),
+]);
 
 // تصدير roles كاسم بديل لـ customRoles لضمان التوافق الكامل مع أي استيراد قديم
 export const roles = customRoles;
@@ -120,4 +134,7 @@ export const notifications = pgTable('notifications', {
   isRead: boolean('is_read').default(false).notNull(),
   link: text('link'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('notifications_user_created_at_idx').on(table.userId, table.createdAt),
+  index('notifications_user_read_idx').on(table.userId, table.isRead),
+]);

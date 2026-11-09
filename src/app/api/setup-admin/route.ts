@@ -1,97 +1,74 @@
+import { timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, branches } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { branches, users } from "@/db/schema";
+import { hashPassword } from "@/lib/passwords";
 
-export async function GET(req: NextRequest) {
-  try {
-    // 1. التحقق من وجود حساب مدير في النظام
-    const existingAdmins = await db
-      .select()
-      .from(users)
-      .where(eq(users.role, "SUPER_ADMIN"))
-      .limit(1);
-
-    if (existingAdmins.length > 0) {
-      return NextResponse.json({
-        success: true,
-        message: "Super admin user already exists.",
-        data: {
-          phone: existingAdmins[0].phone,
-          role: existingAdmins[0].role,
-        },
-      });
-    }
-
-    // 2. التحقق من وجود فرع رئيسي أو إنشائه
-    let branchList = await db.select().from(branches).limit(1);
-    let mainBranchId: string;
-
-    if (branchList.length === 0) {
-      const branchId = crypto.randomUUID();
-      const branchPayload: any = {
-        id: branchId,
-        nameAr: "الإدارة الرئيسية",
-        nameEn: "Main Management",
-        address: "القاهرة، مصر",
-        latitude: "30.0444",
-        longitude: "31.2357",
-        geofenceRadius: 500,
-        radiusMeters: 500,
-        qrSecretKey: crypto.randomUUID(),
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const [newBranch] = await db
-        .insert(branches)
-        .values(branchPayload)
-        .returning();
-
-      mainBranchId = newBranch.id;
-    } else {
-      mainBranchId = branchList[0].id;
-    }
-
-    // 3. إنشاء حساب مدير النظام التلقائي
-    const adminId = crypto.randomUUID();
-    const adminPayload: any = {
-      id: adminId,
-      name: "مدير النظام",
-      phone: "01000000000",
-      password: "123456", // كلمة المرور الافتراضية
-      role: "SUPER_ADMIN",
-      branchId: mainBranchId,
-      isActive: true,
-      canUseAttendanceTerminal: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const [adminUser] = await db
-      .insert(users)
-      .values(adminPayload)
-      .returning();
-
-    return NextResponse.json({
-      success: true,
-      message: "Admin user and main branch initialized successfully.",
-      data: {
-        phone: adminUser.phone,
-        password: "123456",
-        role: adminUser.role,
-      },
-    });
-  } catch (error: any) {
-    console.error("Error setting up admin:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Internal Server Error" },
-      { status: 500 }
-    );
+export async function POST(request: NextRequest) {
+  const setupToken = process.env.SETUP_ADMIN_TOKEN;
+  const providedToken = request.headers.get("x-setup-token") || "";
+  if (!setupToken) {
+    return NextResponse.json({ message: "المسار معطل." }, { status: 404 });
   }
-}
+  const expected = Buffer.from(setupToken);
+  const provided = Buffer.from(providedToken);
+  if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
+    return NextResponse.json({ message: "غير مصرح." }, { status: 403 });
+  }
 
-export async function POST(req: NextRequest) {
-  return GET(req);
+  try {
+    const [existingAdmin] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.systemRole, "SUPER_ADMIN"))
+      .limit(1);
+    if (existingAdmin) {
+      return NextResponse.json({ message: "حساب المدير العام موجود بالفعل." }, { status: 409 });
+    }
+
+    const body: unknown = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ message: "بيانات المدير غير صالحة." }, { status: 400 });
+    }
+    const values = body as Record<string, unknown>;
+    const phone = typeof values.phone === "string" ? values.phone.trim() : "";
+    const password = typeof values.password === "string" ? values.password : "";
+    const fullNameAr = typeof values.fullNameAr === "string" ? values.fullNameAr.trim() : "";
+    if (!phone || password.length < 12 || !fullNameAr) {
+      return NextResponse.json(
+        { message: "الاسم ورقم الهاتف وكلمة مرور من 12 محرفًا على الأقل مطلوبة." },
+        { status: 400 }
+      );
+    }
+
+    let [branch] = await db.select({ id: branches.id }).from(branches).limit(1);
+    if (!branch) {
+      [branch] = await db
+        .insert(branches)
+        .values({
+          nameAr: "الإدارة الرئيسية",
+          nameEn: "Main Management",
+          latitude: 30.0444,
+          longitude: 31.2357,
+          geofenceRadius: 500,
+        })
+        .returning({ id: branches.id });
+    }
+
+    await db.insert(users).values({
+      fullNameAr,
+      phone,
+      passwordHash: await hashPassword(password),
+      systemRole: "SUPER_ADMIN",
+      jobRole: "مدير النظام",
+      primaryBranchId: branch.id,
+      isActive: true,
+    });
+
+    return NextResponse.json({ success: true, message: "تم إنشاء حساب المدير العام." }, { status: 201 });
+  } catch (error) {
+    console.error("Admin setup error:", error);
+    return NextResponse.json({ message: "تعذر إنشاء حساب المدير العام." }, { status: 500 });
+  }
 }

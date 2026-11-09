@@ -1,104 +1,116 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { eq, ilike, or } from 'drizzle-orm';
 import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+import { notifications, users } from '@/db/schema';
+import { hashPassword } from '@/lib/passwords';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function isUniqueConstraintError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  if ('code' in error && error.code === '23505') return true;
+  return 'cause' in error && isUniqueConstraintError(error.cause);
+}
+
 export async function POST(request: NextRequest) {
+  let body: unknown;
   try {
-    const body = await request.json();
-    const { fullName, phone, password } = body;
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { success: false, message: 'بيانات التسجيل غير صالحة.' },
+      { status: 400 }
+    );
+  }
 
-    if (!fullName || !phone || !password) {
-      return NextResponse.json(
-        { success: false, message: 'يرجى إدخال جميع البيانات المطلوبة' },
-        { status: 400 }
-      );
-    }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json(
+      { success: false, message: 'بيانات التسجيل غير صالحة.' },
+      { status: 400 }
+    );
+  }
 
-    const cleanPhone = phone.trim();
-    const cleanName = fullName.trim();
+  const values = body as Record<string, unknown>;
+  const fullName = typeof values.fullName === 'string' ? values.fullName.trim() : '';
+  const phone = typeof values.phone === 'string' ? values.phone.trim() : '';
+  const password = typeof values.password === 'string' ? values.password : '';
 
-    // التحقق من عدم وجود حساب سابق بنفس رقم الهاتف
-    const existing = await db.execute(sql`
-      SELECT id FROM users WHERE phone = ${cleanPhone} LIMIT 1;
-    `);
-    const existingRows = Array.isArray(existing) ? existing : (existing as any)?.rows || [];
-    if (existingRows.length > 0) {
+  if (fullName.length < 2 || fullName.length > 120 || phone.length < 6 || phone.length > 32
+    || password.length < 12 || password.length > 128) {
+    return NextResponse.json(
+      { success: false, message: 'يرجى إدخال اسم ورقم هاتف صحيحين وكلمة مرور من 12 حرفاً على الأقل.' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.phone, phone))
+      .limit(1);
+    if (existing) {
       return NextResponse.json(
         { success: false, message: 'رقم الهاتف مسجل بالفعل مسبقاً، يمكنك تسجيل الدخول مباشرة' },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
-    // إدراج الموظف الجديد في جدول users
-    const inserted = await db.execute(sql`
-      INSERT INTO users (
-        full_name_ar,
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        fullNameAr: fullName,
         phone,
-        password_hash,
-        system_role,
-        job_role,
-        is_active,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${cleanName},
-        ${cleanPhone},
-        ${password.trim()},
-        'EMPLOYEE',
-        'موظف',
-        true,
-        NOW(),
-        NOW()
-      ) RETURNING id;
-    `);
+        passwordHash: await hashPassword(password),
+        systemRole: 'EMPLOYEE',
+        jobRole: 'موظف',
+      })
+      .returning({ id: users.id });
+    if (!newUser) throw new Error('Registration did not return a user record.');
 
-    const newRows = Array.isArray(inserted) ? inserted : (inserted as any)?.rows || [];
-    const newUserId = newRows[0]?.id;
-
-    // إرسال إشعار فوري لمدير النظام ومسؤولي الـ HR فقط
+    let notificationStatus: 'sent' | 'not_required' | 'failed' = 'not_required';
     try {
-      const managers = await db.execute(sql`
-        SELECT id FROM users 
-        WHERE system_role = 'SUPER_ADMIN' 
-           OR job_role ILIKE '%مدير النظام%' 
-           OR job_role ILIKE '%HR%' 
-           OR job_role ILIKE '%موارد بشرية%';
-      `);
-      const managerRows = Array.isArray(managers) ? managers : (managers as any)?.rows || [];
+      const managers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(
+          eq(users.systemRole, 'SUPER_ADMIN'),
+          ilike(users.jobRole, '%مدير النظام%'),
+          ilike(users.jobRole, '%HR%'),
+          ilike(users.jobRole, '%موارد بشرية%')
+        ));
 
-      const notifTitle = 'تسجيل موظف جديد';
-      const notifMsg = `قام الموظف (${cleanName}) برقم هاتف (${cleanPhone}) بإنشاء حساب جديد بالنظام.`;
-
-      for (const m of managerRows) {
-        await db.execute(sql`
-          INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
-          VALUES (
-            ${m.id},
-            ${newUserId || null},
-            ${notifTitle},
-            ${notifMsg},
-            'GENERAL',
-            '/admin/employees',
-            false,
-            NOW()
-          );
-        `);
+      if (managers.length > 0) {
+        await db.insert(notifications).values(managers.map((manager) => ({
+          userId: manager.id,
+          title: 'تسجيل موظف جديد',
+          message: `قام الموظف (${fullName}) برقم هاتف (${phone}) بإنشاء حساب جديد بالنظام.`,
+          link: '/admin/employees',
+        })));
+        notificationStatus = 'sent';
       }
     } catch (notifErr) {
-      console.warn('Notification for new registration skipped:', notifErr);
+      notificationStatus = 'failed';
+      console.error('Registration succeeded but manager notifications could not be created:', notifErr);
     }
 
     return NextResponse.json({
       success: true,
       message: 'تم إنشاء حسابك بنجاح! يمكنك الآن تسجيل الدخول.',
-    });
-  } catch (error: any) {
+      notificationStatus,
+    }, { status: 201 });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        { success: false, message: 'رقم الهاتف مسجل بالفعل مسبقاً، يمكنك تسجيل الدخول مباشرة' },
+        { status: 409 }
+      );
+    }
+
     console.error('Registration API error:', error);
     return NextResponse.json(
-      { success: false, message: error?.message || 'حدث خطأ أثناء إنشاء الحساب' },
+      { success: false, message: 'حدث خطأ أثناء إنشاء الحساب.' },
       { status: 500 }
     );
   }

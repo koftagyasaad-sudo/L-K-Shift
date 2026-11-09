@@ -1,4 +1,4 @@
-import { neon, neonConfig } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
@@ -7,14 +7,33 @@ if (typeof window !== 'undefined') {
   throw new Error('Security Alert: Database cannot be accessed from the client-side.');
 }
 
-const connectionString = process.env.DATABASE_URL;
+function createDatabase() {
+  const connectionString =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.NEON_DATABASE_URL;
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL is not defined in environment variables.');
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not defined in environment variables.');
+  }
+
+  return drizzle(neon(connectionString), { schema });
 }
 
-// إنشاء اتصال آمن وسريع عبر HTTP متوافق مع خوادم Vercel Edge و Serverless
-const sqlClient = neon(connectionString);
+type Database = ReturnType<typeof createDatabase>;
+let database: Database | undefined;
 
-export const db = drizzle(sqlClient, { schema });
+function getDatabase(): Database {
+  database ??= createDatabase();
+  return database;
+}
+
+export const db = new Proxy({} as Database, {
+  get(_target, property) {
+    const databaseInstance = getDatabase();
+    const value = Reflect.get(databaseInstance, property, databaseInstance);
+    return typeof value === 'function' ? value.bind(databaseInstance) : value;
+  },
+});
+
 export default db;

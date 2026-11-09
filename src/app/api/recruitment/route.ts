@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { authorizeApi } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
+  const authorization = await authorizeApi('recruitment.view');
+  if ('response' in authorization) return authorization.response;
+
   try {
     const raw = await db.execute(sql`
       SELECT 
@@ -31,7 +35,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(rows, { status: 200 });
   } catch (error: any) {
     console.error('Recruitment GET error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ message: 'تعذر تحميل طلبات التوظيف.' }, { status: 500 });
   }
 }
 

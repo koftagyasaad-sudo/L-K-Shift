@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
-import crypto from 'crypto';
+import { hashPassword } from '@/lib/passwords';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-function hashPassword(password: string): string {
-  const salt = 'LK_SHIFT_SECURE_SALT_2026';
-  return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-}
 
 // فحص قوة كلمة المرور: 8 خانات، حرف كبير، حرف صغير، رقم، رمز خاص
 function isPasswordStrong(pass: string): boolean {
@@ -57,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const hashedNewPassword = hashPassword(cleanPass);
+    const hashedNewPassword = await hashPassword(cleanPass);
 
     // تحديث الباسورد المشفر للمستخدم
     await db.execute(sql`

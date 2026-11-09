@@ -13,10 +13,10 @@ export async function GET(req: NextRequest) {
       .select({
         id: users.id,
         phone: users.phone,
-        name: users.name,
+        name: users.fullNameAr,
         isActive: users.isActive,
-        role: users.role,
-        branchId: users.branchId,
+        role: users.jobRole,
+        branchId: users.primaryBranchId,
       })
       .from(users);
 

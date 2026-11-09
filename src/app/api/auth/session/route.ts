@@ -1,66 +1,49 @@
-import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import { getServerSession } from "next-auth";
+import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { authOptions } from "@/lib/auth";
+import { authorizeApi } from "@/lib/api-auth";
+import { db } from "@/db";
+import { branches } from "@/db/schema";
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'LK_SHIFT_SUPER_SECURE_JWT_SECRET_KEY_2026';
-
-function verifySignedJwt(token: string): any | null {
+export async function GET(_request: NextRequest) {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
+    const authorization = await authorizeApi();
+    if ("response" in authorization) return authorization.response;
 
-    const [headerB64, payloadB64, signatureB64] = parts;
-
-    const expectedSignature = crypto
-      .createHmac('sha256', JWT_SECRET)
-      .update(`${headerB64}.${payloadB64}`)
-      .digest('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    if (signatureB64 !== expectedSignature) return null;
-
-    const payloadJson = Buffer.from(payloadB64, 'base64').toString('utf-8');
-    const payload = JSON.parse(payloadJson);
-
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const token = request.cookies.get('lk_session_token')?.value;
-
-    if (!token) {
-      return NextResponse.json({ authenticated: false }, { status: 401 });
-    }
-
-    const payload = verifySignedJwt(token);
-    if (!payload) {
-      return NextResponse.json({ authenticated: false, message: 'Invalid or expired token' }, { status: 401 });
-    }
+    const session = await getServerSession(authOptions);
+    const sessionUser = session?.user as
+      | { name?: string | null; phone?: string | null; fullNameAr?: string | null }
+      | undefined;
+    const branchId = authorization.principal.primaryBranchId;
+    const [branch] = branchId
+      ? await db
+          .select({ name: branches.nameAr, start: branches.shiftStartTime, end: branches.shiftEndTime })
+          .from(branches)
+          .where(eq(branches.id, branchId))
+          .limit(1)
+      : [];
 
     return NextResponse.json({
       authenticated: true,
       user: {
-        id: payload.userId,
-        name: payload.name,
-        role: payload.role,
-        branchId: payload.branchId,
-        branchScope: payload.branchScope,
-        permissions: payload.permissions,
+        id: authorization.principal.id,
+        name: sessionUser?.name || sessionUser?.fullNameAr || "",
+        fullName: sessionUser?.fullNameAr || sessionUser?.name || "",
+        phone: sessionUser?.phone || "",
+        role: authorization.principal.jobRole,
+        systemRole: authorization.principal.systemRole,
+        branchId,
+        branchName: branch?.name || "",
+        shiftStart: branch?.start || "10:00",
+        shiftEnd: branch?.end || "18:00",
+        permissions: authorization.principal.permissions,
       },
-    }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ authenticated: false, message: error?.message }, { status: 500 });
+    });
+  } catch (error) {
+    console.error("Session endpoint error:", error);
+    return NextResponse.json({ authenticated: false }, { status: 500 });
   }
 }

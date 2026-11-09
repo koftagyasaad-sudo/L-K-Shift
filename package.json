@@ -5,13 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "rm -rf .next && next build",
-    "build:with-db": "drizzle-kit push --force && rm -rf .next && next build",
     "start": "next start",
-    "lint": "next lint",
-    "db:push": "drizzle-kit push",
-    "db:push:force": "drizzle-kit push --force",
+    "lint": "eslint . --max-warnings 322",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:studio": "drizzle-kit studio",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -27,28 +28,26 @@
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-toast": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.1.6",
-    "@vercel/blob": "^0.27.1",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.4",
     "lucide-react": "^0.469.0",
     "nanoid": "^5.0.9",
-    "next": "15.1.11",
+    "next": "^15.5.29",
     "next-auth": "^4.24.11",
-    "next-intl": "^3.26.3",
+    "next-intl": "^4.14.9",
     "next-themes": "^0.4.4",
     "pg": "^8.13.1",
-    "postcss": "^8.4.49",
+    "postcss": "^8.5.32",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^3.4.17",
-    "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.24.1"
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -56,9 +55,24 @@
     "@types/pg": "^8.11.10",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "dotenv": "^16.4.7",
-    "drizzle-kit": "^0.30.1",
-    "typescript": "^5.7.2"
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.29",
+    "typescript": "^5.7.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.32",
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.12"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.5"
+    }
   },
   "allowScripts": {
     "esbuild": true,

@@ -1,101 +1,110 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+import { and, eq, gte, lt } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { attendanceLogs, branches, leaveRequests, users } from "@/db/schema";
+import { authorizeApi, canAccessBranch } from "@/lib/api-auth";
+import { calculatePayroll } from "@/lib/payroll";
 
 export async function GET(request: NextRequest) {
+  const authorization = await authorizeApi(["payroll.view", "reports.view"]);
+  if ("response" in authorization) return authorization.response;
+
+  const now = new Date();
+  const month = Number(request.nextUrl.searchParams.get("month") ?? now.getMonth() + 1);
+  const year = Number(request.nextUrl.searchParams.get("year") ?? now.getFullYear());
+  if (!Number.isSafeInteger(month) || month < 1 || month > 12
+    || !Number.isSafeInteger(year) || year < 2000 || year > now.getFullYear() + 1) {
+    return NextResponse.json({ message: "الشهر أو السنة غير صالحين." }, { status: 400 });
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const now = new Date();
-    const month = parseInt(searchParams.get('month') || String(now.getMonth() + 1), 10);
-    const year = parseInt(searchParams.get('year') || String(now.getFullYear()), 10);
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const nextMonth = new Date(Date.UTC(year, month, 1));
+    const nextMonthStart = `${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
-    const raw = await db.execute(sql`
-      SELECT 
-        u.id as "userId",
-        COALESCE(u.full_name_ar, u.name, 'موظف') as name,
-        COALESCE(u.job_role, 'موظف') as role,
-        COALESCE(b.name_ar, b.name, 'الإدارة') as "branchName",
-        COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
-        COALESCE(u.monthly_salary, 0) as "basicSalary",
-        
-        -- إجمالي الساعات الفعلية المسجلة
-        COALESCE(SUM(l.actual_worked_minutes), 0) / 60 as "workedHours",
-        COUNT(DISTINCT l.work_date) FILTER (WHERE l.check_in_time IS NOT NULL) as "workedDays",
-        COALESCE(SUM(l.late_minutes), 0) as "lateMinutes",
-        COALESCE(SUM(l.overtime_minutes), 0) / 60 as "overtimeHours",
+    const [employees, logs, requests] = await Promise.all([
+      db
+        .select({
+          id: users.id,
+          name: users.fullNameAr,
+          role: users.jobRole,
+          branchId: users.primaryBranchId,
+          branchName: branches.nameAr,
+          workingHoursPerDay: users.workingHoursPerDay,
+          basicSalary: users.monthlySalary,
+        })
+        .from(users)
+        .leftJoin(branches, eq(users.primaryBranchId, branches.id))
+        .where(eq(users.isActive, true)),
+      db
+        .select({
+          userId: attendanceLogs.userId,
+          workDate: attendanceLogs.workDate,
+          checkInTime: attendanceLogs.checkInTime,
+          actualWorkedMinutes: attendanceLogs.actualWorkedMinutes,
+          lateMinutes: attendanceLogs.lateMinutes,
+          overtimeMinutes: attendanceLogs.overtimeMinutes,
+        })
+        .from(attendanceLogs)
+        .where(and(
+          gte(attendanceLogs.workDate, monthStart),
+          lt(attendanceLogs.workDate, nextMonthStart)
+        )),
+      db
+        .select({
+          userId: leaveRequests.userId,
+          startDate: leaveRequests.startDate,
+          requestType: leaveRequests.requestType,
+          status: leaveRequests.status,
+          finalStatus: leaveRequests.finalStatus,
+          durationDays: leaveRequests.durationDays,
+          totalDays: leaveRequests.totalDays,
+          advanceAmount: leaveRequests.advanceAmount,
+        })
+        .from(leaveRequests)
+        .where(and(
+          gte(leaveRequests.startDate, monthStart),
+          lt(leaveRequests.startDate, nextMonthStart)
+        )),
+    ]);
 
-        -- إجمالي أيام الإجازات المعتمدة
-        COALESCE((
-          SELECT SUM(duration_days) 
-          FROM leave_requests lr 
-          WHERE CAST(lr.user_id AS TEXT) = CAST(u.id AS TEXT)
-            AND lr.final_status = 'APPROVED'
-            AND lr.request_type != 'ADVANCE'
-            AND EXTRACT(MONTH FROM lr.start_date) = ${month}
-            AND EXTRACT(YEAR FROM lr.start_date) = ${year}
-        ), 0) as "approvedLeaveDays",
+    const results = employees
+      .filter((employee) => canAccessBranch(authorization.principal, employee.branchId))
+      .map((employee) =>
+        calculatePayroll(
+          {
+            id: employee.id,
+            name: employee.name,
+            role: employee.role,
+            branchName: employee.branchName,
+            workingHoursPerDay: employee.workingHoursPerDay,
+            basicSalary: Number(employee.basicSalary || 0),
+          },
+          logs
+            .filter((log) => log.userId === employee.id)
+            .map((log) => ({
+              workDate: log.workDate,
+              checkInTime: log.checkInTime,
+              actualWorkedMinutes: log.actualWorkedMinutes,
+              lateMinutes: log.lateMinutes,
+              overtimeMinutes: log.overtimeMinutes,
+            })),
+          requests
+            .filter((item) => item.userId === employee.id)
+            .map((item) => ({
+              requestType: item.requestType,
+              status: item.status,
+              finalStatus: item.finalStatus,
+              durationDays: item.durationDays,
+              totalDays: item.totalDays,
+              advanceAmount: item.advanceAmount,
+            }))
+        )
+      );
 
-        -- إجمالي السلف المصروفة والمعتمدة
-        COALESCE((
-          SELECT SUM(advance_amount) 
-          FROM leave_requests lr 
-          WHERE CAST(lr.user_id AS TEXT) = CAST(u.id AS TEXT)
-            AND lr.final_status = 'APPROVED'
-            AND lr.request_type = 'ADVANCE'
-            AND EXTRACT(MONTH FROM lr.start_date) = ${month}
-            AND EXTRACT(YEAR FROM lr.start_date) = ${year}
-        ), 0) as "advanceDeductions"
-
-      FROM users u
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
-      LEFT JOIN attendance_logs l ON CAST(l.user_id AS TEXT) = CAST(u.id AS TEXT)
-        AND EXTRACT(MONTH FROM l.work_date) = ${month}
-        AND EXTRACT(YEAR FROM l.work_date) = ${year}
-      WHERE u.is_active = TRUE
-      GROUP BY u.id, u.full_name_ar, u.name, u.job_role, b.name_ar, b.name, u.working_hours_per_day, u.monthly_salary
-      ORDER BY u.id ASC;
-    `);
-
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-
-    // احتساب صافي الراتب الدقيق بناءً على الساعات الفعلية
-    const calculatedRows = rows.map((emp: any) => {
-      const basic = parseFloat(emp.basicSalary) || 0;
-      const hoursPerDay = parseInt(emp.workingHoursPerDay, 10) || 8;
-      const scheduledMonthlyHours = hoursPerDay * 26; // 26 يوم عمل شهرياً
-      const hourlyRate = scheduledMonthlyHours > 0 ? basic / scheduledMonthlyHours : 0;
-      const minuteRate = hourlyRate / 60;
-
-      const workedHours = parseFloat(emp.workedHours) || 0;
-      const approvedLeaveHours = (parseInt(emp.approvedLeaveDays, 10) || 0) * hoursPerDay;
-      const overtimeHours = parseFloat(emp.overtimeHours) || 0;
-      const lateMinutes = parseInt(emp.lateMinutes, 10) || 0;
-      const advanceDeductions = parseFloat(emp.advanceDeductions) || 0;
-
-      // الأجر الفعلي = الساعات الفعلية + ساعات الإجازات المدفوعة
-      const earnedBase = (workedHours + approvedLeaveHours) * hourlyRate;
-      const overtimePay = overtimeHours * (hourlyRate * 1.5);
-      const lateDeduction = lateMinutes * minuteRate;
-
-      let netSalary = earnedBase + overtimePay - lateDeduction - advanceDeductions;
-      if (netSalary < 0) netSalary = 0;
-
-      return {
-        ...emp,
-        hourlyRate: hourlyRate.toFixed(2),
-        workedHours: Math.round(workedHours),
-        workedDays: parseInt(emp.workedDays, 10) || 0,
-        approvedLeaveDays: parseInt(emp.approvedLeaveDays, 10) || 0,
-        overtimeHours: Math.round(overtimeHours),
-        lateMinutes,
-        advanceDeductions: Math.round(advanceDeductions),
-        netSalary: Math.round(netSalary), // صافي الراتب الفعلي وليس الأساسي الكامل
-      };
-    });
-
-    return NextResponse.json(calculatedRows, { status: 200 });
-  } catch (error: any) {
-    console.error('Payroll API Error:', error);
-    return NextResponse.json({ message: 'فشل استخراج مسير الرواتب', error: error.message }, { status: 500 });
+    return NextResponse.json(results);
+  } catch (error) {
+    console.error("Payroll API error:", error);
+    return NextResponse.json({ message: "فشل استخراج مسير الرواتب." }, { status: 500 });
   }
 }

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { authorizeApi } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json([], { status: 200 });
-    }
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
+    const userId = authorization.principal.id;
 
     const raw = await db.execute(sql`
       SELECT 
@@ -26,7 +24,7 @@ export async function GET(request: NextRequest) {
         COALESCE(is_read, false) as "isRead",
         created_at as "createdAt"
       FROM notifications
-      WHERE user_id = ${parseInt(userId, 10)}
+      WHERE user_id = ${userId}
       ORDER BY id DESC
       LIMIT 30;
     `);
@@ -41,6 +39,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await authorizeApi('notifications.send');
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
     const { userId, senderId, title, message, type, link } = body;
 
@@ -71,14 +72,18 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const authorization = await authorizeApi();
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
-    const { notificationId, userId, markAll } = body;
+    const { notificationId, markAll } = body;
+    const userId = authorization.principal.id;
 
     if (markAll && userId) {
       await db.execute(sql`
         UPDATE notifications 
         SET is_read = true 
-        WHERE user_id = ${parseInt(userId, 10)};
+        WHERE user_id = ${userId};
       `);
       return NextResponse.json({ success: true, message: 'تم تحديد جميع الإشعارات كمقروءة' });
     }
@@ -87,7 +92,7 @@ export async function PATCH(request: NextRequest) {
       await db.execute(sql`
         UPDATE notifications 
         SET is_read = true 
-        WHERE id = ${parseInt(notificationId, 10)};
+        WHERE id = ${parseInt(notificationId, 10)} AND user_id = ${userId};
       `);
       return NextResponse.json({ success: true, message: 'تم تحديث الإشعار' });
     }

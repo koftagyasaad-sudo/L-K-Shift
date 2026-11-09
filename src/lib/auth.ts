@@ -2,10 +2,10 @@ import type { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import type { Session, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { hashPassword, verifyPassword } from "@/lib/passwords";
 
 /**
  * نموذج المستخدم الموسع للنظام.
@@ -71,49 +71,41 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const passwordHash =
-          (user as any).passwordHash ||
-          (user as any).password ||
-          (user as any).hashedPassword;
-
-        if (!passwordHash || typeof passwordHash !== "string") {
+        const passwordHash = user.passwordHash;
+        if (!passwordHash) {
           return null;
         }
 
-        const valid = await bcrypt.compare(password, passwordHash);
-        if (!valid) {
+        const verification = await verifyPassword(password, passwordHash);
+        if (!verification.isValid) {
           return null;
         }
 
-        const role = toNullableString((user as any).role) || "employee";
-        const systemRoleVal = (user as any).systemRole || (user as any).role || "EMPLOYEE";
+        if (verification.needsRehash) {
+          await db
+            .update(users)
+            .set({ passwordHash: await hashPassword(password), updatedAt: new Date() })
+            .where(eq(users.id, user.id));
+        }
 
-        const branchId = toNullableString(
-          (user as any).branchId ?? (user as any).primaryBranchId
-        );
-        const primaryBranchId = toNullableString(
-          (user as any).primaryBranchId ?? (user as any).branchId
-        );
-
-        const fullNameAr = toNullableString((user as any).fullNameAr);
-        const fullNameEn = toNullableString((user as any).fullNameEn);
-        const displayName =
-          fullNameEn ||
-          fullNameAr ||
-          toNullableString((user as any).name) ||
-          phone;
+        const role = user.jobRole || "EMPLOYEE";
+        const systemRoleVal = user.systemRole || "EMPLOYEE";
+        const branchId = toNullableString(user.primaryBranchId);
+        const fullNameAr = toNullableString(user.fullNameAr);
+        const fullNameEn = toNullableString(user.fullNameEn);
+        const displayName = fullNameEn || fullNameAr || phone;
 
         const result: AppUser = {
           id: String(user.id),
           name: displayName,
-          email: toNullableString((user as any).email),
-          phone: toNullableString((user as any).phone) || phone,
+          email: null,
+          phone: user.phone || phone,
           role,
           systemRole: systemRoleVal as any,
           fullNameAr,
           fullNameEn,
           branchId,
-          primaryBranchId,
+          primaryBranchId: branchId,
         };
 
         return result;

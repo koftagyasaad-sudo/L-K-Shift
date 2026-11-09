@@ -7,15 +7,14 @@ import {
   Edit,
   Trash2,
   CheckCircle,
-  XCircle,
   X,
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
+import { permissionCatalog } from "@/lib/permissions";
 import {
   saveRoleAction,
   deleteRoleAction,
-  toggleRoleStatusAction,
   type RoleData,
 } from "@/actions/roleActions";
 import { useRouter } from "next/navigation";
@@ -24,15 +23,12 @@ interface RoleManagerProps {
   initialRoles?: RoleData[];
 }
 
-const AVAILABLE_PERMISSIONS = [
-  { id: "view_employees", label: "عرض الموظفين" },
-  { id: "manage_employees", label: "إدارة الموظفين (إضافة/تعديل/حذف)" },
-  { id: "view_branches", label: "عرض الفروع" },
-  { id: "manage_branches", label: "إدارة الفروع والجغرافيا" },
-  { id: "view_attendance", label: "عرض سجلات الحضور" },
-  { id: "edit_attendance", label: "تعديل الحضور والتنفيذ" },
-  { id: "view_reports", label: "عرض التقارير" },
-];
+const AVAILABLE_PERMISSIONS = permissionCatalog.flatMap((group) =>
+  group.items.map((permission) => ({
+    id: permission.id,
+    label: permission.labelAr,
+  }))
+);
 
 export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
   const router = useRouter();
@@ -55,9 +51,7 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
     id: "",
     nameAr: "",
     nameEn: "",
-    description: "",
     permissions: [] as string[],
-    isActive: true,
   });
 
   const openAddModal = () => {
@@ -66,9 +60,7 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
       id: "",
       nameAr: "",
       nameEn: "",
-      description: "",
       permissions: [],
-      isActive: true,
     });
     setIsModalOpen(true);
   };
@@ -76,12 +68,10 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
   const openEditModal = (role: RoleData) => {
     setEditingRole(role);
     setFormData({
-      id: role.id,
+      id: String(role.id),
       nameAr: role.nameAr || role.name || "",
       nameEn: role.nameEn || "",
-      description: role.description || "",
       permissions: Array.isArray(role.permissions) ? role.permissions : [],
-      isActive: role.isActive ?? true,
     });
     setIsModalOpen(true);
   };
@@ -102,7 +92,7 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
 
     try {
       const res = await saveRoleAction(formData);
-      if (res && (res.success || !res.error)) {
+      if (res.success) {
         showToast(
           formData.id ? "تم تعديل الدور بنجاح" : "تم إضافة الدور بنجاح",
           "success"
@@ -110,7 +100,7 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
         setIsModalOpen(false);
         router.refresh();
       } else {
-        showToast(res?.error || "حدث خطأ أثناء حفظ البيانات", "error");
+        showToast(res.message || "حدث خطأ أثناء حفظ البيانات", "error");
       }
     } catch (err) {
       showToast("حدث خطأ غير متوقع", "error");
@@ -119,34 +109,19 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     if (!confirm("هل أنت تأكد من حذف هذا الدور؟")) return;
     try {
       const res = await deleteRoleAction(id);
-      if (res && (res.success || !res.error)) {
+      if (res.success) {
         showToast("تم حذف الدور بنجاح", "success");
         setRoles((prev) => prev.filter((r) => r.id !== id));
         router.refresh();
       } else {
-        showToast(res?.error || "فشل الحذف", "error");
+        showToast(res.message || "فشل الحذف", "error");
       }
     } catch (err) {
       showToast("حدث خطأ أثناء الحذف", "error");
-    }
-  };
-
-  const handleToggleStatus = async (id: string, currentStatus?: boolean) => {
-    try {
-      const res = await toggleRoleStatusAction(id, currentStatus);
-      if (res && (res.success || !res.error)) {
-        showToast("تم تغيير حالة الدور بنجاح", "success");
-        setRoles((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r))
-        );
-        router.refresh();
-      }
-    } catch (err) {
-      showToast("فشل تغيير الحالة", "error");
     }
   };
 
@@ -205,30 +180,13 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
                   <p className="text-xs text-slate-400">{role.nameEn}</p>
                 )}
               </div>
-              <button
-                onClick={() =>
-                  handleToggleStatus(role.id, role.isActive ?? true)
-                }
-                className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${
-                  role.isActive
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                }`}
-              >
-                {role.isActive ? (
-                  <>
-                    <CheckCircle size={12} /> نشط
-                  </>
-                ) : (
-                  <>
-                    <XCircle size={12} /> غير نشط
-                  </>
-                )}
-              </button>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <CheckCircle size={12} /> نشط
+              </span>
             </div>
 
             <p className="text-sm text-slate-400 min-h-[40px]">
-              {role.description || "لا يوجد وصف محدد لهذا الدور"}
+              {role.nameEn || role.name}
             </p>
 
             <div className="bg-slate-800/50 p-3 rounded-xl space-y-2">
@@ -327,19 +285,6 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">الوصف</label>
-                <input
-                  type="text"
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                  placeholder="وصف مختصر لمسؤوليات هذا الدور"
-                />
-              </div>
-
               <div className="space-y-3">
                 <label className="text-sm font-medium text-slate-300 block">
                   الصلاحيات
@@ -365,24 +310,6 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
                     );
                   })}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-3 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                <input
-                  type="checkbox"
-                  id="isActiveRoleModal"
-                  checked={formData.isActive}
-                  onChange={(e) =>
-                    setFormData({ ...formData, isActive: e.target.checked })
-                  }
-                  className="w-5 h-5 rounded bg-slate-700 border-slate-600 text-purple-600 focus:ring-purple-500"
-                />
-                <label
-                  htmlFor="isActiveRoleModal"
-                  className="text-sm font-medium text-slate-300 cursor-pointer"
-                >
-                  تفعيل هذا الدور
-                </label>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-700/50">

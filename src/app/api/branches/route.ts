@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
   try {
+    const authorization = await authorizeApi([
+      'branches.view',
+      'branches.manage',
+      'employees.view',
+      'employees.manage',
+      'attendance.view',
+    ]);
+    if ('response' in authorization) return authorization.response;
+
     try {
       await db.execute(sql`
         ALTER TABLE branches ADD COLUMN IF NOT EXISTS address TEXT;
@@ -52,7 +62,10 @@ export async function GET() {
     `);
 
     const branches = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    return NextResponse.json(branches, { status: 200 });
+    const visibleBranches = branches.filter((branch: any) =>
+      canAccessBranch(authorization.principal, Number(branch.id))
+    );
+    return NextResponse.json(visibleBranches, { status: 200 });
   } catch (error: any) {
     console.error('Branches GET error:', error);
     return NextResponse.json([], { status: 200 });
@@ -61,6 +74,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await authorizeApi('branches.manage');
+    if ('response' in authorization) return authorization.response;
+
     const body = await request.json();
     const {
       id,
@@ -84,6 +100,13 @@ export async function POST(request: NextRequest) {
 
     if (!nameAr) {
       return NextResponse.json({ message: 'اسم الفرع بالعربية مطلوب' }, { status: 400 });
+    }
+
+    if (id && !canAccessBranch(authorization.principal, Number(id))) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
+    if (!id && authorization.principal.branchScope !== 'ALL') {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
 
     try {
@@ -162,6 +185,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const authorization = await authorizeApi('branches.manage');
+    if ('response' in authorization) return authorization.response;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -169,7 +195,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'معرف الفرع مطلوب' }, { status: 400 });
     }
 
-    const branchId = parseInt(id, 10);
+    const branchId = Number(id);
+    if (!Number.isSafeInteger(branchId) || branchId < 1) {
+      return NextResponse.json({ message: 'معرف الفرع غير صالح' }, { status: 400 });
+    }
+    if (!canAccessBranch(authorization.principal, branchId)) {
+      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    }
 
     try {
       await db.execute(sql`UPDATE users SET primary_branch_id = NULL WHERE primary_branch_id = ${branchId};`);

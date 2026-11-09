@@ -40,6 +40,14 @@ export const permissionCatalog = [
       { id: "reports.export", label: "Export reports", labelAr: "تصدير التقارير" },
     ],
   },
+  {
+    category: "Payroll",
+    categoryAr: "الرواتب",
+    items: [
+      { id: "payroll.view", label: "View payroll", labelAr: "عرض الرواتب" },
+      { id: "payroll.export", label: "Export payroll", labelAr: "تصدير الرواتب" },
+    ],
+  },
 ] as const;
 
 export const allPermissionIds = permissionCatalog.flatMap((group) => group.items.map((item) => item.id));

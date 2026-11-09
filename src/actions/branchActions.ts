@@ -4,6 +4,19 @@ import { db } from '@/db';
 import { branches } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { canAccessBranch, requireApiPrincipal } from '@/lib/api-auth';
+import type { ApiPrincipal } from '@/lib/api-auth';
+
+async function assertBranchAccess(principal: ApiPrincipal, branchId: number) {
+  const [branch] = await db
+    .select({ id: branches.id })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  if (!branch || !canAccessBranch(principal, branchId)) {
+    throw new Error('ممنوع الوصول إلى هذا الفرع');
+  }
+}
 
 export interface BranchData {
   id?: any;
@@ -35,9 +48,16 @@ export interface BranchData {
 }
 
 export async function getBranchesAction(): Promise<BranchData[]> {
+  const principal = await requireApiPrincipal([
+    'branches.view',
+    'branches.manage',
+    'employees.view',
+    'employees.manage',
+    'attendance.view',
+  ]);
   try {
     const rows = await db.select().from(branches).orderBy(desc(branches.createdAt));
-    return rows.map((r: any) => ({
+    return rows.filter((row) => canAccessBranch(principal, row.id)).map((r: any) => ({
       ...r,
       name: r.nameAr || r.nameEn || '',
       phone: r.phone || '',
@@ -50,9 +70,17 @@ export async function getBranchesAction(): Promise<BranchData[]> {
 }
 
 export async function getBranchByIdAction(id: any): Promise<BranchData | null> {
+  const principal = await requireApiPrincipal([
+    'branches.view',
+    'branches.manage',
+    'employees.view',
+    'employees.manage',
+    'attendance.view',
+  ]);
   try {
     const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) return null;
+    if (!Number.isSafeInteger(numericId) || numericId < 1) return null;
+    await assertBranchAccess(principal, numericId);
 
     const rows = await db
       .select()
@@ -78,6 +106,8 @@ export async function getBranchByIdAction(id: any): Promise<BranchData | null> {
 export async function createBranchAction(
   data: any
 ): Promise<{ success: boolean; message?: string; error?: string; branch?: any }> {
+  const principal = await requireApiPrincipal('branches.manage');
+  if (principal.branchScope !== 'ALL') throw new Error('ممنوع إنشاء فرع خارج نطاقك');
   try {
     const inserted = await db
       .insert(branches)
@@ -115,12 +145,13 @@ export async function updateBranchAction(
   id: any,
   data: any
 ): Promise<{ success: boolean; message?: string; error?: string }> {
+  const principal = await requireApiPrincipal('branches.manage');
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+    return { success: false, message: 'معرف الفرع غير صالح', error: 'معرف الفرع غير صالح' };
+  }
+  await assertBranchAccess(principal, numericId);
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) {
-      return { success: false, message: 'معرف الفرع غير صالح', error: 'معرف الفرع غير صالح' };
-    }
-
     await db
       .update(branches)
       .set({
@@ -157,12 +188,13 @@ export async function toggleBranchStatusAction(
   id: any,
   currentStatus?: boolean
 ): Promise<{ success: boolean; message?: string; error?: string }> {
+  const principal = await requireApiPrincipal('branches.manage');
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+    return { success: false, message: 'معرف الفرع غير صالح', error: 'معرف الفرع غير صالح' };
+  }
+  await assertBranchAccess(principal, numericId);
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) {
-      return { success: false, message: 'معرف الفرع غير صالح', error: 'معرف الفرع غير صالح' };
-    }
-
     let newStatus = !currentStatus;
     if (currentStatus === undefined) {
       const rows = await db
@@ -199,12 +231,13 @@ export async function toggleBranchStatusAction(
 export async function deleteBranchAction(
   id: any
 ): Promise<{ success: boolean; message?: string; error?: string }> {
+  const principal = await requireApiPrincipal('branches.manage');
+  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
+  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+    return { success: false, message: 'معرف الفرع غير صالح', error: 'معرف الفرع غير صالح' };
+  }
+  await assertBranchAccess(principal, numericId);
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (isNaN(numericId)) {
-      return { success: false, message: 'معرف الفرع غير صالح', error: 'معرف الفرع غير صالح' };
-    }
-
     await db.delete(branches).where(eq(branches.id, numericId));
     revalidatePath('/[locale]/admin/branches', 'page');
     revalidatePath('/[locale]/branches', 'page');
@@ -217,4 +250,8 @@ export async function deleteBranchAction(
       error: error?.message || 'فشل حذف الفرع' 
     };
   }
+}
+
+export async function saveBranchAction(data: any) {
+  return data?.id ? updateBranchAction(data.id, data) : createBranchAction(data);
 }
