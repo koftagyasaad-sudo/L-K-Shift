@@ -55,7 +55,7 @@ export default function BranchesManagementPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('EDIT');
+  const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('LIST');
 
   const [editingBranch, setEditingBranch] = useState<Partial<BranchItem>>({
     nameAr: '',
@@ -88,9 +88,7 @@ export default function BranchesManagementPage() {
         const list: BranchItem[] = Array.isArray(dataB) ? dataB : [];
         setBranches(list);
 
-        if (list.length > 0) {
-          loadBranchForEdit(list[0]);
-        }
+        // Default to list view
       }
 
       const resU = await fetch('/api/employees', { cache: 'no-store' });
