@@ -1,6 +1,48 @@
-async authorize(credentials): Promise<AppUser | null> {
+import { NextAuthOptions, User, Session } from "next-auth";
+import { JWT } from "next-auth/jwt";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { hashPassword, verifyPassword } from "@/lib/passwords";
+
+export type AppUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phone: string;
+  role: string;
+  systemRole: any;
+  fullNameAr?: string | null;
+  fullNameEn?: string | null;
+  branchId?: string | null;
+  primaryBranchId?: string | null;
+};
+
+function toNullableString(val: any): string | null {
+  if (val === undefined || val === null || val === "") return null;
+  return String(val);
+}
+
+export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 يوماً
+  },
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
+  providers: [
+    CredentialsProvider({
+      id: "credentials",
+      name: "Credentials",
+      credentials: {
+        phone: { label: "Phone", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials): Promise<AppUser | null> {
         try {
-          // قبول كل من phone أو username لتفادي أي تعارض في الواجهة
           const rawPhone = (credentials as any)?.phone || (credentials as any)?.username;
           if (!rawPhone || !credentials?.password) {
             console.warn("[AUTH] Missing credentials payload");
@@ -10,7 +52,6 @@ async authorize(credentials): Promise<AppUser | null> {
           const phone = String(rawPhone).trim();
           const password = String(credentials.password);
 
-          // استعلام مباشر متوافق مع Drizzle
           const found = await db
             .select()
             .from(users)
@@ -78,3 +119,38 @@ async authorize(credentials): Promise<AppUser | null> {
           return null;
         }
       },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }: { token: JWT; user?: User | AppUser }) {
+      if (user) {
+        const u = user as AppUser;
+        token.id = String(u.id);
+        token.phone = u.phone ?? null;
+        token.role = u.role ?? null;
+        token.systemRole = (u.systemRole ?? u.role ?? "SUPER_ADMIN") as any;
+        token.fullNameAr = u.fullNameAr ?? null;
+        token.fullNameEn = u.fullNameEn ?? null;
+        token.branchId = toNullableString(u.branchId);
+        token.primaryBranchId = toNullableString(u.primaryBranchId ?? u.branchId);
+      }
+      return token;
+    },
+    async session({ session, token }: { session: Session; token: JWT }) {
+      if (session.user) {
+        const sUser = session.user as AppUser;
+        sUser.id = toNullableString(token.id) || sUser.id || "";
+        sUser.phone = toNullableString(token.phone);
+        sUser.role = toNullableString(token.role) || "SUPER_ADMIN";
+        sUser.systemRole = (token.systemRole as any) || "SUPER_ADMIN";
+        sUser.fullNameAr = toNullableString(token.fullNameAr);
+        sUser.fullNameEn = toNullableString(token.fullNameEn);
+        sUser.branchId = toNullableString(token.branchId);
+        sUser.primaryBranchId = toNullableString(token.primaryBranchId);
+      }
+      return session;
+    },
+  },
+};
+
+export default authOptions;
