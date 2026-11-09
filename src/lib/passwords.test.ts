@@ -1,3 +1,4 @@
+import { pbkdf2Sync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { hashPassword, verifyPassword } from "./passwords";
 
@@ -22,6 +23,19 @@ describe("password storage", () => {
       isValid: true,
       needsRehash: true,
     });
+  });
+
+  it("verifies legacy PBKDF2 passwords and marks them for rehash", async () => {
+    const password = "legacy-pbkdf2-password";
+    const salt = "0123456789abcdef0123456789abcdef";
+    const hash = pbkdf2Sync(password, salt, 100_000, 64, "sha512").toString("hex");
+
+    await expect(
+      verifyPassword(password, `pbkdf2$100000$${salt}$${hash}`)
+    ).resolves.toEqual({ isValid: true, needsRehash: true });
+    await expect(
+      verifyPassword("incorrect-password", `pbkdf2$100000$${salt}$${hash}`)
+    ).resolves.toEqual({ isValid: false, needsRehash: false });
   });
 
   it("rejects malformed or empty password records safely", async () => {

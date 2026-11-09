@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { hashPassword, verifyPassword } from "@/lib/passwords";
 
 export async function POST(req: Request) {
   try {
-    const { phone, password } = await req.json();
+    const body: unknown = await req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { message: "بيانات تسجيل الدخول غير صالحة" },
+        { status: 400 }
+      );
+    }
+
+    const values = body as Record<string, unknown>;
+    const phone = typeof values.phone === "string" ? values.phone.trim() : "";
+    const password = typeof values.password === "string" ? values.password : "";
 
     if (!phone || !password) {
       return NextResponse.json(
@@ -16,13 +26,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const cleanPhone = phone.trim();
-
-    // البحث عن المستخدم برقم الهاتف
     const userRecords = await db
       .select()
       .from(users)
-      .where(eq(users.phone, cleanPhone))
+      .where(eq(users.phone, phone))
       .limit(1);
 
     const user = userRecords[0];
@@ -34,29 +41,36 @@ export async function POST(req: Request) {
       );
     }
 
-    // فحص كلمة المرور مع الحقل الفعلي
-    const passwordToCompare = (user as any).passwordHash || (user as any).password;
-    if (!passwordToCompare) {
+    if (!user.passwordHash) {
       return NextResponse.json(
         { message: "حساب المستخدم غير مهيأ بكلمة مرور" },
         { status: 401 }
       );
     }
 
-    const isMatch = await bcrypt.compare(password, passwordToCompare);
-    if (!isMatch) {
+    const verification = await verifyPassword(password, user.passwordHash);
+    if (!verification.isValid) {
       return NextResponse.json(
         { message: "بيانات الدخول غير صحيحة" },
         { status: 401 }
       );
     }
 
-    if ((user as any).isActive === false) {
+    if (!user.isActive) {
       return NextResponse.json(
         { message: "هذا الحساب معطل حالياً" },
         { status: 403 }
       );
     }
+
+    if (verification.needsRehash) {
+      await db
+        .update(users)
+        .set({ passwordHash: await hashPassword(password), updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+    }
+
+    const name = user.fullNameAr || "Admin";
 
     // حفظ الجلسة
     const cookieStore = await cookies();
@@ -65,7 +79,7 @@ export async function POST(req: Request) {
       JSON.stringify({
         id: user.id,
         phone: user.phone,
-        name: (user as any).fullNameAr || (user as any).name || "Admin",
+        name,
       }),
       {
         httpOnly: true,
@@ -79,14 +93,14 @@ export async function POST(req: Request) {
       success: true,
       user: {
         id: user.id,
-        name: (user as any).fullNameAr || (user as any).name || "Admin",
+        name,
         phone: user.phone,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Login Route Error:", error);
     return NextResponse.json(
-      { message: "حدث خطأ داخلي في الخادم", error: error.message },
+      { message: "حدث خطأ داخلي في الخادم" },
       { status: 500 }
     );
   }

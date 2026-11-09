@@ -47,7 +47,8 @@ export async function verifyPassword(
     }
 
     const derived = await pbkdf2(password, salt, iterations, 64, "sha512");
-    return { isValid: equalHex(derived, expectedHex), needsRehash: true };
+    const isValid = equalHex(derived, expectedHex);
+    return { isValid, needsRehash: isValid };
   }
 
   if (/^[a-f0-9]{128}$/i.test(storedHash)) {
