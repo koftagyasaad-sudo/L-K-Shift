@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { and, eq, gt } from 'drizzle-orm';
 import { db } from '@/db';
-import { sql } from 'drizzle-orm';
+import { users } from '@/db/schema';
 import crypto from 'crypto';
 
 export const dynamic = 'force-dynamic';
@@ -57,62 +58,60 @@ async function sendSmsOtp(phone: string, otpCode: string): Promise<boolean> {
     }
   }
 
-  console.log(`[DEV / SMS LOG] تم إرسال OTP (${otpCode}) إلى رقم الهاتف: ${phone}`);
-  return true;
+  return false;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { action, phone, otp } = body;
+    const body: unknown = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ message: 'بيانات الطلب غير صالحة' }, { status: 400 });
+    }
 
-    const cleanPhone = (phone || '').trim();
-    if (!cleanPhone) {
+    const values = body as Record<string, unknown>;
+    const action = values.action;
+    const phone = typeof values.phone === 'string' ? values.phone.trim() : '';
+    const otp = typeof values.otp === 'string' ? values.otp.trim() : '';
+
+    if (!phone) {
       return NextResponse.json({ message: 'يرجى إدخال رقم الهاتف المسجل' }, { status: 400 });
     }
 
     // 1. إجراء إرسال كود الـ OTP في رسالة SMS
     if (action === 'SEND_OTP') {
-      const userCheck = await db.execute(sql`
-        SELECT id, COALESCE(full_name_ar, name) as name, phone 
-        FROM users 
-        WHERE phone = ${cleanPhone} 
-        LIMIT 1;
-      `);
-      const userRows = Array.isArray(userCheck) ? userCheck : (userCheck as any)?.rows || [];
-      if (!userRows.length) {
+      const [user] = await db
+        .select({ id: users.id, phone: users.phone })
+        .from(users)
+        .where(eq(users.phone, phone))
+        .limit(1);
+
+      if (!user) {
         return NextResponse.json(
           { message: 'رقم الهاتف هذا غير مسجل لدينا في النظام، يرجى مراجعة الإدارة.' },
           { status: 404 }
         );
       }
 
-      // توليد كود سري من 6 أرقام
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpCode = crypto.randomInt(100000, 1000000).toString();
+      await db
+        .update(users)
+        .set({
+          resetOtp: otpCode,
+          resetOtpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        })
+        .where(eq(users.id, user.id));
 
-      // حفظ الـ OTP في قاعدة البيانات بصلاحية 10 دقائق
-      await db.execute(sql`
-        INSERT INTO otp_verifications (phone, otp_code, expires_at, is_used, created_at)
-        VALUES (${cleanPhone}, ${otpCode}, NOW() + INTERVAL '10 minutes', false, NOW());
-      `);
+      if (!(await sendSmsOtp(user.phone, otpCode))) {
+        await db
+          .update(users)
+          .set({ resetOtp: null, resetOtpExpiresAt: null })
+          .where(and(eq(users.id, user.id), eq(users.resetOtp, otpCode)));
 
-      // إرسال رسالة SMS حقيقية إلى الهاتف
-      await sendSmsOtp(cleanPhone, otpCode);
-
-      // تسجيل إشعار بالنظام
-      try {
-        await db.execute(sql`
-          INSERT INTO notifications (user_id, title, message, type, is_read, created_at)
-          VALUES (
-            ${userRows[0].id}, 
-            'طلب استعادة كلمة المرور', 
-            ${'تم إرسال رمز التحقق OTP إلى هاتفك بنجاح.'}, 
-            'SECURITY', 
-            false, 
-            NOW()
-          );
-        `);
-      } catch {}
+        return NextResponse.json(
+          { message: 'تعذر إرسال رمز التحقق. خدمة الرسائل غير مهيأة، يرجى التواصل مع الإدارة.' },
+          { status: 503 }
+        );
+      }
 
       return NextResponse.json({
         success: true,
@@ -122,44 +121,47 @@ export async function POST(request: NextRequest) {
 
     // 2. إجراء مطابقة وتأكيد كود الـ OTP
     if (action === 'VERIFY_OTP') {
-      const cleanOtp = (otp || '').trim();
-      if (!cleanOtp) {
+      if (!/^\d{6}$/.test(otp)) {
         return NextResponse.json({ message: 'يرجى إدخال كود التحقق المكون من 6 أرقام' }, { status: 400 });
       }
 
-      const otpCheck = await db.execute(sql`
-        SELECT id, otp_code, expires_at, is_used 
-        FROM otp_verifications 
-        WHERE phone = ${cleanPhone} 
-          AND is_used = false 
-          AND expires_at > NOW() 
-        ORDER BY id DESC 
-        LIMIT 1;
-      `);
+      const [user] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.phone, phone),
+          eq(users.resetOtp, otp),
+          gt(users.resetOtpExpiresAt, new Date())
+        ))
+        .limit(1);
 
-      const otpRows = Array.isArray(otpCheck) ? otpCheck : (otpCheck as any)?.rows || [];
-      if (!otpRows.length) {
+      if (!user) {
         return NextResponse.json(
           { message: 'كود التحقق منتهي الصلاحية أو غير موجود، يرجى طلب كود جديد.' },
           { status: 400 }
         );
       }
 
-      const record = otpRows[0];
-      if (record.otp_code !== cleanOtp) {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const [verifiedUser] = await db
+        .update(users)
+        .set({
+          resetOtp: resetToken,
+          resetOtpExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        })
+        .where(and(
+          eq(users.id, user.id),
+          eq(users.resetOtp, otp),
+          gt(users.resetOtpExpiresAt, new Date())
+        ))
+        .returning({ id: users.id });
+
+      if (!verifiedUser) {
         return NextResponse.json(
-          { message: 'كود التحقق الذي أدخلته غير صحيح، يرجى التأكد وإعادة المحاولة.' },
+          { message: 'كود التحقق منتهي الصلاحية أو غير صحيح، يرجى طلب كود جديد.' },
           { status: 400 }
         );
       }
-
-      // إبطال الكود لمنع استخدامه مرة أخرى وتوليد توكن إعادة تعيين آمن
-      const resetToken = crypto.randomBytes(32).toString('hex');
-      await db.execute(sql`
-        UPDATE otp_verifications 
-        SET is_used = true, reset_token = ${resetToken} 
-        WHERE id = ${record.id};
-      `);
 
       return NextResponse.json({
         success: true,
@@ -169,8 +171,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ message: 'إجراء غير مدعوم' }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Forgot-password route error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل إتمام العملية' }, { status: 500 });
+    return NextResponse.json({ message: 'حدث خطأ أثناء تنفيذ طلب استعادة كلمة المرور.' }, { status: 500 });
   }
 }
