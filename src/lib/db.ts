@@ -1,3 +1,7 @@
+
+declare global {
+  var globalNeonPool: any | undefined;
+}
 import { neon } from "@neondatabase/serverless";
 
 export async function query(

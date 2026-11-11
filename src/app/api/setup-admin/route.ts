@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
@@ -19,6 +20,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // [SECURITY LOCK] منع استدعاء التهيئة إذا وجد مدير عام مسجل مسبقاً
+    try {
+      const existingSuperAdmin = await db.execute(sql`SELECT id FROM users WHERE system_role = 'SUPER_ADMIN' LIMIT 1;`);
+      const rows = Array.isArray(existingSuperAdmin) ? existingSuperAdmin : (existingSuperAdmin as any)?.rows || [];
+      if (rows.length > 0) {
+        return NextResponse.json(
+          { message: "تم قفل مسار التهيئة أمنياً؛ النظام يحتوي على مدير عام مسبقاً." /* admin_lock_activated */ },
+          { status: 403 }
+        );
+      }
+    } catch (lockErr) {
+      console.error("Setup lock check error:", lockErr);
+    }
+
     const [existingAdmin] = await db
       .select({ id: users.id })
       .from(users)
