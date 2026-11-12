@@ -73,12 +73,12 @@ export async function GET(request: NextRequest) {
         COALESCE(NULLIF(TRIM(u.employee_number), ''), u.id::text) as "employeeCode",
         COALESCE(u.monthly_salary, 5000) as "monthlySalary",
         COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
-        COALESCE(u.working_days_per_month, 26) as "workingDaysPerMonth",
+        26 as "workingDaysPerMonth",
         COALESCE(u.is_active, true) as "isActive",
         b.id::text as "branchId",
         COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
-        b.latitude as "branchLat",
-        b.longitude as "branchLng",
+        NULLIF(b.latitude::text, '')::double precision as "branchLat",
+        NULLIF(b.longitude::text, '')::double precision as "branchLng",
         GREATEST(COALESCE(b.geofence_radius, 100), 100) as "branchRadius",
         TO_CHAR(u.created_at, 'YYYY-MM-DD') as "hireDate",
         COALESCE(u.shift_name, 'الشيفت الصباحي') as "shiftName",
@@ -89,7 +89,6 @@ export async function GET(request: NextRequest) {
       WHERE ${empId ? sql`u.id::text = ${empId}` : sql`TRUE`}
         AND ${branchFilter}
       ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, 999999) ASC, u.id ASC
-      LIMIT 500;
     `);
 
     const employees = resultRows<Record<string, unknown>>(raw);

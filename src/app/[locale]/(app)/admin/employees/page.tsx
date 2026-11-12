@@ -77,6 +77,24 @@ interface ZkAttendanceRecord {
   status: string;
 }
 
+async function readApiList<T>(response: Response, property: string): Promise<T[]> {
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    const message = typeof payload === 'object' && payload !== null && 'message' in payload
+      && typeof payload.message === 'string'
+      ? payload.message
+      : 'تعذر تحميل البيانات.';
+    throw new Error(message);
+  }
+  if (Array.isArray(payload)) return payload as T[];
+  if (typeof payload === 'object' && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record[property])) return record[property] as T[];
+    if (Array.isArray(record.data)) return record.data as T[];
+  }
+  throw new Error('استجابة الخادم غير صالحة.');
+}
+
 // دالة ذكية تقرأ أي صيغة وقت صادرة من قاعدة البيانات أو ماكينة البصمة وتمنع ظهور الشرطة
 function formatTimeArabic(val: string | number | Date | null | undefined): string {
   if (!val) return '—';
@@ -159,26 +177,21 @@ export default function EmployeesManagementPage() {
     try {
       setLoading(true);
       const resE = await fetch('/api/employees', { cache: 'no-store' });
-      if (resE.ok) {
-        const dataE = await resE.json();
-        setEmployees(Array.isArray(dataE) ? dataE : []);
-      }
+      setEmployees(await readApiList<EmployeeItem>(resE, 'employees'));
 
       const resB = await fetch('/api/branches', { cache: 'no-store' });
-      if (resB.ok) {
-        const dataB = await resB.json();
-        const mappedB: BranchOption[] = (Array.isArray(dataB) ? dataB : []).map((b: {
-          id: string;
-          name?: string;
-          nameAr?: string;
-          name_ar?: string;
-        }) => ({
-          id: b.id,
-          name: b.name || 'Branch',
-          nameAr: b.nameAr || b.name_ar || b.name || 'فرع',
-        }));
-        setAllBranches(mappedB);
-      }
+      const dataB = await readApiList<{
+        id: string;
+        name?: string;
+        nameAr?: string;
+        name_ar?: string;
+      }>(resB, 'branches');
+      const mappedB: BranchOption[] = dataB.map((b) => ({
+        id: b.id,
+        name: b.name || 'Branch',
+        nameAr: b.nameAr || b.name_ar || b.name || 'فرع',
+      }));
+      setAllBranches(mappedB);
 
       const resR = await fetch('/api/roles', { cache: 'no-store' });
       if (resR.ok) {

@@ -43,6 +43,24 @@ interface UserOption {
   role: string;
 }
 
+async function readApiList<T>(response: Response, property: string): Promise<T[]> {
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    const message = typeof payload === 'object' && payload !== null && 'message' in payload
+      && typeof payload.message === 'string'
+      ? payload.message
+      : 'تعذر تحميل البيانات.';
+    throw new Error(message);
+  }
+  if (Array.isArray(payload)) return payload as T[];
+  if (typeof payload === 'object' && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record[property])) return record[property] as T[];
+    if (Array.isArray(record.data)) return record.data as T[];
+  }
+  throw new Error('استجابة الخادم غير صالحة.');
+}
+
 export default function BranchesManagementPage() {
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
@@ -80,32 +98,30 @@ export default function BranchesManagementPage() {
     try {
       setLoading(true);
       const resB = await fetch('/api/branches', { cache: 'no-store' });
-      if (resB.ok) {
-        const dataB = await resB.json();
-        const list: BranchItem[] = Array.isArray(dataB) ? dataB : [];
-        setBranches(list);
-
-        // Default to list view
-      }
+      const list = await readApiList<BranchItem>(resB, 'branches');
+      setBranches(list);
+      setViewMode('LIST');
 
       const resU = await fetch('/api/employees', { cache: 'no-store' });
-      if (resU.ok) {
-        const dataU = await resU.json();
-        const mappedUsers: UserOption[] = (Array.isArray(dataU) ? dataU : []).map((u: {
-          id: string;
-          fullNameAr?: string;
-          name?: string;
-          fullName?: string;
-          role?: string;
-        }) => ({
-          id: u.id,
-          name: u.fullNameAr || u.name || u.fullName || 'موظف',
-          role: u.role || 'موظف',
-        }));
-        setUsers(mappedUsers);
-      }
+      const dataU = await readApiList<{
+        id: string;
+        fullNameAr?: string;
+        name?: string;
+        fullName?: string;
+        role?: string;
+      }>(resU, 'employees');
+      const mappedUsers: UserOption[] = dataU.map((u) => ({
+        id: u.id,
+        name: u.fullNameAr || u.name || u.fullName || 'موظف',
+        role: u.role || 'موظف',
+      }));
+      setUsers(mappedUsers);
     } catch (err) {
       console.error('Error loading branches:', err);
+      setStatusMsg({
+        type: 'err',
+        text: err instanceof Error ? err.message : 'تعذر تحميل بيانات الفروع.',
+      });
     } finally {
       setLoading(false);
     }

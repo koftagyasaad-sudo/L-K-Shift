@@ -2,10 +2,11 @@
 
 import { db } from '@/db';
 import { branches } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { canAccessBranch, requireApiPrincipal } from '@/lib/api-auth';
 import type { ApiPrincipal } from '@/lib/api-auth';
+import { getSqlRows } from '@/lib/db';
 
 async function assertBranchAccess(principal: ApiPrincipal, branchId: string) {
   const [branch] = await db
@@ -60,16 +61,31 @@ export async function getBranchesAction(): Promise<BranchData[]> {
     'attendance.view',
   ]);
   try {
-    const rows = await db.select().from(branches).orderBy(desc(branches.createdAt));
-    return rows.filter((row) => canAccessBranch(principal, row.id)).map((r) => ({
-      ...r,
-      name: r.nameAr || r.nameEn || '',
-      phone: '',
-      managerName: '',
-    })) as BranchData[];
+    const rows = getSqlRows<BranchData>(await db.execute(sql`
+      SELECT
+        b.id::text AS id,
+        COALESCE(b.name, b.name_en, b.name_ar, '') AS name,
+        b.name_ar AS "nameAr",
+        b.name_en AS "nameEn",
+        b.address AS address,
+        b.phone AS phone,
+        b.manager_id::text AS "managerId",
+        COALESCE(u.full_name_ar, u.name, '') AS "managerName",
+        u.phone AS "managerPhone",
+        NULLIF(b.latitude::text, '')::double precision AS latitude,
+        NULLIF(b.longitude::text, '')::double precision AS longitude,
+        GREATEST(COALESCE(b.geofence_radius, 100), 100) AS "geofenceRadius",
+        COALESCE(b.is_active, true) AS "isActive",
+        b.created_at AS "createdAt",
+        b.updated_at AS "updatedAt"
+      FROM branches b
+      LEFT JOIN users u ON b.manager_id::text = u.id::text
+      ORDER BY b.created_at DESC, b.id ASC;
+    `));
+    return rows.filter((row) => canAccessBranch(principal, String(row.id)));
   } catch (error) {
     console.error('Error fetching branches:', error);
-    return [];
+    throw error;
   }
 }
 

@@ -2,14 +2,16 @@
 
 import { db } from '@/db';
 import { users, branches } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { canAccessBranch, hasApiPermission, requireApiPrincipal } from '@/lib/api-auth';
 import type { ApiPrincipal } from '@/lib/api-auth';
 
 async function assertEmployeeBranchAccess(principal: ApiPrincipal, employeeId: string) {
   const [employee] = await db
-    .select({ branchId: users.primaryBranchId })
+    .select({
+      branchId: sql<string | null>`COALESCE(${users.primaryBranchId}::text, users.branch_id::text)`,
+    })
     .from(users)
     .where(eq(users.id, employeeId))
     .limit(1);
@@ -60,7 +62,7 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
         systemRole: users.systemRole,
         employeeCode: users.employeeCode,
         employeeNumber: users.employeeNumber,
-        primaryBranchId: users.primaryBranchId,
+        branchId: sql<string | null>`COALESCE(${users.primaryBranchId}::text, users.branch_id::text)`,
         monthlySalary: users.monthlySalary,
         workingHoursPerDay: users.workingHoursPerDay,
         nationalId: users.nationalId,
@@ -73,11 +75,14 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
         branchName: branches.nameAr,
       })
       .from(users)
-      .leftJoin(branches, eq(users.primaryBranchId, branches.id))
+      .leftJoin(
+        branches,
+        sql`COALESCE(${users.primaryBranchId}::text, users.branch_id::text) = ${branches.id}::text`
+      )
       .orderBy(desc(users.createdAt));
 
     return rows
-      .filter((user) => canAccessBranch(principal, user.primaryBranchId))
+      .filter((user) => canAccessBranch(principal, user.branchId))
       .map((u) => ({
       id: u.id,
       name: u.fullNameAr,
@@ -90,7 +95,7 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
       systemRole: u.systemRole,
       employeeCode: u.employeeCode || u.employeeNumber || String(u.id),
       employeeNumber: u.employeeNumber,
-      branchId: u.primaryBranchId,
+      branchId: u.branchId,
       branchName: u.branchName || 'الفرع الرئيسي',
       basicSalary: canViewPayroll ? Number(u.monthlySalary) || 0 : 0,
       monthlySalary: canViewPayroll ? u.monthlySalary : null,
@@ -106,7 +111,7 @@ export async function getEmployeesAction(): Promise<EmployeeData[]> {
       }));
   } catch (error) {
     console.error('Error fetching employees:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -128,7 +133,7 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
         systemRole: users.systemRole,
         employeeCode: users.employeeCode,
         employeeNumber: users.employeeNumber,
-        primaryBranchId: users.primaryBranchId,
+        branchId: sql<string | null>`COALESCE(${users.primaryBranchId}::text, users.branch_id::text)`,
         monthlySalary: users.monthlySalary,
         workingHoursPerDay: users.workingHoursPerDay,
         nationalId: users.nationalId,
@@ -141,7 +146,10 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
         branchName: branches.nameAr,
       })
       .from(users)
-      .leftJoin(branches, eq(users.primaryBranchId, branches.id))
+      .leftJoin(
+        branches,
+        sql`COALESCE(${users.primaryBranchId}::text, users.branch_id::text) = ${branches.id}::text`
+      )
       .where(eq(users.id, employeeId))
       .limit(1);
 
@@ -154,7 +162,7 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
     ) {
       throw new Error('ممنوع الوصول إلى بيانات هذا الموظف');
     }
-    if (!canAccessBranch(principal, u.primaryBranchId)) {
+    if (!canAccessBranch(principal, u.branchId)) {
       throw new Error('ممنوع الوصول إلى بيانات هذا الموظف');
     }
 
@@ -170,7 +178,7 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
       systemRole: u.systemRole,
       employeeCode: u.employeeCode || u.employeeNumber || String(u.id),
       employeeNumber: u.employeeNumber,
-      branchId: u.primaryBranchId,
+      branchId: u.branchId,
       branchName: u.branchName || 'الفرع الرئيسي',
       basicSalary: employeeId === principal.id || canViewPayroll ? Number(u.monthlySalary) || 0 : 0,
       monthlySalary: employeeId === principal.id || canViewPayroll ? u.monthlySalary : null,
