@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         COALESCE(u.full_name_ar, u.name, '') as "fullName",
         COALESCE(u.full_name_en, '') as "fullNameEn",
         COALESCE(u.phone, '') as phone,
+        COALESCE(u.email, '') as email,
         COALESCE(u.phone_alt, '') as "phoneAlt",
         COALESCE(u.national_id, '') as "nationalId",
         TO_CHAR(u.national_id_expiry, 'YYYY-MM-DD') as "nationalIdExpiry",
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
       fullName,
       fullNameEn,
       phone,
+      email,
       phoneAlt,
       nationalId,
       nationalIdExpiry,
@@ -171,6 +173,9 @@ export async function POST(request: NextRequest) {
     }
 
     const gradYearNum = graduationYear ? parseInt(graduationYear, 10) : null;
+    if (graduationYear && !Number.isSafeInteger(gradYearNum)) {
+      return NextResponse.json({ message: 'سنة التخرج غير صالحة' }, { status: 400 });
+    }
     const bDate = birthDate ? birthDate : null;
     const nExpiry = nationalIdExpiry ? nationalIdExpiry : null;
 
@@ -181,6 +186,10 @@ export async function POST(request: NextRequest) {
         name = COALESCE(NULLIF(${fullName || ''}, ''), name),
         full_name_en = ${fullNameEn || null},
         phone = COALESCE(NULLIF(${phone || ''}, ''), phone),
+        email = CASE
+          WHEN ${email !== undefined} THEN NULLIF(${typeof email === 'string' ? email.trim() : ''}, '')
+          ELSE email
+        END,
         phone_alt = ${phoneAlt || null},
         national_id = ${nationalId || null},
         national_id_expiry = NULLIF(${nExpiry}, '')::date,

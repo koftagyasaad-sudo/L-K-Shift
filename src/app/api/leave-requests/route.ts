@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth';
+import { notifyRequestOwner } from '@/lib/request-notifications';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -31,9 +32,10 @@ export async function GET(request: NextRequest) {
     }
     const isSelf = requestedId === authorization.principal.id;
     const canView = authorization.principal.systemRole === 'SUPER_ADMIN'
-      || ['leaves.view', 'leaves.approve', 'staff_requests.manage'].some((permission) =>
+      || (authorization.principal.systemRole !== 'EMPLOYEE'
+      && ['leaves.view', 'leaves.approve', 'staff_requests.manage'].some((permission) =>
       hasApiPermission(authorization.principal, permission)
-    );
+    ));
     if (!isSelf && !canView) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
@@ -159,11 +161,9 @@ export async function PATCH(request: NextRequest) {
     if (!Number.isSafeInteger(reqNumericId) || reqNumericId < 1) {
       return NextResponse.json({ message: 'معرف الطلب غير صالح' }, { status: 400 });
     }
-    const adminUserId = authorization.principal.id;
-
     const targetReq = await db.execute(sql`
       SELECT r.user_id, r.request_type, r.leave_type,
-             COALESCE(u.primary_branch_id, u.branch_id) AS branch_id
+             COALESCE(u.primary_branch_id::text, u.branch_id::text) AS branch_id
       FROM leave_requests r
       LEFT JOIN users u ON u.id::text = r.user_id::text
       WHERE r.id = ${reqNumericId} LIMIT 1;
@@ -191,25 +191,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
 
-    try {
-      await db.execute(sql`
-        UPDATE leave_requests
-        SET 
-          status = ${newStatus}::leave_status,
-          approved_by = ${adminUserId},
+    await db.execute(sql`
+      UPDATE leave_requests
+      SET status = ${newStatus},
           rejection_reason = ${rejectionReason || null}
-        WHERE id = ${reqNumericId};
-      `);
-    } catch {
-      await db.execute(sql`
-        UPDATE leave_requests
-        SET 
-          status = ${newStatus},
-          approved_by = ${adminUserId},
-          rejection_reason = ${rejectionReason || null}
-        WHERE id = ${reqNumericId};
-      `);
-    }
+      WHERE id = ${reqNumericId};
+    `);
 
     const notifTitle = newStatus === 'APPROVED' ? 'تمت الموافقة على طلبك ✅' : 'تم رفض طلبك ❌';
     const notifMsg =
@@ -218,20 +205,10 @@ export async function PATCH(request: NextRequest) {
         : `تم رفض طلبك.${rejectionReason ? ` سبب الرفض: ${rejectionReason}` : ''}`;
 
     try {
-      await db.execute(sql`
-        INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
-        VALUES (
-          ${employeeUserId},
-          ${adminUserId},
-          ${notifTitle},
-          ${notifMsg},
-          'REQUEST',
-          '/requests',
-          false,
-          NOW()
-        );
-      `);
-    } catch {}
+      await notifyRequestOwner(employeeUserId, notifTitle, notifMsg, '/requests');
+    } catch (notificationError) {
+      console.warn('Request notification could not be saved:', notificationError);
+    }
 
     return NextResponse.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' });
   } catch (error) {

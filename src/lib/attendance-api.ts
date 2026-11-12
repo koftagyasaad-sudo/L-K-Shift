@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendanceLogs, branches, users } from "@/db/schema";
@@ -19,7 +19,7 @@ export interface AttendanceInput {
 }
 
 export interface AttendanceRecord {
-  id: number;
+  id: string | number;
   userId: string;
   userName: string;
   employeeCode: string;
@@ -197,6 +197,136 @@ function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number):
   return Math.round(6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+async function getLiveAttendanceRecords(
+  principal: ApiPrincipal,
+  searchParams: URLSearchParams
+): Promise<AttendanceRecord[]> {
+  const canViewAll = principal.systemRole === "SUPER_ADMIN"
+    || (principal.systemRole !== "EMPLOYEE" && (
+      hasApiPermission(principal, "attendance.view")
+      || hasApiPermission(principal, "attendance.review")
+      || hasApiPermission(principal, "attendance.export")
+    ));
+  const canViewPayroll = hasApiPermission(principal, "payroll.view")
+    || hasApiPermission(principal, "reports.view");
+  const conditions: SQL[] = [];
+  const requestedUserId = searchParams.get("userId");
+  const requestedCode = searchParams.get("code");
+  const requestedPhone = searchParams.get("phone");
+  const requestedBranchId = searchParams.get("branchId");
+  const fromDate = searchParams.get("from");
+  const toDate = searchParams.get("to");
+
+  if (!canViewAll) {
+    conditions.push(sql`user_id = ${principal.id}`);
+  } else if (principal.systemRole !== "SUPER_ADMIN" && principal.branchScope !== "ALL") {
+    const branchIds = principal.branchScope === "CUSTOM"
+      ? principal.allowedBranchIds
+      : principal.primaryBranchId
+        ? [principal.primaryBranchId]
+        : [];
+    conditions.push(branchIds.length
+      ? sql`effective_branch_id = ANY(${branchIds}::text[])`
+      : sql`FALSE`);
+  }
+  if (canViewAll && requestedUserId && requestedUserId !== "ALL") {
+    conditions.push(sql`user_id = ${requestedUserId}`);
+  }
+  if (canViewAll && requestedCode) conditions.push(sql`employee_code = ${requestedCode}`);
+  if (canViewAll && requestedPhone) conditions.push(sql`phone = ${requestedPhone}`);
+  if (requestedBranchId) {
+    conditions.push(canAccessBranch(principal, requestedBranchId)
+      ? sql`effective_branch_id = ${requestedBranchId}`
+      : sql`FALSE`);
+  }
+  conditions.push(sql`work_date >= COALESCE(NULLIF(${fromDate ?? ""}, '')::date, work_date)`);
+  conditions.push(sql`work_date <= COALESCE(NULLIF(${toDate ?? ""}, '')::date, work_date)`);
+
+  const raw = await db.execute(sql`
+    WITH attendance_rows AS (
+      SELECT
+        a.id::text AS id,
+        a.user_id::text AS user_id,
+        COALESCE(a.branch_id::text, u.primary_branch_id::text, u.branch_id::text) AS effective_branch_id,
+        COALESCE(u.full_name_ar, u.name, u.full_name, 'موظف') AS user_name,
+        COALESCE(u.employee_number, u.employee_code, u.id::text) AS employee_code,
+        COALESCE(u.phone, '') AS phone,
+        u.monthly_salary AS salary,
+        COALESCE(u.working_hours_per_day, 8) AS working_hours_per_day,
+        b.name_ar AS branch_name,
+        a.check_in,
+        a.check_out,
+        a.distance_meters,
+        a.status,
+        CASE
+          WHEN (a.check_in AT TIME ZONE 'Africa/Cairo')::time < TIME '06:00'
+            THEN (a.check_in AT TIME ZONE 'Africa/Cairo')::date - 1
+          ELSE (a.check_in AT TIME ZONE 'Africa/Cairo')::date
+        END AS work_date
+      FROM attendance a
+      LEFT JOIN users u ON a.user_id::text = u.id::text
+      LEFT JOIN branches b ON b.id::text = COALESCE(
+        a.branch_id::text,
+        u.primary_branch_id::text,
+        u.branch_id::text,
+        ''
+      )
+    )
+    SELECT *
+    FROM attendance_rows
+    WHERE ${sql.join(conditions, sql` AND `)}
+    ORDER BY check_in DESC
+    LIMIT 500;
+  `);
+  const rows = resultRows<{
+    id: string;
+    user_id: string;
+    effective_branch_id: string | null;
+    user_name: string;
+    employee_code: string;
+    phone: string;
+    salary: string | number | null;
+    working_hours_per_day: number | null;
+    branch_name: string | null;
+    check_in: string | Date | null;
+    check_out: string | Date | null;
+    distance_meters: number | null;
+    status: string | null;
+    work_date: string | Date;
+  }>(raw);
+
+  return rows.map((row) => {
+    const checkInTime = timestampString(row.check_in);
+    const checkOutTime = timestampString(row.check_out);
+    const workedMinutes = checkInTime && checkOutTime
+      ? Math.max(0, Math.round((new Date(checkOutTime).getTime() - new Date(checkInTime).getTime()) / 60_000))
+      : 0;
+    const rawStatus = String(row.status || "present").toUpperCase();
+    return {
+      id: row.id,
+      userId: row.user_id,
+      userName: row.user_name || "موظف",
+      employeeCode: row.employee_code || row.user_id,
+      userPhone: row.phone || "",
+      branchName: row.branch_name || "الفرع الرئيسي",
+      branchId: row.effective_branch_id,
+      workDate: row.work_date instanceof Date
+        ? row.work_date.toISOString().slice(0, 10)
+        : String(row.work_date).slice(0, 10),
+      checkInTime,
+      checkOutTime,
+      gpsDistance: Number(row.distance_meters || 0),
+      photoUrl: null,
+      workedMinutes,
+      lateMinutes: 0,
+      overtimeMinutes: Math.max(0, workedMinutes - Number(row.working_hours_per_day || 8) * 60),
+      status: rawStatus === "PRESENT" ? "ON_TIME" : rawStatus,
+      basicSalary: canViewPayroll ? Number(row.salary || 0) : 0,
+      workingHoursPerDay: Number(row.working_hours_per_day || 8),
+    };
+  });
+}
+
 export async function submitAttendance(
   principal: ApiPrincipal,
   input: AttendanceInput
@@ -207,95 +337,125 @@ export async function submitAttendance(
     return errorResponse("غير مصرح بتسجيل الحضور لموظف آخر.", 403);
   }
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(and(eq(users.id, targetUserId), eq(users.isActive, true)))
-    .limit(1);
+  const userRows = resultRows<{
+    id: string;
+    primary_branch_id: string | null;
+    branch_id: string | null;
+    working_hours_per_day: number | null;
+  }>(await db.execute(sql`
+    SELECT id::text, primary_branch_id::text, branch_id::text, working_hours_per_day
+    FROM users
+    WHERE id::text = ${targetUserId} AND is_active = TRUE
+    LIMIT 1;
+  `));
+  const user = userRows[0];
   if (!user) return errorResponse("الموظف غير موجود أو غير نشط.", 404);
 
-  const branchId = input.branchId ?? user.primaryBranchId;
+  const employeeBranchId = user.primary_branch_id ?? user.branch_id;
+  const branchId = input.branchId ?? employeeBranchId;
   if (branchId === null) return errorResponse("لا يوجد فرع معين للموظف.", 400);
-  if (!canOverride && branchId !== user.primaryBranchId) {
+  if (!canOverride && branchId !== employeeBranchId) {
     return errorResponse("لا يمكن تسجيل الحضور في فرع غير معين للموظف.", 403);
   }
   if (!canAccessBranch(principal, branchId)) {
     return errorResponse("ممنوع الوصول إلى هذا الفرع.", 403);
   }
 
-  const [branch] = await db
-    .select()
-    .from(branches)
-    .where(eq(branches.id, branchId))
-    .limit(1);
+  const branchRows = resultRows<{
+    id: string;
+    latitude: string | null;
+    longitude: string | null;
+    geofence_radius: number | null;
+  }>(await db.execute(sql`
+    SELECT id::text, latitude, longitude, geofence_radius
+    FROM branches
+    WHERE id::text = ${branchId}
+    LIMIT 1;
+  `));
+  const branch = branchRows[0];
   if (!branch) return errorResponse("الفرع غير موجود.", 404);
 
-  const distance = distanceMeters(input.latitude, input.longitude, branch.latitude, branch.longitude);
-  const allowedRadius = Math.max(100, branch.geofenceRadius) + 100;
+  const branchLatitude = branch.latitude == null || !branch.latitude.trim()
+    ? Number.NaN
+    : Number(branch.latitude);
+  const branchLongitude = branch.longitude == null || !branch.longitude.trim()
+    ? Number.NaN
+    : Number(branch.longitude);
+  if (!isValidCoordinates(branchLatitude, branchLongitude)) {
+    return errorResponse("إحداثيات الفرع غير صالحة.", 500);
+  }
+  const distance = distanceMeters(input.latitude, input.longitude, branchLatitude, branchLongitude);
+  const allowedRadius = Math.max(100, Number(branch.geofence_radius) || 100) + 100;
   if (distance > allowedRadius) {
     return errorResponse(`أنت خارج نطاق الفرع. المسافة ${distance}م (المسموح ${allowedRadius}م).`, 400);
   }
 
   const { date: workDate, hour, minute } = cairoWorkDate(input.timestamp);
-  const [existing] = await db
-    .select()
-    .from(attendanceLogs)
-    .where(and(eq(attendanceLogs.userId, targetUserId), eq(attendanceLogs.workDate, workDate)))
-    .orderBy(desc(attendanceLogs.id))
-    .limit(1);
+  const existingRows = resultRows<{
+    id: string;
+    check_in: string | Date | null;
+    check_out: string | Date | null;
+  }>(await db.execute(sql`
+    SELECT id, check_in, check_out
+    FROM attendance
+    WHERE user_id::text = ${targetUserId}
+      AND CASE
+        WHEN (check_in AT TIME ZONE 'Africa/Cairo')::time < TIME '06:00'
+          THEN (check_in AT TIME ZONE 'Africa/Cairo')::date - 1
+        ELSE (check_in AT TIME ZONE 'Africa/Cairo')::date
+      END = ${workDate}::date
+    ORDER BY check_in DESC
+    LIMIT 1;
+  `));
+  const existing = existingRows[0];
 
   if (input.action === "CHECK_IN") {
-    if (existing?.checkInTime) {
-      await db
-        .update(attendanceLogs)
-        .set({
-          checkInLat: input.latitude,
-          checkInLng: input.longitude,
-          checkInDistance: distance,
-          checkInPhotoUrl: input.photoUrl ?? existing.checkInPhotoUrl,
-        })
-        .where(eq(attendanceLogs.id, existing.id));
+    if (existing?.check_in) {
+      await db.execute(sql`
+        UPDATE attendance
+        SET check_in_lat = ${String(input.latitude)},
+            check_in_lng = ${String(input.longitude)},
+            distance_meters = ${distance},
+            updated_at = NOW()
+        WHERE id::text = ${existing.id};
+      `);
     } else {
       const lateMinutes = hour > 10 || (hour === 10 && minute > 15)
         ? (hour - 10) * 60 + minute - 15
         : 0;
-      await db.insert(attendanceLogs).values({
-        userId: targetUserId,
-        branchId,
-        workDate,
-        checkInTime: input.timestamp,
-        checkInLat: input.latitude,
-        checkInLng: input.longitude,
-        checkInDistance: distance,
-        checkInPhotoUrl: input.photoUrl,
-        status: lateMinutes > 0 ? "LATE" : "ON_TIME",
-        lateMinutes,
-      });
+      await db.execute(sql`
+        INSERT INTO attendance (
+          user_id, branch_id, check_in, check_in_lat, check_in_lng,
+          distance_meters, status, created_at, updated_at
+        ) VALUES (
+          ${targetUserId}, ${branchId}, ${input.timestamp},
+          ${String(input.latitude)}, ${String(input.longitude)},
+          ${distance}, ${lateMinutes > 0 ? "late" : "present"}, NOW(), NOW()
+        );
+      `);
     }
     return NextResponse.json({ success: true, message: "تم تسجيل الحضور بنجاح." });
   }
 
-  if (!existing?.checkInTime) {
+  if (!existing?.check_in) {
     return errorResponse("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف.", 400);
   }
-  if (input.timestamp < existing.checkInTime) {
+  if (existing.check_out) {
+    return errorResponse("تم تسجيل الانصراف مسبقاً.", 400);
+  }
+  const checkInTime = new Date(existing.check_in);
+  if (input.timestamp < checkInTime) {
     return errorResponse("وقت الانصراف يسبق وقت الحضور.", 400);
   }
 
-  const workedMinutes = Math.max(1, Math.round(
-    (input.timestamp.getTime() - existing.checkInTime.getTime()) / 60_000
-  ));
-  await db
-    .update(attendanceLogs)
-    .set({
-      checkOutTime: input.timestamp,
-      checkOutLat: input.latitude,
-      checkOutLng: input.longitude,
-      checkOutDistance: distance,
-      actualWorkedMinutes: workedMinutes,
-      overtimeMinutes: Math.max(0, workedMinutes - user.workingHoursPerDay * 60),
-    })
-    .where(eq(attendanceLogs.id, existing.id));
+  await db.execute(sql`
+    UPDATE attendance
+    SET check_out = ${input.timestamp},
+        check_out_lat = ${String(input.latitude)},
+        check_out_lng = ${String(input.longitude)},
+        updated_at = NOW()
+    WHERE id::text = ${existing.id};
+  `);
 
   return NextResponse.json({ success: true, message: "تم تسجيل الانصراف بنجاح." });
 }
@@ -304,10 +464,19 @@ export async function getAttendanceRecords(
   principal: ApiPrincipal,
   searchParams: URLSearchParams
 ): Promise<AttendanceRecord[]> {
+  const canonicalTable = resultRows<{ tableName: string | null }>(
+    await db.execute(sql`SELECT to_regclass('public.attendance_logs')::text AS "tableName";`)
+  )[0];
+  if (!canonicalTable?.tableName) {
+    return getLiveAttendanceRecords(principal, searchParams);
+  }
+
   const canViewAll = principal.systemRole === "SUPER_ADMIN"
-    || hasApiPermission(principal, "attendance.view")
-    || hasApiPermission(principal, "attendance.review")
-    || hasApiPermission(principal, "attendance.export");
+    || (principal.systemRole !== "EMPLOYEE" && (
+      hasApiPermission(principal, "attendance.view")
+      || hasApiPermission(principal, "attendance.review")
+      || hasApiPermission(principal, "attendance.export")
+    ));
   const canViewPayroll = hasApiPermission(principal, "payroll.view")
     || hasApiPermission(principal, "reports.view");
   const requestedUserId = searchParams.get("userId");
