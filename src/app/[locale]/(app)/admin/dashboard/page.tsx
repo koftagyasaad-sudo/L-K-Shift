@@ -108,7 +108,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
       {'\n'}
       <section
         aria-label={isRtl ? 'إجراءات تحتاج إلى متابعة' : 'Items needing attention'}
-        className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08] dark:bg-[#141519]"
+        className="flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08] dark:bg-gradient-to-b dark:from-[#161922] dark:to-[#11131A] shadow-sm dark:shadow-black/30"
       >
         <div>
           <p className="text-sm font-semibold text-slate-900 dark:text-zinc-100">
@@ -137,7 +137,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
       {'\n'}
       <section
         aria-label={isRtl ? 'روابط الإدارة' : 'Management links'}
-        className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/90 bg-white divide-x divide-y divide-slate-200/90 sm:divide-y-0 sm:divide-x rtl:sm:divide-x-reverse dark:border-white/[0.08] dark:bg-[#141519] dark:divide-white/[0.08] lg:grid-cols-4"
+        className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/90 bg-white divide-x divide-y divide-slate-200/90 sm:divide-y-0 sm:divide-x rtl:sm:divide-x-reverse dark:border-white/[0.08] dark:bg-gradient-to-b dark:from-[#161922] dark:to-[#11131A] shadow-sm dark:shadow-black/30 dark:divide-white/[0.08] lg:grid-cols-3"
       >
         {metrics.map((metric) => {
           const Icon = metric.icon;
@@ -160,7 +160,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
       </section>
 
       {'\n'}
-      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white dark:border-white/[0.08] dark:bg-[#141519]">
+      <section className="overflow-hidden rounded-xl border border-slate-200/90 bg-white dark:border-white/[0.08] dark:bg-gradient-to-b dark:from-[#161922] dark:to-[#11131A] shadow-sm dark:shadow-black/30">
         <div className="flex flex-col gap-3 border-b border-slate-200/90 p-5 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08]">
           <div>
             <h2 className="text-base font-semibold text-slate-900 dark:text-zinc-100">

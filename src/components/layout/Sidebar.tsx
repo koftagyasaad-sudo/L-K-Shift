@@ -200,7 +200,7 @@ export function MobileBottomNav({ locale }: { locale: string }) {
       )}
       <nav
         aria-label={isRtl ? 'التنقل الرئيسي' : 'Primary navigation'}
-        className={`fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] ${moreItems.length > 0 ? 'grid-cols-5' : 'grid-cols-4'} border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-white/[0.08] dark:bg-[#141519]/95`}
+        className={`fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] ${moreItems.length > 0 ? 'grid-cols-5' : 'grid-cols-4'} border-t border-slate-200/90 bg-white/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-white/[0.08] dark:bg-[#11131A]/80 backdrop-blur-xl`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
         {items.map((item) => {

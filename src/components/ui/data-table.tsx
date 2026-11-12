@@ -143,7 +143,7 @@ export function DataTable<T extends Record<string, unknown>>({
 
       {/* الجدول */}
       <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white dark:border-white/[0.08] dark:bg-[#141519]">
-        <div className="overflow-x-auto">
+        <div className="w-full max-w-full overflow-x-auto">
           <table className="w-full text-right text-sm text-slate-600 rtl:text-right ltr:text-left dark:text-zinc-400">
             <thead className="border-b border-slate-200/90 bg-slate-50 text-xs uppercase text-slate-600 dark:border-white/[0.08] dark:bg-[#1c1e24] dark:text-zinc-400">
               <tr>

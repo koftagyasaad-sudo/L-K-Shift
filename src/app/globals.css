@@ -93,3 +93,46 @@
     border-color: rgb(255 255 255 / 8%);
   }
 }
+
+
+/* === lk-mobile-lock: Prevent wide tables/grids from zooming out mobile viewport === */
+@layer base {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
+  main,
+  section,
+  article,
+  header,
+  footer {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* === Executive Gradient & Glass Visual Polish === */
+.lk-aurora-bg {
+  background-image:
+    radial-gradient(ellipse 80% 45% at 85% -5%, rgba(249, 115, 22, 0.18), transparent 60%),
+    radial-gradient(ellipse 65% 40% at 10% 5%, rgba(225, 29, 72, 0.13), transparent 55%),
+    radial-gradient(ellipse 55% 35% at 50% 100%, rgba(124, 58, 237, 0.09), transparent 60%);
+}
+html:not(.dark) .lk-aurora-bg {
+  background-image:
+    radial-gradient(ellipse 80% 45% at 85% -5%, rgba(249, 115, 22, 0.12), transparent 60%),
+    radial-gradient(ellipse 65% 40% at 10% 5%, rgba(244, 63, 94, 0.08), transparent 55%),
+    radial-gradient(ellipse 55% 35% at 50% 100%, rgba(99, 102, 241, 0.06), transparent 60%);
+}
+.lk-gradient-btn {
+  background-image: linear-gradient(135deg, #f97316 0%, #ea580c 45%, #e11d48 100%);
+  box-shadow: 0 8px 24px -6px rgba(249, 115, 22, 0.45);
+}
+.lk-gradient-btn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 12px 28px -6px rgba(225, 29, 72, 0.5);
+}

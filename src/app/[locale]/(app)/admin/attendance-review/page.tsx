@@ -318,7 +318,7 @@ export default function AttendanceReviewPage() {
         </div>
       ) : activeTab === 'LOGS' ? (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="w-full max-w-full overflow-x-auto">
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold">
                 <tr>
@@ -391,7 +391,7 @@ export default function AttendanceReviewPage() {
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="w-full max-w-full overflow-x-auto">
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold">
                 <tr>

@@ -181,7 +181,7 @@ export default function RecruitmentManagementPage() {
         </div>
       ) : (
         <div className="bg-[#0c0e18] border border-white/5 rounded-3xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
+          <div className="w-full max-w-full overflow-x-auto">
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-900/80 border-b border-white/5 text-slate-400 font-bold">
                 <tr>

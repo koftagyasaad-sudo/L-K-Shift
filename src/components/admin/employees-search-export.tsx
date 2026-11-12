@@ -146,7 +146,7 @@ export default function EmployeesSearchExport({ data }: EmployeesSearchExportPro
       </div>
 
       {/* جدول عرض النتائج المفلترة */}
-      <div className="overflow-x-auto mt-4 border rounded-lg">
+      <div className="w-full max-w-full overflow-x-auto mt-4 border rounded-lg">
         <table className="w-full text-sm text-right text-slate-600 dark:text-slate-300">
           <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b">
             <tr>

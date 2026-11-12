@@ -115,7 +115,7 @@ export default function MyBranchStaffPage({ params }: PageProps) {
             {isRtl ? 'لا يوجد موظفون آخرون مسجلون في هذا الفرع' : 'No other staff in this branch'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full max-w-full overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100 text-right text-sm dark:divide-white/5" dir={isRtl ? 'rtl' : 'ltr'}>
               <thead className="bg-slate-50 text-slate-600 dark:bg-white/5 dark:text-slate-300">
                 <tr>

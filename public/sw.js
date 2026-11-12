@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lk-shift-v2026-executive-topnav-v9';
+const CACHE_NAME = 'lk-shift-v2026-mobile-scale-aurora-v11';
 
 // الملفات الأساسية المحفوظة مسبقاً لفتح التطبيق أوفلاين فوري
 const STATIC_ASSETS = [

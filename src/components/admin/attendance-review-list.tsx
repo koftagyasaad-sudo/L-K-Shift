@@ -58,7 +58,7 @@ export function AttendanceReviewList({ initialData = [] }: { initialData?: Atten
       </div>
 
       {/* جدول المسير المالي الدقيق */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+      <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
         <table className="w-full text-right text-xs">
           <thead className="bg-slate-800/60 text-slate-400 font-bold border-b border-slate-800">
             <tr>

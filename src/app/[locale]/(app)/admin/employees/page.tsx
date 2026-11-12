@@ -419,7 +419,7 @@ export default function EmployeesManagementPage() {
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="w-full max-w-full overflow-x-auto">
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold">
                 <tr>
@@ -845,7 +845,7 @@ export default function EmployeesManagementPage() {
                 لا توجد حركات بصمة مسجلة لهذا الموظف
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border-2 border-slate-300">
+              <div className="w-full max-w-full overflow-x-auto rounded-2xl border-2 border-slate-300">
                 <table className="w-full text-right text-xs border-collapse">
                   <thead className="bg-slate-200 border-b-2 border-slate-300 text-slate-800 font-bold">
                     <tr>

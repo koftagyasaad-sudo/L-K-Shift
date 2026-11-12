@@ -217,7 +217,7 @@ export default function EmployeeZkSheet({
         </div>
 
         {/* جدول سجل الأيام بتفاصيل ZK */}
-        <div className="overflow-x-auto">
+        <div className="w-full max-w-full overflow-x-auto">
           <table className="w-full text-right text-xs border-collapse">
             <thead>
               <tr className="bg-slate-900 text-white text-[11px]">

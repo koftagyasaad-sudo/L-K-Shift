@@ -40,7 +40,7 @@ export default function DashboardBranchesTable({
 
   return (
     <>
-      <div className="min-w-0 overflow-x-auto">
+      <div className="min-w-0 w-full max-w-full overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200/90 text-right text-sm text-slate-600 dark:divide-white/[0.08] dark:text-zinc-400" dir={isRtl ? 'rtl' : 'ltr'}>
           <thead className="bg-slate-50 text-slate-600 dark:bg-[#1c1e24] dark:text-zinc-400">
             <tr>
