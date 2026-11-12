@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
 interface Branch {
   id: number;
@@ -19,6 +19,10 @@ interface CheckInOutProps {
   onClose?: () => void;
 }
 
+type CameraPermission = "checking" | "prompt" | "granted" | "denied";
+
+const isCameraPermissionDenied = (permission: CameraPermission) => permission === "denied";
+
 export function CheckInOutWidget({
   branch,
   locale = "ar",
@@ -29,6 +33,7 @@ export function CheckInOutWidget({
   const isAr = locale === "ar";
   const [loading, setLoading] = useState<boolean>(false);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [cameraPermission, setCameraPermission] = useState<CameraPermission>("checking");
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -39,6 +44,8 @@ export function CheckInOutWidget({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraPermissionRef = useRef<CameraPermission>("checking");
+  const cameraRequestRef = useRef(false);
 
   const activeBranch: Branch = branch || {
     id: 1,
@@ -63,7 +70,7 @@ export function CheckInOutWidget({
     return Math.round(R * c);
   };
 
-  const getCurrentLocation = (): Promise<{ lat: number; lng: number }> => {
+  const getCurrentLocation = useCallback((): Promise<{ lat: number; lng: number }> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
         reject(new Error(isAr ? "خاصية GPS غير مدعومة في جهازك" : "Geolocation not supported"));
@@ -90,10 +97,27 @@ export function CheckInOutWidget({
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
-  };
+  }, [activeBranch.latitude, activeBranch.longitude, isAr]);
 
-  const startCamera = async () => {
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    if (isCameraPermissionDenied(cameraPermissionRef.current)) {
+      setErrorMessage(isAr
+        ? "تم رفض صلاحية الكاميرا. يرجى تفعيلها من إعدادات المتصفح."
+        : "Camera access was denied. Enable it in your browser settings.");
+      return;
+    }
+    if (cameraRequestRef.current || streamRef.current) return;
+
     setErrorMessage(null);
+    cameraRequestRef.current = true;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error(isAr ? "الكاميرا تتطلب الاتصال الآمن (HTTPS)" : "HTTPS required for camera");
@@ -109,25 +133,35 @@ export function CheckInOutWidget({
         audio: false,
       });
 
+      if (isCameraPermissionDenied(cameraPermissionRef.current)) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
+      cameraPermissionRef.current = "granted";
+      setCameraPermission("granted");
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
       setCameraActive(true);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : (isAr ? "تعذر فتح الكاميرا" : "Camera access failed"));
+      stopCamera();
+      const errorName = err instanceof Error ? err.name : "";
+      if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+        cameraPermissionRef.current = "denied";
+        setCameraPermission("denied");
+        setErrorMessage(isAr
+          ? "تم رفض صلاحية الكاميرا. يرجى تفعيلها من إعدادات المتصفح."
+          : "Camera access was denied. Enable it in your browser settings.");
+      } else {
+        setErrorMessage(err instanceof Error ? err.message : (isAr ? "تعذر فتح الكاميرا" : "Camera access failed"));
+      }
       setCameraActive(false);
+    } finally {
+      cameraRequestRef.current = false;
     }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setCameraActive(false);
-  };
+  }, [isAr, stopCamera]);
 
   const takePhoto = () => {
     if (!videoRef.current) return;
@@ -159,23 +193,57 @@ export function CheckInOutWidget({
   const resetPhoto = () => {
     setPhotoBlob(null);
     setPhotoPreview(null);
-    startCamera();
+    void startCamera();
   };
 
   useEffect(() => {
-    startCamera();
+    let active = true;
+    let permissionStatus: PermissionStatus | undefined;
+
+    const updatePermission = (permission: CameraPermission) => {
+      cameraPermissionRef.current = permission;
+      setCameraPermission(permission);
+    };
+
+    const checkCameraPermission = async () => {
+      let permission: CameraPermission = "prompt";
+      try {
+        if (navigator.permissions?.query) {
+          permissionStatus = await navigator.permissions.query({ name: "camera" as PermissionName });
+          permission = permissionStatus.state;
+          permissionStatus.onchange = () => {
+            if (!active) return;
+            updatePermission(permissionStatus?.state ?? "prompt");
+            if (permissionStatus?.state === "granted") void startCamera();
+            if (permissionStatus?.state === "denied") stopCamera();
+          };
+        }
+      } catch {
+        permission = "prompt";
+      }
+
+      if (!active) return;
+      updatePermission(permission);
+      if (permission === "granted") void startCamera();
+    };
+
+    void checkCameraPermission();
     getCurrentLocation().catch(() => {});
     return () => {
+      active = false;
+      if (permissionStatus) permissionStatus.onchange = null;
       stopCamera();
     };
-  }, []);
+  }, [getCurrentLocation, startCamera, stopCamera]);
 
   const handleAttendanceSubmit = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!photoBlob) {
-      setErrorMessage(isAr ? "يرجى التقاط صورة الوجه أولاً" : "Please take a live photo first");
+    if (cameraPermission !== "granted" || !photoBlob) {
+      setErrorMessage(isAr
+        ? "الكاميرا إجبارية لإتمام العملية — يرجى السماح بصلاحية الكاميرا والتقاط صورة أولاً."
+        : "Camera access is required — allow camera access and take a photo first.");
       return;
     }
 
@@ -273,13 +341,32 @@ export function CheckInOutWidget({
         )}
 
         {!cameraActive && !photoPreview && (
-          <button
-            type="button"
-            onClick={startCamera}
-            className="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl shadow hover:bg-orange-600 transition"
-          >
-            {isAr ? "فتح الكاميرا" : "Open Camera"}
-          </button>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center text-white">
+            {cameraPermission === "denied" ? (
+              <p className="text-xs leading-relaxed">
+                {isAr
+                  ? "تم رفض صلاحية الكاميرا. يرجى تفعيلها من إعدادات المتصفح ثم إعادة المحاولة."
+                  : "Camera access was denied. Enable it in your browser settings before trying again."}
+              </p>
+            ) : cameraPermission === "checking" ? (
+              <p className="text-xs">{isAr ? "جارٍ التحقق من صلاحية الكاميرا..." : "Checking camera permission..."}</p>
+            ) : (
+              <>
+                <p className="text-xs leading-relaxed">
+                  {isAr
+                    ? "يلزم السماح بصلاحية الكاميرا قبل فتحها والتقاط الصورة."
+                    : "Camera permission is required before opening the camera and taking a photo."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void startCamera()}
+                  className="px-4 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl shadow hover:bg-orange-600 transition"
+                >
+                  {isAr ? "السماح بفتح الكاميرا للتصوير" : "Allow Camera Access"}
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
 
@@ -328,7 +415,7 @@ export function CheckInOutWidget({
       <button
         type="button"
         onClick={handleAttendanceSubmit}
-        disabled={loading || !photoBlob}
+        disabled={loading}
         className="w-full py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white text-xs font-bold rounded-xl shadow-lg disabled:opacity-50 transition active:scale-98"
       >
         {loading ? (isAr ? "جاري التحقق والارسال..." : "Verifying & Sending...") : (isAr ? "إرسال حركات الحضور الان" : "Submit Attendance")}

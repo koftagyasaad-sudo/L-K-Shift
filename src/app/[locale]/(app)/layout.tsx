@@ -1,6 +1,7 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import type { ReactNode } from 'react';
+import PwaInstallPrompt from '@/components/PwaInstallPrompt';
 import AppShell from './app-shell';
 
 interface AppLayoutProps {
@@ -12,6 +13,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
   return (
     <NextIntlClientProvider messages={messages}>
       <AppShell>{children}</AppShell>
+      <PwaInstallPrompt />
     </NextIntlClientProvider>
   );
 }

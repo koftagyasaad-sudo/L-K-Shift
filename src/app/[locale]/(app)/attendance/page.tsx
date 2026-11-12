@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Camera,
@@ -28,6 +28,10 @@ interface BranchItem {
   lng: number;
   radius: number;
 }
+
+type CameraPermission = 'checking' | 'prompt' | 'granted' | 'denied';
+
+const isCameraPermissionDenied = (permission: CameraPermission) => permission === 'denied';
 
 export default function AttendancePage() {
   const params = useParams();
@@ -58,7 +62,11 @@ export default function AttendancePage() {
 
   // الكاميرا والسيلفي
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [, setCameraActive] = useState(false);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraPermissionRef = useRef<CameraPermission>('checking');
+  const cameraRequestRef = useRef(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState<CameraPermission>('checking');
   const [selfiePhoto, setSelfiePhoto] = useState<string>('');
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -76,7 +84,7 @@ export default function AttendancePage() {
   };
 
   // جلب الفروع المسجلة بالنظام
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     try {
       const res = await fetch('/api/branches', { cache: 'no-store' });
       if (res.ok) {
@@ -101,12 +109,12 @@ export default function AttendancePage() {
         }
       }
     } catch {}
-  };
+  }, []);
 
   const currentBranch = branches.find((b) => b.id === selectedBranchId) || branches[0];
 
   // حساب المسافة واكتشاف أقرب فرع تلقائياً إذا كان الموظف قريباً منه
-  const updateDistance = (coords: { lat: number; lng: number }) => {
+  const updateDistance = useCallback((coords: { lat: number; lng: number }) => {
     let closestBranch = currentBranch;
     let minDistance = getDistanceMeters(coords.lat, coords.lng, currentBranch.lat, currentBranch.lng);
 
@@ -125,9 +133,9 @@ export default function AttendancePage() {
 
     setDistance(minDistance);
     setIsInsideGeofence(minDistance <= (closestBranch.radius + 100)); // هامش 100 متر لدقة الأبراج
-  };
+  }, [branches, currentBranch, selectedBranchId]);
 
-  const acquirePreciseLocation = () => {
+  const acquirePreciseLocation = useCallback(() => {
     setLocating(true);
     setStatusMsg(null);
 
@@ -162,7 +170,14 @@ export default function AttendancePage() {
         maximumAge: 0,
       }
     );
-  };
+  }, [updateDistance]);
+
+  const checkPending = useCallback(async () => {
+    try {
+      const pending = await getPendingOfflineAttendance();
+      setPendingCount(pending.length);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -177,6 +192,7 @@ export default function AttendancePage() {
             type: 'ok',
             text: `تم الاتصال بالإنترنت ومزامنة (${res.syncedCount}) بصمة معلقة بنجاح!`,
           });
+
         }
         checkPending();
       }
@@ -193,21 +209,12 @@ export default function AttendancePage() {
     fetchBranches();
     checkPending();
     acquirePreciseLocation();
-    startCamera();
 
     return () => {
       window.removeEventListener('online', handleStatusChange);
       window.removeEventListener('offline', handleStatusChange);
-      stopCamera();
     };
-  }, []);
-
-  const checkPending = async () => {
-    try {
-      const pending = await getPendingOfflineAttendance();
-      setPendingCount(pending.length);
-    } catch {}
-  };
+  }, [acquirePreciseLocation, checkPending, fetchBranches]);
 
   useEffect(() => {
     if (userCoords) {
@@ -215,10 +222,32 @@ export default function AttendancePage() {
       setDistance(dist);
       setIsInsideGeofence(dist <= (currentBranch.radius + 100));
     }
-  }, [selectedBranchId, userCoords]);
+  }, [currentBranch.lat, currentBranch.lng, currentBranch.radius, selectedBranchId, userCoords]);
 
-  const startCamera = async () => {
+  const stopCamera = useCallback(() => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraActive(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    if (isCameraPermissionDenied(cameraPermissionRef.current)) {
+      setStatusMsg({
+        type: 'err',
+        text: 'تم رفض صلاحية الكاميرا. يرجى تفعيلها من إعدادات المتصفح ثم إعادة تحميل الصفحة.',
+      });
+      return;
+    }
+    if (cameraRequestRef.current || cameraStreamRef.current) return;
+
+    cameraRequestRef.current = true;
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('الكاميرا تتطلب اتصالاً آمناً بالإنترنت (HTTPS).');
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -228,24 +257,78 @@ export default function AttendancePage() {
         },
         audio: false,
       });
+      if (isCameraPermissionDenied(cameraPermissionRef.current)) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      cameraStreamRef.current = stream;
+      cameraPermissionRef.current = 'granted';
+      setCameraPermission('granted');
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play();
         setCameraActive(true);
       }
-    } catch {
+    } catch (error) {
+      stopCamera();
+      const errorName = error instanceof Error ? error.name : '';
       setCameraActive(false);
+      if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+        cameraPermissionRef.current = 'denied';
+        setCameraPermission('denied');
+        setStatusMsg({
+          type: 'err',
+          text: 'تم رفض صلاحية الكاميرا. يرجى تفعيلها من إعدادات المتصفح ثم إعادة تحميل الصفحة.',
+        });
+      } else {
+        setStatusMsg({ type: 'err', text: 'تعذر فتح الكاميرا. تحقق من اتصال الكاميرا ثم أعد المحاولة.' });
+      }
+    } finally {
+      cameraRequestRef.current = false;
     }
-  };
+  }, [stopCamera]);
 
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-  };
+  useEffect(() => {
+    let active = true;
+    let permissionStatus: PermissionStatus | undefined;
+
+    const updatePermission = (permission: CameraPermission) => {
+      cameraPermissionRef.current = permission;
+      setCameraPermission(permission);
+    };
+
+    const checkCameraPermission = async () => {
+      let permission: CameraPermission = 'prompt';
+      try {
+        if (navigator.permissions?.query) {
+          permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          permission = permissionStatus.state;
+          permissionStatus.onchange = () => {
+            if (!active) return;
+            updatePermission(permissionStatus?.state ?? 'prompt');
+            if (permissionStatus?.state === 'granted') void startCamera();
+            if (permissionStatus?.state === 'denied') stopCamera();
+          };
+        }
+      } catch {
+        permission = 'prompt';
+      }
+
+      if (!active) return;
+      updatePermission(permission);
+      if (permission === 'granted') void startCamera();
+    };
+
+    void checkCameraPermission();
+    return () => {
+      active = false;
+      if (permissionStatus) permissionStatus.onchange = null;
+      stopCamera();
+    };
+  }, [startCamera, stopCamera]);
 
   const capturePhoto = () => {
-    if (!videoRef.current) return '';
+    if (cameraPermission !== 'granted' || !cameraActive || !videoRef.current) return '';
     const canvas = document.createElement('canvas');
     canvas.width = 720;
     canvas.height = 960;
@@ -263,6 +346,7 @@ export default function AttendancePage() {
       }
       const base64 = canvas.toDataURL('image/jpeg', 0.7);
       setSelfiePhoto(base64);
+      stopCamera();
       return base64;
     }
     return '';
@@ -270,6 +354,14 @@ export default function AttendancePage() {
 
   const handleAttendanceAction = async (action: 'CHECK_IN' | 'CHECK_OUT') => {
     setStatusMsg(null);
+
+    if (cameraPermission !== 'granted' || !selfiePhoto) {
+      setStatusMsg({
+        type: 'err',
+        text: 'الكاميرا إجبارية لإتمام العملية — يرجى السماح بصلاحية الكاميرا والتقاط صورة أولاً.',
+      });
+      return;
+    }
 
     if (!userCoords) {
       setStatusMsg({ type: 'err', text: 'يرجى الانتظار حتى يتم تحديد موقعك الجغرافي بدقة أولاً' });
@@ -284,10 +376,7 @@ export default function AttendancePage() {
       return;
     }
 
-    let photo = selfiePhoto;
-    if (!photo) {
-      photo = capturePhoto();
-    }
+    const photo = selfiePhoto;
 
     setLoading(true);
 
@@ -324,7 +413,6 @@ export default function AttendancePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
-          userId,
           branchId: selectedBranchId,
           latitude: userCoords.lat,
           longitude: userCoords.lng,
@@ -521,20 +609,57 @@ export default function AttendancePage() {
               autoPlay
               playsInline
               muted
-              className="w-full h-full object-cover transform -scale-x-100"
+              className={`w-full h-full object-cover transform -scale-x-100 ${cameraActive ? 'block' : 'hidden'}`}
             />
+          )}
+
+          {!selfiePhoto && !cameraActive && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-5 text-center text-white">
+              {cameraPermission === 'denied' ? (
+                <p className="text-xs leading-relaxed">
+                  تم رفض صلاحية الكاميرا. يرجى تفعيلها من إعدادات المتصفح ثم إعادة تحميل الصفحة.
+                </p>
+              ) : cameraPermission === 'checking' ? (
+                <p className="text-xs">جارٍ التحقق من صلاحية الكاميرا...</p>
+              ) : (
+                <>
+                  <p className="text-xs leading-relaxed">
+                    يلزم السماح بصلاحية الكاميرا قبل فتحها والتقاط الصورة.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void startCamera()}
+                    className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-orange-600"
+                  >
+                    السماح بفتح الكاميرا للتصوير
+                  </button>
+                </>
+              )}
+            </div>
           )}
 
           {selfiePhoto && (
             <button
               type="button"
-              onClick={() => setSelfiePhoto('')}
+              onClick={() => {
+                setSelfiePhoto('');
+                if (cameraPermission === 'granted') void startCamera();
+              }}
               className="absolute bottom-3 right-3 bg-black/70 hover:bg-black text-white px-3 py-1.5 rounded-xl text-[11px] font-bold backdrop-blur-xs cursor-pointer"
             >
               إعادة الالتقاط
             </button>
           )}
         </div>
+        {cameraActive && !selfiePhoto && (
+          <button
+            type="button"
+            onClick={capturePhoto}
+            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 py-3 text-xs font-bold text-white shadow-lg transition hover:opacity-95"
+          >
+            التقاط صورة لايف 📸
+          </button>
+        )}
       </div>
 
       {/* أزرار الحضور والانصراف */}

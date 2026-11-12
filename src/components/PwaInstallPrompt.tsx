@@ -1,10 +1,29 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import type { BeforeInstallPromptEvent } from './PwaInstallEventCapture';
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+interface NavigatorWithStandalone extends Navigator {
+  standalone?: boolean;
+}
+
+const DISMISSED_KEY = 'lk_shift_pwa_prompt_dismissed';
+
+function isPromptDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(DISMISSED_KEY) === 'true';
+  } catch (error) {
+    console.warn('Unable to read PWA prompt dismissal:', error);
+    return false;
+  }
+}
+
+function persistPromptDismissal(): void {
+  try {
+    window.localStorage.setItem(DISMISSED_KEY, 'true');
+  } catch (error) {
+    console.warn('Unable to persist PWA prompt dismissal:', error);
+  }
 }
 
 export default function PwaInstallPrompt() {
@@ -13,68 +32,58 @@ export default function PwaInstallPrompt() {
   const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
-    // 1. تسجيل الـ Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .catch((err) => console.log('SW registration failed:', err));
-    }
-
-    // 2. التحقق إن كان التطبيق مفتوحاً بالفعل كتطبيق مستقل (Standalone)
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone ||
+      (window.navigator as NavigatorWithStandalone).standalone === true ||
       document.referrer.includes('android-app://');
 
-    if (isStandalone) {
-      return; // لا نظهر الرسالة إذا كان التطبيق مثبتاً ويعمل بالفعل
-    }
+    if (isStandalone || isPromptDismissed()) return;
 
-    // 3. فحص إذا كان جهاز آيفون (iOS)
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIos(isIosDevice);
 
-    // 4. استلام إشعار المتصفح لإتاحة التثبيت (لأجهزة Android والكمبيوتر)
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // إظهار البانر بعد ثانيتين من فتح الموقع
-      setTimeout(() => setShowPrompt(true), 2000);
+    const handleBeforeInstallPrompt = () => {
+      const event = window.lkShiftDeferredInstallPrompt;
+      if (!event) return;
+      setDeferredPrompt(event);
+      setShowPrompt(true);
+    };
+    const handleAppInstalled = () => {
+      persistPromptDismissal();
+      setShowPrompt(false);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('lk-shift-beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    handleBeforeInstallPrompt();
 
-    // للمستخدمين على أجهزة iOS في Safari نظهر التوجيه إذا لم يكن مثبتاً
-    if (isIosDevice && !isStandalone) {
-      const dismissed = sessionStorage.getItem('pwa_ios_dismissed');
-      if (!dismissed) {
-        setTimeout(() => setShowPrompt(true), 3000);
-      }
+    if (isIosDevice) {
+      setShowPrompt(true);
     }
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('lk-shift-beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
 
     if (outcome === 'accepted') {
+      persistPromptDismissal();
       setShowPrompt(false);
     }
     setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
+    persistPromptDismissal();
     setShowPrompt(false);
-    if (isIos) {
-      sessionStorage.setItem('pwa_ios_dismissed', 'true');
-    }
   };
 
   if (!showPrompt) return null;

@@ -66,6 +66,30 @@ function formValue(form: FormData, ...keys: string[]): string | null {
   return null;
 }
 
+function isValidAttendancePhoto(value: string): boolean {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  if (!match) return false;
+
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length === 0 || bytes.length > 5 * 1024 * 1024 || bytes.toString("base64") !== match[2]) {
+    return false;
+  }
+
+  switch (match[1]) {
+    case "image/jpeg":
+      return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    case "image/png":
+      return bytes.length >= 8
+        && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case "image/webp":
+      return bytes.length >= 12
+        && bytes.toString("ascii", 0, 4) === "RIFF"
+        && bytes.toString("ascii", 8, 12) === "WEBP";
+    default:
+      return false;
+  }
+}
+
 export async function parseAttendanceInput(
   request: Request,
   forcedAction?: AttendanceAction
@@ -96,8 +120,12 @@ export async function parseAttendanceInput(
       if (photo.size > 5 * 1024 * 1024) {
         throw new Error("حجم الصورة يتجاوز الحد المسموح.");
       }
+      const photoType = photo.type || "image/jpeg";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(photoType)) {
+        throw new Error("صورة الحضور غير صالحة.");
+      }
       const bytes = Buffer.from(await photo.arrayBuffer());
-      photoUrl = `data:${photo.type || "image/jpeg"};base64,${bytes.toString("base64")}`;
+      photoUrl = `data:${photoType};base64,${bytes.toString("base64")}`;
     }
   } else {
     const body: unknown = await request.json();
@@ -140,8 +168,14 @@ export async function parseAttendanceInput(
   if (parsedAccuracy !== null && !isValidGpsAccuracy(parsedAccuracy)) {
     throw new Error("دقة إشارة GPS غير صالحة.");
   }
-  if (photoUrl && photoUrl.length > 7_000_000) {
+  if (!photoUrl) {
+    throw new Error("صورة الحضور مطلوبة لإتمام العملية.");
+  }
+  if (photoUrl.length > 7_000_000) {
     throw new Error("حجم الصورة يتجاوز الحد المسموح.");
+  }
+  if (!isValidAttendancePhoto(photoUrl)) {
+    throw new Error("صورة الحضور غير صالحة.");
   }
 
   const parsedUserId = userId?.trim() || null;
@@ -332,7 +366,21 @@ export async function submitAttendance(
   input: AttendanceInput
 ): Promise<NextResponse> {
   const canOverride = hasApiPermission(principal, "attendance.override");
-  const targetUserId = input.userId ?? principal.id;
+  if (!input.photoUrl || !isValidAttendancePhoto(input.photoUrl)) {
+    return errorResponse("صورة الحضور مطلوبة وصالحة لإتمام العملية.", 400);
+  }
+
+  if (
+    principal.systemRole === "EMPLOYEE" &&
+    input.userId !== null &&
+    input.userId !== principal.id
+  ) {
+    return errorResponse("غير مصرح بتسجيل الحضور لموظف آخر.", 403);
+  }
+
+  const targetUserId = principal.systemRole === "EMPLOYEE"
+    ? principal.id
+    : input.userId ?? principal.id;
   if (targetUserId !== principal.id && !canOverride) {
     return errorResponse("غير مصرح بتسجيل الحضور لموظف آخر.", 403);
   }
