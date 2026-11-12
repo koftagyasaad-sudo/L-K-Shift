@@ -20,27 +20,41 @@ function resultRows<T>(result: unknown): T[] {
   return [];
 }
 
-let penaltyColumnsEnsured = false;
-async function ensurePenaltyColumns() {
-  if (penaltyColumnsEnsured) return;
-  try {
-    await db.execute(sql`
-      ALTER TABLE leave_requests
-        ADD COLUMN IF NOT EXISTS submitted_by text,
-        ADD COLUMN IF NOT EXISTS penalty_category text,
-        ADD COLUMN IF NOT EXISTS deduction_amount numeric DEFAULT 0;
-    `);
-    penaltyColumnsEnsured = true;
-  } catch (err) {
-    console.warn("Could not alter leave_requests for penalty columns:", err);
+let cachedLeaveColumns: Set<string> | null = null;
+
+async function getLeaveRequestsColumns(): Promise<Set<string>> {
+  if (cachedLeaveColumns) return cachedLeaveColumns;
+  const alterStatements = [
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS request_type text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS leave_type text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS duration_days integer DEFAULT 1`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS total_days integer DEFAULT 1`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS advance_amount numeric DEFAULT 0`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS deduction_amount numeric DEFAULT 0`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS submitted_by text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS penalty_category text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS target_role text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS staff_count integer DEFAULT 1`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS rejection_reason text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS final_status text DEFAULT 'PENDING'`,
+  ];
+  for (const stmt of alterStatements) {
+    try { await db.execute(stmt); } catch {}
   }
+  const raw = await db.execute(sql`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_schema = current_schema() AND table_name = 'leave_requests';
+  `);
+  const cols = new Set(resultRows<{ column_name: string }>(raw).map((r) => r.column_name));
+  if (cols.size > 0) cachedLeaveColumns = cols;
+  return cols;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
     if ("response" in authorization) return authorization.response;
-    await ensurePenaltyColumns();
+    await getLeaveRequestsColumns();
 
     const principal = authorization.principal;
     const { searchParams } = new URL(request.url);
@@ -51,10 +65,9 @@ export async function GET(request: NextRequest) {
         r.id,
         r.user_id AS "userId",
         COALESCE(r.submitted_by, r.user_id) AS "submittedBy",
-        COALESCE(sub.full_name_ar, sub.name, '') AS "submittedByName",
-        COALESCE(u.full_name_ar, u.name, 'موظف') AS "userName",
+        COALESCE(u.full_name_ar, 'موظف') AS "userName",
         COALESCE(u.phone, '') AS "userPhone",
-        COALESCE(u.primary_branch_id::text, u.branch_id::text) AS "branchId",
+        u.primary_branch_id::text AS "branchId",
         COALESCE(b.name_ar, 'الإدارة') AS "branchName",
         COALESCE(r.request_type, r.leave_type, 'LEAVE') AS "requestType",
         COALESCE(r.penalty_category, '') AS "penaltyCategory",
@@ -69,8 +82,7 @@ export async function GET(request: NextRequest) {
         r.created_at AS "createdAt"
       FROM leave_requests r
       LEFT JOIN users u ON r.user_id::text = u.id::text
-      LEFT JOIN users sub ON r.submitted_by::text = sub.id::text
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id::text, u.branch_id::text) = b.id::text
+      LEFT JOIN branches b ON u.primary_branch_id::text = b.id::text
       WHERE (${requestedUserId}::text IS NULL OR r.user_id::text = ${requestedUserId}::text)
       ORDER BY r.id DESC
       LIMIT 600;
@@ -82,14 +94,10 @@ export async function GET(request: NextRequest) {
       const rowSubId = String(row.submittedBy || "");
       const rowBranchId = row.branchId ? String(row.branchId) : null;
       const reqType = String(row.requestType || "LEAVE");
-      const isOwn = rowUserId === principal.id;
-      const isSubmittedByMe = rowSubId === principal.id;
-      const isBranchMatch = canAccessBranch(principal, rowBranchId);
-
       return canViewRequestByType(principal, reqType, {
-        isOwn,
-        isSubmittedByMe,
-        isBranchMatch,
+        isOwn: rowUserId === principal.id,
+        isSubmittedByMe: rowSubId === principal.id,
+        isBranchMatch: canAccessBranch(principal, rowBranchId),
       });
     });
 
@@ -104,7 +112,7 @@ export async function POST(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
     if ("response" in authorization) return authorization.response;
-    await ensurePenaltyColumns();
+    const cols = await getLeaveRequestsColumns();
 
     const principal = authorization.principal;
     const body = await request.json();
@@ -131,103 +139,35 @@ export async function POST(request: NextRequest) {
     const eDate = endDate || sDate;
     const days = durationDays ? Math.max(0, parseInt(String(durationDays), 10) || 0) : 1;
 
-    // Handle Manager Penalty / Deduction submission
+    let finalUserId = principal.id;
+    let finalAmount = advanceAmount ? parseFloat(String(advanceAmount)) || 0 : 0;
+
     if (normalizedType === "PENALTY") {
       const gov = getGovernanceFlags(principal);
       if (!gov.isBranchOrDirectManager) {
-        return NextResponse.json(
-          { message: "إرسال الجزاءات والخصومات متاح للمديرين ومدير التشغيل والإدارة فقط." },
-          { status: 403 }
-        );
+        return NextResponse.json({ message: "إرسال الجزاءات متاح للمديرين فقط." }, { status: 403 });
       }
       const employeeId = String(targetUserId || "").trim();
       if (!employeeId) {
-        return NextResponse.json({ message: "يرجى اختيار الموظف المستهدف بالجزاء أو الخصم." }, { status: 400 });
+        return NextResponse.json({ message: "يرجى اختيار الموظف المستهدف." }, { status: 400 });
       }
-
       const empRaw = await db.execute(sql`
-        SELECT id, COALESCE(full_name_ar, name, 'موظف') AS name,
-               COALESCE(monthly_salary, 5000) AS salary,
-               COALESCE(primary_branch_id::text, branch_id::text) AS branch_id
+        SELECT id, COALESCE(full_name_ar, 'موظف') AS name, COALESCE(monthly_salary, 5000) AS salary
         FROM users WHERE id::text = ${employeeId} LIMIT 1;
       `);
-      const empRows = resultRows<{ id: string; name: string; salary: string | number; branch_id: string | null }>(empRaw);
+      const empRows = resultRows<{ id: string; name: string; salary: string | number }>(empRaw);
       if (!empRows.length) {
-        return NextResponse.json({ message: "الموظف المحدد غير موجود." }, { status: 404 });
+        return NextResponse.json({ message: "الموظف غير موجود." }, { status: 404 });
       }
-
-      const empSalary = Number(empRows[0].salary || 5000);
-      const dailyRate = empSalary / 30;
+      const dailyRate = Number(empRows[0].salary || 5000) / 30;
       const explicitAmount = parseFloat(String(deductionAmount || advanceAmount || "0")) || 0;
-      const computedDeduction = explicitAmount > 0 ? explicitAmount : Math.round(days * dailyRate * 100) / 100;
-
-      if (computedDeduction <= 0 && days <= 0) {
-        return NextResponse.json({ message: "يرجى تحديد عدد أيام الخصم أو قيمة الخصم بالجنيه." }, { status: 400 });
-      }
-
-      await db.execute(sql`
-        INSERT INTO leave_requests (
-          user_id,
-          submitted_by,
-          leave_type,
-          request_type,
-          penalty_category,
-          start_date,
-          end_date,
-          total_days,
-          duration_days,
-          advance_amount,
-          deduction_amount,
-          reason,
-          status,
-          final_status,
-          created_at
-        ) VALUES (
-          ${employeeId},
-          ${principal.id},
-          'PENALTY',
-          'PENALTY',
-          ${penaltyCategory || "DEDUCTION_AMOUNT"},
-          NULLIF(${sDate}, '')::date,
-          NULLIF(${eDate}, '')::date,
-          ${days},
-          ${days},
-          ${computedDeduction},
-          ${computedDeduction},
-          ${reason},
-          'PENDING',
-          'PENDING',
-          NOW()
-        );
-      `);
-
-      try {
-        await notifyRequestReviewers(
-          principal.id,
-          `طلب جزاء / خصم جديد على (${empRows[0].name})`,
-          `قيمة الخصم: ${computedDeduction} ج.م — ${String(reason).slice(0, 70)}`,
-          "/admin/leave-requests",
-          "PENALTY",
-          empRows[0].branch_id
-        );
-      } catch (e) {
-        console.warn("Penalty notification skipped:", e);
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: `تم إرسال الجزاء/الخصم (${computedDeduction} ج.م) إلى HR ومدير النظام للمراجعة والاعتماد.`,
-      });
+      finalAmount = explicitAmount > 0 ? explicitAmount : Math.round(days * dailyRate * 100) / 100;
+      finalUserId = employeeId;
     }
-
-    // Standard employee/manager requests (LEAVE, PERMISSION, ADVANCE, COMPLAINT, STAFF_REQUEST)
-    const userId = principal.id;
-    const amount = advanceAmount ? parseFloat(String(advanceAmount)) || 0 : 0;
 
     await db.execute(sql`
       INSERT INTO leave_requests (
         user_id,
-        submitted_by,
         leave_type,
         request_type,
         start_date,
@@ -235,63 +175,60 @@ export async function POST(request: NextRequest) {
         total_days,
         duration_days,
         advance_amount,
-        target_role,
-        staff_count,
         reason,
         status,
-        final_status,
         created_at
       ) VALUES (
-        ${userId},
-        ${userId},
+        ${finalUserId},
         ${normalizedType},
         ${normalizedType},
         NULLIF(${sDate}, '')::date,
         NULLIF(${eDate}, '')::date,
         ${days},
         ${days},
-        ${amount},
-        ${targetRole || null},
-        ${staffCount ? parseInt(String(staffCount), 10) : 1},
+        ${finalAmount},
         ${reason},
-        'PENDING',
         'PENDING',
         NOW()
       );
     `);
 
+    // Update optional extended columns safely if present
+    if (cols.has("submitted_by") || cols.has("deduction_amount") || cols.has("penalty_category")) {
+      try {
+        await db.execute(sql`
+          UPDATE leave_requests
+          SET submitted_by = ${principal.id},
+              deduction_amount = ${normalizedType === "PENALTY" ? finalAmount : 0},
+              penalty_category = ${penaltyCategory || null},
+              target_role = ${targetRole || null},
+              staff_count = ${staffCount ? parseInt(String(staffCount), 10) : 1}
+          WHERE id = (SELECT MAX(id) FROM leave_requests WHERE user_id::text = ${finalUserId});
+        `);
+      } catch {}
+    }
+
     try {
       const channel =
         normalizedType === "COMPLAINT"
           ? "COMPLAINT"
+          : normalizedType === "PENALTY"
+          ? "PENALTY"
           : normalizedType === "STAFF_REQUEST"
           ? "STAFF_REQUEST"
           : normalizedType === "ADVANCE"
           ? "ADVANCE"
           : "LEAVE_PERMISSION";
 
-      const notifTitle =
-        normalizedType === "STAFF_REQUEST"
-          ? "طلب عمالة جديد من مدير فرع"
-          : normalizedType === "COMPLAINT"
-          ? "شكوى سرية جديدة (HR / الإدارة العليا)"
-          : normalizedType === "ADVANCE"
-          ? "طلب سلفة مالية جديدة"
-          : normalizedType === "PERMISSION"
-          ? "طلب إذن جديد"
-          : "طلب إجازة جديد";
-
       await notifyRequestReviewers(
-        userId,
-        notifTitle,
-        `${notifTitle}: "${String(reason).slice(0, 65)}..."`,
+        principal.id,
+        `طلب جديد (${normalizedType})`,
+        String(reason).slice(0, 80),
         "/admin/leave-requests",
         channel,
         principal.primaryBranchId
       );
-    } catch (notifErr) {
-      console.warn("Notification insert skipped:", notifErr);
-    }
+    } catch {}
 
     return NextResponse.json({ success: true, message: "تم إرسال الطلب بنجاح" });
   } catch (error) {
@@ -304,7 +241,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
     if ("response" in authorization) return authorization.response;
-    await ensurePenaltyColumns();
+    const cols = await getLeaveRequestsColumns();
 
     const principal = authorization.principal;
     const body = await request.json();
@@ -315,13 +252,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const reqNumericId = Number(requestId);
-    if (!Number.isSafeInteger(reqNumericId) || reqNumericId < 1) {
-      return NextResponse.json({ message: "معرف الطلب غير صالح" }, { status: 400 });
-    }
-
     const targetReq = await db.execute(sql`
-      SELECT r.user_id, r.request_type, r.leave_type,
-             COALESCE(u.primary_branch_id::text, u.branch_id::text) AS branch_id
+      SELECT r.user_id, r.request_type, r.leave_type, u.primary_branch_id::text AS branch_id
       FROM leave_requests r
       LEFT JOIN users u ON u.id::text = r.user_id::text
       WHERE r.id = ${reqNumericId} LIMIT 1;
@@ -339,54 +271,35 @@ export async function PATCH(request: NextRequest) {
 
     const employeeUserId = reqRows[0].user_id;
     const rawType = String(reqRows[0].request_type || reqRows[0].leave_type || "LEAVE").toUpperCase();
-    const targetBranchId = reqRows[0].branch_id == null ? null : String(reqRows[0].branch_id);
-    const isBranchMatch = canAccessBranch(principal, targetBranchId);
+    const isBranchMatch = canAccessBranch(principal, reqRows[0].branch_id);
 
     if (!canApproveRequestByType(principal, rawType, isBranchMatch)) {
-      return NextResponse.json({ message: "غير مصرح لك باعتماد هذا النوع من الطلبات" }, { status: 403 });
+      return NextResponse.json({ message: "غير مصرح لك باعتماد هذا الطلب" }, { status: 403 });
     }
+
+    const cleanRejection = rejectionReason ? String(rejectionReason).trim() : null;
 
     await db.execute(sql`
       UPDATE leave_requests
       SET status = ${newStatus},
-          final_status = ${newStatus},
-          rejection_reason = ${rejectionReason || null}
+          rejection_reason = ${cleanRejection}
       WHERE id = ${reqNumericId};
     `);
 
-    const typeNamesAr: Record<string, string> = {
-      LEAVE: "الإجازة",
-      PERMISSION: "الإذن",
-      ADVANCE: "السلفة المالية",
-      COMPLAINT: "الشكوى",
-      STAFF_REQUEST: "طلب العمالة",
-      PENALTY: "الجزاء / الخصم الإداري",
-    };
-    const reqTypeAr = typeNamesAr[rawType] || "الطلب";
-
-    const notifTitle =
-      rawType === "PENALTY"
-        ? newStatus === "APPROVED"
-          ? "تم اعتماد جزاء / خصم على راتبك ⚠️"
-          : "تم إلغاء / رفض طلب الجزاء ✅"
-        : newStatus === "APPROVED"
-        ? `تمت الموافقة على ${reqTypeAr} ✅`
-        : `تم رفض ${reqTypeAr} ❌`;
-
-    const notifMsg =
-      rawType === "PENALTY"
-        ? newStatus === "APPROVED"
-          ? "تم اعتماد الخصم/الجزاء من إدارة الموارد البشرية وإضافته إلى مسير الرواتب."
-          : "تم رفض الجزاء الإداري ولن يُخصم من راتبك."
-        : newStatus === "APPROVED"
-        ? `تمت مراجعة واعتماد ${reqTypeAr} الخاص بك بنجاح.`
-        : `تم رفض ${reqTypeAr}.${rejectionReason ? ` سبب الرفض: ${rejectionReason}` : ""}`;
+    if (cols.has("final_status")) {
+      try {
+        await db.execute(sql`UPDATE leave_requests SET final_status = ${newStatus} WHERE id = ${reqNumericId};`);
+      } catch {}
+    }
 
     try {
-      await notifyRequestOwner(employeeUserId, notifTitle, notifMsg, "/requests");
-    } catch (e) {
-      console.warn("Owner notification skipped:", e);
-    }
+      await notifyRequestOwner(
+        employeeUserId,
+        newStatus === "APPROVED" ? "تمت الموافقة على طلبك ✅" : "تم رفض طلبك ❌",
+        newStatus === "APPROVED" ? "تم اعتماد طلبك بنجاح." : `تم رفض الطلب.${cleanRejection ? " السبب: " + cleanRejection : ""}`,
+        "/requests"
+      );
+    } catch {}
 
     return NextResponse.json({ success: true, message: "تم تحديث حالة الطلب بنجاح" });
   } catch (error) {

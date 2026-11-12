@@ -1,114 +1,169 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
-import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth';
-import { notifyRequestOwner } from '@/lib/request-notifications';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
+import { authorizeApi, canAccessBranch } from "@/lib/api-auth";
+import { notifyRequestOwner, notifyRequestReviewers } from "@/lib/request-notifications";
+import {
+  canApproveRequestByType,
+  canViewRequestByType,
+  getGovernanceFlags,
+} from "@/lib/workflow-routing";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function resultRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) return result as T[];
-  if (typeof result === 'object' && result !== null && 'rows' in result && Array.isArray(result.rows)) {
+  if (typeof result === "object" && result !== null && "rows" in result && Array.isArray(result.rows)) {
     return result.rows as T[];
   }
   return [];
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+let cachedLeaveColumns: Set<string> | null = null;
+
+async function getLeaveRequestsColumns(): Promise<Set<string>> {
+  if (cachedLeaveColumns) return cachedLeaveColumns;
+  const alterStatements = [
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS request_type text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS leave_type text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS duration_days integer DEFAULT 1`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS total_days integer DEFAULT 1`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS advance_amount numeric DEFAULT 0`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS deduction_amount numeric DEFAULT 0`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS submitted_by text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS penalty_category text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS target_role text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS staff_count integer DEFAULT 1`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS rejection_reason text`,
+    sql`ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS final_status text DEFAULT 'PENDING'`,
+  ];
+  for (const stmt of alterStatements) {
+    try { await db.execute(stmt); } catch {}
+  }
+  const raw = await db.execute(sql`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_schema = current_schema() AND table_name = 'leave_requests';
+  `);
+  const cols = new Set(resultRows<{ column_name: string }>(raw).map((r) => r.column_name));
+  if (cols.size > 0) cachedLeaveColumns = cols;
+  return cols;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
-    if ('response' in authorization) return authorization.response;
+    if ("response" in authorization) return authorization.response;
+    await getLeaveRequestsColumns();
 
+    const principal = authorization.principal;
     const { searchParams } = new URL(request.url);
-    const requestedUserId = searchParams.get('userId');
-    const requestedId = requestedUserId?.trim() || null;
-    if (requestedUserId && !requestedId) {
-      return NextResponse.json({ message: 'معرف المستخدم غير صالح' }, { status: 400 });
-    }
-    const isSelf = requestedId === authorization.principal.id;
-    const canView = authorization.principal.systemRole === 'SUPER_ADMIN'
-      || (authorization.principal.systemRole !== 'EMPLOYEE'
-      && ['leaves.view', 'leaves.approve', 'staff_requests.manage'].some((permission) =>
-      hasApiPermission(authorization.principal, permission)
-    ));
-    if (!isSelf && !canView) {
-      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
-    }
-
-    const branchFilter = isSelf
-      || authorization.principal.systemRole === 'SUPER_ADMIN'
-      || authorization.principal.branchScope === 'ALL'
-      ? sql`1=1`
-      : !canView
-        ? sql`1=1`
-        : authorization.principal.branchScope === 'CUSTOM'
-        ? authorization.principal.allowedBranchIds.length
-          ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text) = ANY(${authorization.principal.allowedBranchIds}::text[])`
-          : sql`1=0`
-        : authorization.principal.primaryBranchId
-          ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text) = ${authorization.principal.primaryBranchId}`
-          : sql`1=0`;
-    const userFilter = requestedId !== null
-      ? sql`r.user_id::text = ${requestedId}`
-      : canView
-        ? sql`1=1`
-        : sql`r.user_id::text = ${authorization.principal.id}`;
+    const requestedUserId = searchParams.get("userId")?.trim() || null;
 
     const raw = await db.execute(sql`
       SELECT 
         r.id,
-        r.user_id as "userId",
-        COALESCE(u.full_name_ar, u.name, 'موظف') as "userName",
-        COALESCE(u.phone, '') as "userPhone",
-        COALESCE(b.name_ar, 'الإدارة') as "branchName",
-        COALESCE(r.request_type, r.leave_type, 'LEAVE') as "requestType",
-        TO_CHAR(r.start_date, 'YYYY-MM-DD') as "startDate",
-        TO_CHAR(r.end_date, 'YYYY-MM-DD') as "endDate",
-        COALESCE(r.duration_days, r.total_days, 1) as "durationDays",
-        COALESCE(r.advance_amount, 0) as "advanceAmount",
+        r.user_id AS "userId",
+        COALESCE(r.submitted_by, r.user_id) AS "submittedBy",
+        COALESCE(u.full_name_ar, 'موظف') AS "userName",
+        COALESCE(u.phone, '') AS "userPhone",
+        u.primary_branch_id::text AS "branchId",
+        COALESCE(b.name_ar, 'الإدارة') AS "branchName",
+        COALESCE(r.request_type, r.leave_type, 'LEAVE') AS "requestType",
+        COALESCE(r.penalty_category, '') AS "penaltyCategory",
+        TO_CHAR(r.start_date, 'YYYY-MM-DD') AS "startDate",
+        TO_CHAR(r.end_date, 'YYYY-MM-DD') AS "endDate",
+        COALESCE(r.duration_days, r.total_days, 1) AS "durationDays",
+        COALESCE(NULLIF(r.deduction_amount, 0), r.advance_amount, 0) AS "advanceAmount",
+        COALESCE(r.deduction_amount, 0) AS "deductionAmount",
         r.reason,
-        COALESCE(r.status::text, 'PENDING') as "status",
-        COALESCE(r.rejection_reason, '') as "rejectionReason",
-        r.created_at as "createdAt"
+        COALESCE(r.status::text, 'PENDING') AS "status",
+        COALESCE(r.rejection_reason, '') AS "rejectionReason",
+        r.created_at AS "createdAt"
       FROM leave_requests r
       LEFT JOIN users u ON r.user_id::text = u.id::text
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id::text, u.branch_id::text) = b.id::text
-      WHERE ${userFilter}
-        AND ${branchFilter}
+      LEFT JOIN branches b ON u.primary_branch_id::text = b.id::text
+      WHERE (${requestedUserId}::text IS NULL OR r.user_id::text = ${requestedUserId}::text)
       ORDER BY r.id DESC
-      LIMIT 500;
+      LIMIT 600;
     `);
 
     const rows = resultRows<Record<string, unknown>>(raw);
-    return NextResponse.json(rows, { status: 200 });
+    const filtered = rows.filter((row) => {
+      const rowUserId = String(row.userId || "");
+      const rowSubId = String(row.submittedBy || "");
+      const rowBranchId = row.branchId ? String(row.branchId) : null;
+      const reqType = String(row.requestType || "LEAVE");
+      return canViewRequestByType(principal, reqType, {
+        isOwn: rowUserId === principal.id,
+        isSubmittedByMe: rowSubId === principal.id,
+        isBranchMatch: canAccessBranch(principal, rowBranchId),
+      });
+    });
+
+    return NextResponse.json(filtered, { status: 200 });
   } catch (error) {
-    console.error('Leave-requests GET Error:', error);
-    return NextResponse.json({ message: 'تعذر تحميل طلبات الإجازات.' }, { status: 500 });
+    console.error("Requests GET Error:", error);
+    return NextResponse.json({ message: "تعذر تحميل الطلبات." }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
-    if ('response' in authorization) return authorization.response;
+    if ("response" in authorization) return authorization.response;
+    const cols = await getLeaveRequestsColumns();
 
+    const principal = authorization.principal;
     const body = await request.json();
-    const { requestType, startDate, endDate, durationDays, advanceAmount, reason } = body;
-    const userId = authorization.principal.id;
+    const {
+      requestType,
+      targetUserId,
+      penaltyCategory,
+      startDate,
+      endDate,
+      durationDays,
+      advanceAmount,
+      deductionAmount,
+      reason,
+      targetRole,
+      staffCount,
+    } = body;
 
-    if (!userId || !requestType || !reason) {
-      return NextResponse.json({ message: 'البيانات غير مكتملة' }, { status: 400 });
+    if (!requestType || !reason) {
+      return NextResponse.json({ message: "البيانات غير مكتملة" }, { status: 400 });
     }
 
+    const normalizedType = String(requestType).toUpperCase();
     const sDate = startDate || new Date().toISOString().slice(0, 10);
     const eDate = endDate || sDate;
-    const days = durationDays ? parseInt(durationDays, 10) : 1;
-    const amount = advanceAmount ? parseFloat(advanceAmount) : 0;
+    const days = durationDays ? Math.max(0, parseInt(String(durationDays), 10) || 0) : 1;
+
+    let finalUserId = principal.id;
+    let finalAmount = advanceAmount ? parseFloat(String(advanceAmount)) || 0 : 0;
+
+    if (normalizedType === "PENALTY") {
+      const gov = getGovernanceFlags(principal);
+      if (!gov.isBranchOrDirectManager) {
+        return NextResponse.json({ message: "إرسال الجزاءات متاح للمديرين فقط." }, { status: 403 });
+      }
+      const employeeId = String(targetUserId || "").trim();
+      if (!employeeId) {
+        return NextResponse.json({ message: "يرجى اختيار الموظف المستهدف." }, { status: 400 });
+      }
+      const empRaw = await db.execute(sql`
+        SELECT id, COALESCE(full_name_ar, 'موظف') AS name, COALESCE(monthly_salary, 5000) AS salary
+        FROM users WHERE id::text = ${employeeId} LIMIT 1;
+      `);
+      const empRows = resultRows<{ id: string; name: string; salary: string | number }>(empRaw);
+      if (!empRows.length) {
+        return NextResponse.json({ message: "الموظف غير موجود." }, { status: 404 });
+      }
+      const dailyRate = Number(empRows[0].salary || 5000) / 30;
+      const explicitAmount = parseFloat(String(deductionAmount || advanceAmount || "0")) || 0;
+      finalAmount = explicitAmount > 0 ? explicitAmount : Math.round(days * dailyRate * 100) / 100;
+      finalUserId = employeeId;
+    }
 
     await db.execute(sql`
       INSERT INTO leave_requests (
@@ -124,46 +179,81 @@ export async function POST(request: NextRequest) {
         status,
         created_at
       ) VALUES (
-        ${userId},
-        ${requestType},
-        ${requestType},
+        ${finalUserId},
+        ${normalizedType},
+        ${normalizedType},
         NULLIF(${sDate}, '')::date,
         NULLIF(${eDate}, '')::date,
         ${days},
         ${days},
-        ${amount},
+        ${finalAmount},
         ${reason},
         'PENDING',
         NOW()
       );
     `);
 
-    return NextResponse.json({ success: true, message: 'تم إرسال الطلب بنجاح' });
+    // Update optional extended columns safely if present
+    if (cols.has("submitted_by") || cols.has("deduction_amount") || cols.has("penalty_category")) {
+      try {
+        await db.execute(sql`
+          UPDATE leave_requests
+          SET submitted_by = ${principal.id},
+              deduction_amount = ${normalizedType === "PENALTY" ? finalAmount : 0},
+              penalty_category = ${penaltyCategory || null},
+              target_role = ${targetRole || null},
+              staff_count = ${staffCount ? parseInt(String(staffCount), 10) : 1}
+          WHERE id = (SELECT MAX(id) FROM leave_requests WHERE user_id::text = ${finalUserId});
+        `);
+      } catch {}
+    }
+
+    try {
+      const channel =
+        normalizedType === "COMPLAINT"
+          ? "COMPLAINT"
+          : normalizedType === "PENALTY"
+          ? "PENALTY"
+          : normalizedType === "STAFF_REQUEST"
+          ? "STAFF_REQUEST"
+          : normalizedType === "ADVANCE"
+          ? "ADVANCE"
+          : "LEAVE_PERMISSION";
+
+      await notifyRequestReviewers(
+        principal.id,
+        `طلب جديد (${normalizedType})`,
+        String(reason).slice(0, 80),
+        "/admin/leave-requests",
+        channel,
+        principal.primaryBranchId
+      );
+    } catch {}
+
+    return NextResponse.json({ success: true, message: "تم إرسال الطلب بنجاح" });
   } catch (error) {
-    console.error('Leave-requests POST Error:', error);
-    return NextResponse.json({ message: errorMessage(error, 'فشل إرسال الطلب') }, { status: 500 });
+    console.error("Requests POST Error:", error);
+    return NextResponse.json({ message: error instanceof Error ? error.message : "فشل إرسال الطلب" }, { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
-    if ('response' in authorization) return authorization.response;
+    if ("response" in authorization) return authorization.response;
+    const cols = await getLeaveRequestsColumns();
 
+    const principal = authorization.principal;
     const body = await request.json();
     const { requestId, status: newStatus, rejectionReason } = body;
 
-    if (!requestId || !newStatus || (newStatus !== 'APPROVED' && newStatus !== 'REJECTED')) {
-      return NextResponse.json({ message: 'بيانات غير صحيحة' }, { status: 400 });
+    if (!requestId || !newStatus || (newStatus !== "APPROVED" && newStatus !== "REJECTED")) {
+      return NextResponse.json({ message: "بيانات غير صحيحة" }, { status: 400 });
     }
 
     const reqNumericId = Number(requestId);
-    if (!Number.isSafeInteger(reqNumericId) || reqNumericId < 1) {
-      return NextResponse.json({ message: 'معرف الطلب غير صالح' }, { status: 400 });
-    }
     const targetReq = await db.execute(sql`
-      SELECT r.user_id, r.request_type, r.leave_type,
-             COALESCE(u.primary_branch_id::text, u.branch_id::text) AS branch_id
+      SELECT r.user_id, r.request_type, r.leave_type, u.primary_branch_id::text AS branch_id
       FROM leave_requests r
       LEFT JOIN users u ON u.id::text = r.user_id::text
       WHERE r.id = ${reqNumericId} LIMIT 1;
@@ -174,45 +264,46 @@ export async function PATCH(request: NextRequest) {
       leave_type: string | null;
       branch_id: string | null;
     }>(targetReq);
+
     if (!reqRows.length) {
-      return NextResponse.json({ message: 'الطلب غير موجود' }, { status: 404 });
+      return NextResponse.json({ message: "الطلب غير موجود" }, { status: 404 });
     }
 
     const employeeUserId = reqRows[0].user_id;
-    const rawType = reqRows[0].request_type || reqRows[0].leave_type || 'LEAVE';
-    const requiredPermission = rawType === 'STAFF_REQUEST' || rawType === 'COMPLAINT'
-      ? 'staff_requests.manage'
-      : 'leaves.approve';
-    const targetBranchId = reqRows[0].branch_id == null ? null : String(reqRows[0].branch_id);
-    if (
-      !hasApiPermission(authorization.principal, requiredPermission) ||
-      !canAccessBranch(authorization.principal, targetBranchId)
-    ) {
-      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
+    const rawType = String(reqRows[0].request_type || reqRows[0].leave_type || "LEAVE").toUpperCase();
+    const isBranchMatch = canAccessBranch(principal, reqRows[0].branch_id);
+
+    if (!canApproveRequestByType(principal, rawType, isBranchMatch)) {
+      return NextResponse.json({ message: "غير مصرح لك باعتماد هذا الطلب" }, { status: 403 });
     }
+
+    const cleanRejection = rejectionReason ? String(rejectionReason).trim() : null;
 
     await db.execute(sql`
       UPDATE leave_requests
       SET status = ${newStatus},
-          rejection_reason = ${rejectionReason || null}
+          rejection_reason = ${cleanRejection}
       WHERE id = ${reqNumericId};
     `);
 
-    const notifTitle = newStatus === 'APPROVED' ? 'تمت الموافقة على طلبك ✅' : 'تم رفض طلبك ❌';
-    const notifMsg =
-      newStatus === 'APPROVED'
-        ? 'تمت مراجعة واعتماد طلبك بنجاح من قبل الإدارة.'
-        : `تم رفض طلبك.${rejectionReason ? ` سبب الرفض: ${rejectionReason}` : ''}`;
-
-    try {
-      await notifyRequestOwner(employeeUserId, notifTitle, notifMsg, '/requests');
-    } catch (notificationError) {
-      console.warn('Request notification could not be saved:', notificationError);
+    if (cols.has("final_status")) {
+      try {
+        await db.execute(sql`UPDATE leave_requests SET final_status = ${newStatus} WHERE id = ${reqNumericId};`);
+      } catch {}
     }
 
-    return NextResponse.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' });
+    try {
+      await notifyRequestOwner(
+        employeeUserId,
+        newStatus === "APPROVED" ? "تمت الموافقة على طلبك ✅" : "تم رفض طلبك ❌",
+        newStatus === "APPROVED" ? "تم اعتماد طلبك بنجاح." : `تم رفض الطلب.${cleanRejection ? " السبب: " + cleanRejection : ""}`,
+        "/requests"
+      );
+    } catch {}
+
+    return NextResponse.json({ success: true, message: "تم تحديث حالة الطلب بنجاح" });
   } catch (error) {
-    console.error('Leave-requests PATCH Error:', error);
-    return NextResponse.json({ message: errorMessage(error, 'فشل التحديث') }, { status: 500 });
+    console.error("Requests PATCH Error:", error);
+    return NextResponse.json({ message: error instanceof Error ? error.message : "فشل التحديث" }, { status: 500 });
   }
 }

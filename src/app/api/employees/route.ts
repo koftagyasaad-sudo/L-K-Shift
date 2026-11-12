@@ -149,8 +149,7 @@ export async function POST(request: NextRequest) {
 
     if (id) {
       const currentRaw = await db.execute(sql`
-        SELECT COALESCE(primary_branch_id, branch_id)::text AS branch_id
-        FROM users WHERE id::text = ${String(id)} LIMIT 1;
+        SELECT primary_branch_id::text AS branch_id FROM users WHERE id::text = ${String(id)} LIMIT 1;
       `);
       const currentRows = resultRows<{ branch_id: string | null }>(currentRaw);
       if (!currentRows.length) {
@@ -162,12 +161,9 @@ export async function POST(request: NextRequest) {
       }
 
       await db.execute(sql`
-        UPDATE users
-        SET 
-          full_name_ar = ${normalizedFullNameAr},
-          name = ${normalizedFullNameAr},
+        UPDATE users SET full_name_ar = ${normalizedFullNameAr},
           phone = ${normalizedPhone},
-          employee_number = COALESCE(NULLIF(TRIM(${employeeCode || ''}), ''), employee_number),
+          employee_number = COALESCE(NULLIF(TRIM(${employeeCode && String(employeeCode).length < 15 ? employeeCode : ''}), ''), employee_number), employee_code = COALESCE(NULLIF(TRIM(${employeeCode && String(employeeCode).length < 15 ? employeeCode : ''}), ''), employee_code),
           primary_branch_id = ${requestedBranchId},
           job_role = ${role || 'موظف'},
           monthly_salary = ${salaryValue ? parseFloat(salaryValue) : 5000},

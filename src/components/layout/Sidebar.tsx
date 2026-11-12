@@ -105,26 +105,10 @@ export function DesktopNav({ locale }: { locale: string }) {
         );
       })}
 
-      <div className="relative flex h-full shrink-0 items-center">
-        <button type="button" onClick={() => setOpenMenu((m) => (m === "attendance" ? null : "attendance"))} aria-expanded={openMenu === "attendance"} className={`flex h-full items-center gap-1.5 border-b-2 px-3 text-xs font-bold transition-colors ${groupActive || openMenu === "attendance" ? "border-orange-600 text-slate-950 dark:border-orange-500 dark:text-zinc-100" : "border-transparent text-slate-600 hover:text-slate-950 dark:text-zinc-400 dark:hover:text-zinc-100"}`}>
-          <ClipboardCheck className="h-4 w-4" />
-          <span>{isRtl ? "الحضور والرواتب" : "Attendance & Payroll"}</span>
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openMenu === "attendance" ? "rotate-180" : ""}`} />
-        </button>
-        {openMenu === "attendance" && (
-          <div className="absolute start-0 top-full z-50 mt-1 min-w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/[0.08] dark:bg-[#141519]">
-            {attendanceGroup.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link key={item.titleEn} href={`/${locale}${item.href}`} onClick={() => setOpenMenu(null)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-orange-50 hover:text-orange-700 dark:text-zinc-200 dark:hover:bg-white/[0.06] dark:hover:text-orange-400">
-                  <Icon className="h-4 w-4 text-orange-600 dark:text-orange-500" />
-                  <span>{isRtl ? item.titleAr : item.titleEn}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <Link href={`/${locale}/admin/attendance-review`} prefetch onClick={() => setOpenMenu(null)} className={`flex h-full shrink-0 items-center gap-2 border-b-2 px-3 text-xs font-bold transition-colors ${groupActive ? "border-orange-600 text-slate-950 dark:border-orange-500 dark:text-zinc-100" : "border-transparent text-slate-600 hover:text-slate-950 dark:text-zinc-400 dark:hover:text-zinc-100"}`}>
+        <ClipboardCheck className="h-4 w-4" />
+        <span>{isRtl ? "الحضور والرواتب" : "Attendance & Payroll"}</span>
+      </Link>
 
       {adminTrailing.map((item) => {
         const Icon = item.icon;
