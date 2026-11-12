@@ -191,26 +191,26 @@ export default function Sidebar({
       <aside
         className={`fixed inset-y-0 ${
           isRtl ? 'right-0 border-l' : 'left-0 border-r'
-        } z-50 flex w-72 flex-col justify-between border-slate-200 bg-white transition-all duration-300 ease-in-out lg:static lg:z-auto ${
+        } z-50 w-72 flex-col justify-between border-violet-950/10 bg-white text-[#0a0814] transition-all duration-300 ease-in-out dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:text-[#f6f0ff] lg:static lg:z-auto lg:flex ${
           collapsed ? 'lg:w-20' : 'lg:w-72'
         } ${
           mobileOpen
-            ? 'translate-x-0'
+            ? 'flex translate-x-0'
             : isRtl
-            ? 'translate-x-full lg:translate-x-0'
-            : '-translate-x-full lg:translate-x-0'
+            ? 'hidden translate-x-full lg:translate-x-0'
+            : 'hidden -translate-x-full lg:translate-x-0'
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
         {/* الترويسة والشعار */}
-        <div className="flex flex-col border-b border-slate-100 p-4">
+        <div className="flex flex-col border-b border-violet-950/10 p-4 dark:border-[#c4b2ff]/15">
           <Link
             href={`/${locale}/profile`}
             prefetch
             className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} group cursor-pointer`}
             title="البيانات الشخصية"
           >
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-1.5 shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#46f4ff] via-[#9d6bff] to-[#ff2bd6] p-1.5 shadow-md shadow-[#9d6bff]/20 transition-transform group-hover:scale-105">
               <img
                 src="/Logo.png"
                 alt="L-K Shift Logo"
@@ -219,10 +219,10 @@ export default function Sidebar({
             </div>
             {!collapsed && (
               <div className="overflow-hidden">
-                <h2 className="text-base font-black tracking-wide text-slate-900 group-hover:text-orange-600 transition truncate">
+                <h2 className="truncate text-base font-black tracking-wide text-[#0a0814] transition group-hover:text-[#9d6bff] dark:text-[#f6f0ff]">
                   L-K Shift
                 </h2>
-                <span className="inline-block rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-600">
+                <span className="inline-block rounded-md bg-violet-500/10 px-2 py-0.5 text-[11px] font-bold text-[#6e42bd] dark:text-[#c9c0e8]">
                   {userRole || 'موظف'}
                 </span>
               </div>
@@ -252,13 +252,13 @@ export default function Sidebar({
                   collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'
                 } rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
                   isActive
-                    ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-lg shadow-orange-500/20 font-black'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    ? 'sonomir-iridescent text-[#050309] shadow-lg shadow-[#9d6bff]/20 font-black'
+                    : 'text-[#433b5c] hover:bg-violet-50 hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] dark:hover:text-[#f6f0ff]'
                 }`}
               >
                 <Icon
                   size={19}
-                  className={isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-900'}
+                  className={isActive ? 'text-[#050309]' : 'text-[#756c91] group-hover:text-[#0a0814] dark:text-[#c9c0e8] dark:group-hover:text-[#f6f0ff]'}
                 />
                 {!collapsed && (
                   <>
@@ -272,7 +272,7 @@ export default function Sidebar({
         </div>
 
         {/* زر تسجيل الخروج */}
-        <div className="border-t border-slate-100 p-3">
+        <div className="border-t border-violet-950/10 p-3 dark:border-[#c4b2ff]/15">
           <button
             type="button"
             onClick={handleLogout}

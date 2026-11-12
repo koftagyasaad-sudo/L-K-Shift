@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import {
+  ArrowUpLeft,
+  ArrowUpRight,
   LogOut,
   Menu,
   X,
@@ -16,6 +18,7 @@ import {
   CheckCheck,
   Volume2,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 interface GlobalHeaderProps {
   onToggleSidebar?: () => void;
@@ -300,13 +303,13 @@ export default function GlobalHeader({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-x-hidden border-b border-slate-200 bg-white/95 px-3 sm:px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-16 w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-x-hidden border-b border-violet-950/10 bg-white/90 px-2 text-[#0a0814] backdrop-blur-md dark:border-[#c4b2ff]/15 dark:bg-[#0a0814]/85 dark:text-[#f6f0ff] sm:px-4 lg:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer lg:flex"
+            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-violet-950/10 bg-violet-50 text-[#433b5c] transition hover:bg-violet-100 hover:text-[#0a0814] dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] dark:hover:text-[#f6f0ff] lg:flex"
             title="طي / فتح القائمة"
           >
             {isRtl ? (
@@ -320,7 +323,7 @@ export default function GlobalHeader({
           <button
             type="button"
             onClick={onToggleMobileSidebar}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-950/10 bg-violet-50 text-[#433b5c] transition hover:bg-violet-100 hover:text-[#0a0814] dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] dark:hover:text-[#f6f0ff] lg:hidden"
             aria-label={mobileSidebarOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
             aria-expanded={mobileSidebarOpen}
           >
@@ -330,33 +333,50 @@ export default function GlobalHeader({
 
         <Link
           href={`/${locale}/profile`}
-          className="flex min-w-0 items-center gap-2 rounded-2xl p-1.5 hover:bg-slate-50 transition cursor-pointer group sm:gap-3"
+          className="group flex min-w-0 items-center gap-2 rounded-2xl p-1.5 transition hover:bg-violet-50 dark:hover:bg-[#110e1f] sm:gap-3"
           title="البيانات الشخصية"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-rose-600 text-white font-bold text-sm shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#46f4ff] via-[#9d6bff] to-[#ff2bd6] text-[#050309] text-sm font-bold shadow-md shadow-[#9d6bff]/20 transition-transform group-hover:scale-105 sm:h-10 sm:w-10">
             {firstLetter}
           </div>
-          <div className="min-w-0 max-w-[28vw] text-right sm:max-w-none">
-            <h3 className="truncate text-xs sm:text-sm font-bold text-slate-900 group-hover:text-orange-600 transition">
+          <div className="hidden min-w-0 max-w-[28vw] text-right sm:block sm:max-w-none">
+            <h3 className="truncate text-xs font-bold text-[#0a0814] transition group-hover:text-[#9d6bff] dark:text-[#f6f0ff] sm:text-sm">
               {userName}
             </h3>
-            <span className="block truncate text-[11px] font-semibold text-emerald-600">
+            <span className="block truncate text-[11px] font-semibold text-[#433b5c] dark:text-[#c9c0e8]">
               {userRole}
             </span>
           </div>
         </Link>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+      <div className="hidden shrink-0 items-center gap-2 text-[11px] font-mono tracking-wide text-[#433b5c] dark:text-[#c9c0e8] md:flex">
+        <span className="sonomir-live-dot relative inline-flex h-2.5 w-2.5 rounded-full">
+          <span className="absolute inset-0 animate-ping rounded-full bg-[#cdff4d] opacity-50" />
+        </span>
+        <span>{isRtl ? 'النظام نشط · L-K Shift Live' : 'System Live · L-K Shift'}</span>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <Link
+          href={`/${locale}/attendance`}
+          prefetch
+          aria-label={isRtl ? 'تسجيل الحضور' : 'Open attendance'}
+          title={isRtl ? 'تسجيل الحضور' : 'Open attendance'}
+          className="inline-flex h-9 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-[#46f4ff] via-[#9d6bff] to-[#ff2bd6] px-2 text-[11px] font-black text-[#050309] shadow-md shadow-[#9d6bff]/20 transition hover:-translate-y-0.5 sm:px-3"
+        >
+          {isRtl ? <ArrowUpLeft size={15} /> : <ArrowUpRight size={15} />}
+          <span className="hidden sm:inline">{isRtl ? 'الحضور' : 'Attendance'}</span>
+        </Link>
+        <ThemeToggle />
         {!hasAudioUnlocked && (
           <button
             type="button"
             onClick={handleUnlockAudioAndPush}
-            className="flex items-center gap-1.5 bg-orange-50 border border-orange-300 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm hover:bg-orange-100 transition cursor-pointer animate-pulse"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#9d6bff]/30 bg-violet-50 text-[#433b5c] shadow-sm transition hover:bg-violet-100 dark:bg-[#110e1f] dark:text-[#c9c0e8]"
             title="انقر لتفعيل صوت التنبيهات وإشعارات الهاتف"
           >
             <Volume2 size={14} />
-            <span className="hidden sm:inline">تفعيل صوت التنبيهات 🔔</span>
           </button>
         )}
 
@@ -367,7 +387,7 @@ export default function GlobalHeader({
               if (!hasAudioUnlocked) handleUnlockAudioAndPush();
               setShowDropdown(!showDropdown);
             }}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-violet-950/10 bg-violet-50 text-[#433b5c] transition hover:bg-violet-100 dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530]"
             title="الإشعارات"
           >
             <Bell size={17} />
@@ -381,11 +401,11 @@ export default function GlobalHeader({
           {showDropdown && (
             <div
               dir={isRtl ? 'rtl' : 'ltr'}
-              className="absolute top-full mt-2 left-0 w-80 max-w-[calc(100vw-1.5rem)] sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl z-50 flex flex-col text-slate-800"
+              className="absolute top-full left-0 z-50 mt-2 flex w-80 max-w-[calc(100vw-1rem)] flex-col rounded-2xl border border-violet-950/10 bg-white p-3 text-[#433b5c] shadow-2xl dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:text-[#c9c0e8] sm:w-96"
             >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 px-2">
+              <div className="flex items-center justify-between border-b border-violet-950/10 px-2 pb-2.5 dark:border-[#c4b2ff]/15">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-900">قائمة الإشعارات</span>
+                  <span className="text-xs font-bold text-[#0a0814] dark:text-[#f6f0ff]">قائمة الإشعارات</span>
                   {unreadCount > 0 && (
                     <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-600">
                       {unreadCount} غير مقروء
@@ -404,7 +424,7 @@ export default function GlobalHeader({
                 )}
               </div>
 
-              <div className="flex flex-col max-h-80 overflow-y-auto divide-y divide-slate-100 custom-scrollbar mt-1">
+              <div className="mt-1 flex max-h-80 flex-col divide-y divide-violet-950/10 overflow-y-auto custom-scrollbar dark:divide-[#c4b2ff]/15">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-xs text-slate-400">لا توجد إشعارات حالياً</div>
                 ) : (
@@ -423,7 +443,7 @@ export default function GlobalHeader({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold text-slate-900 truncate">
+                          <h4 className="truncate text-xs font-bold text-[#0a0814] dark:text-[#f6f0ff]">
                             {item.title}
                           </h4>
                           <span className="text-[10px] text-slate-400 font-mono shrink-0">
@@ -433,7 +453,7 @@ export default function GlobalHeader({
                             })}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-600 mt-1 leading-relaxed break-words">
+                        <p className="mt-1 break-words text-[11px] leading-relaxed text-[#433b5c] dark:text-[#c9c0e8]">
                           {item.message}
                         </p>
                       </div>
@@ -448,10 +468,10 @@ export default function GlobalHeader({
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center gap-1.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-500/20 transition cursor-pointer"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 transition hover:bg-rose-500/20 sm:w-auto sm:gap-1.5 sm:px-3.5 sm:py-1.5 sm:text-xs sm:font-bold"
         >
           <LogOut size={13} />
-          <span>خروج</span>
+          <span className="hidden sm:inline">{isRtl ? 'خروج' : 'Sign out'}</span>
         </button>
       </div>
     </header>

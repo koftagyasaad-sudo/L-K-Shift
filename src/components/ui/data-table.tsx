@@ -112,9 +112,9 @@ export function DataTable<T extends Record<string, unknown>>({
   };
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full min-w-0 max-w-full space-y-4">
       {/* شريط الأدوات والبحث */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-violet-950/10 bg-white p-4 shadow-sm dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] sm:flex-row">
         <div className="relative w-full sm:w-72">
           <Search className="absolute right-3 rtl:right-3 ltr:left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -125,7 +125,7 @@ export function DataTable<T extends Record<string, unknown>>({
               setCurrentPage(1);
             }}
             placeholder={searchPlaceholder || "بحث..."}
-            className="w-full pl-3 pr-9 rtl:pr-9 ltr:pl-9 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full rounded-lg border border-violet-950/15 bg-[#f6f5ff] py-2 pl-3 pr-9 text-sm text-[#0a0814] placeholder:text-[#756c91] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#9d6bff] rtl:pr-9 ltr:pl-9 dark:border-[#c4b2ff]/20 dark:bg-[#050309] dark:text-[#f6f0ff] dark:placeholder:text-[#c9c0e8]"
           />
         </div>
 
@@ -133,19 +133,19 @@ export function DataTable<T extends Record<string, unknown>>({
           {headerExtra}
           <button
             onClick={handleExport}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-violet-950/10 bg-violet-50 px-4 py-2 text-sm font-medium text-[#433b5c] transition-colors hover:bg-violet-100 dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530]"
           >
-            <Download className="w-4 h-4 text-gray-500" />
+            <Download className="h-4 w-4 text-[#9d6bff]" />
             <span>تصدير</span>
           </button>
         </div>
       </div>
 
       {/* الجدول */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+      <div className="sonomir-card min-w-0 overflow-hidden rounded-xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right rtl:text-right ltr:text-left text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50/80 border-b border-gray-100">
+          <table className="w-full text-right text-sm text-[#433b5c] rtl:text-right ltr:text-left dark:text-[#c9c0e8]">
+            <thead className="border-b border-violet-950/10 bg-violet-50/80 text-xs uppercase text-[#433b5c] dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8]">
               <tr>
                 <th className="px-4 py-3 text-center w-12">#</th>
                 {columns.map((col) => (
@@ -161,7 +161,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 <tr>
                   <td
                     colSpan={columns.length + (actions ? 2 : 1)}
-                    className="px-4 py-8 text-center text-gray-400"
+                    className="px-4 py-8 text-center text-[#756c91] dark:text-[#c9c0e8]"
                   >
                     {emptyMessage || "لا توجد بيانات للعرض"}
                   </td>
@@ -171,12 +171,12 @@ export function DataTable<T extends Record<string, unknown>>({
                   const rowIndex = (currentPage - 1) * pageSize + idx + 1;
                   const rowKey = typeof row.id === "string" || typeof row.id === "number" ? row.id : idx;
                   return (
-                    <tr key={rowKey} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 text-center text-gray-400 text-xs font-mono">
+                    <tr key={rowKey} className="transition-colors hover:bg-violet-50/70 dark:hover:bg-[#110e1f]">
+                      <td className="px-4 py-3 text-center font-mono text-xs tabular-nums text-[#756c91] dark:text-[#c9c0e8]">
                         {rowIndex}
                       </td>
                       {columns.map((col) => (
-                        <td key={col.key} className="px-4 py-3 font-medium text-gray-800">
+                        <td key={col.key} className="px-4 py-3 font-medium text-[#0a0814] dark:text-[#f6f0ff]">
                           {col.cell ? col.cell(row, idx) : row[col.key] !== undefined ? String(row[col.key]) : "-"}
                         </td>
                       ))}
@@ -195,7 +195,7 @@ export function DataTable<T extends Record<string, unknown>>({
 
         {/* عناصر التنقل بين الصفحات */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50/50 border-t border-gray-100 text-xs text-gray-500">
+          <div className="flex items-center justify-between border-t border-violet-950/10 bg-violet-50/50 px-4 py-3 text-xs text-[#433b5c] dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8]">
             <div>
               عرض {Math.min((currentPage - 1) * pageSize + 1, filteredData.length)} إلى{" "}
               {Math.min(currentPage * pageSize, filteredData.length)} من إجمالي {filteredData.length}
@@ -205,17 +205,17 @@ export function DataTable<T extends Record<string, unknown>>({
               <button
                 onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-lg border border-violet-950/10 bg-white p-1.5 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:hover:bg-[#1a1530]"
               >
                 <ChevronRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
               </button>
-              <span className="px-2 font-medium text-gray-700">
+              <span className="px-2 font-mono font-medium tabular-nums text-[#0a0814] dark:text-[#f6f0ff]">
                 {currentPage} / {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-lg border border-violet-950/10 bg-white p-1.5 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:hover:bg-[#1a1530]"
               >
                 <ChevronLeft className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
               </button>

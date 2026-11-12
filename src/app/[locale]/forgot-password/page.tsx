@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { meetsPasswordMinimum } from '@/lib/password-policy';
 import PasswordInput from '@/components/ui/PasswordInput';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -179,20 +180,22 @@ export default function ForgotPasswordPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#0c0e18] flex items-center justify-center p-4 text-white relative overflow-hidden"
+      className="relative flex min-h-screen w-full max-w-full items-center justify-center overflow-hidden bg-[#f6f5ff] p-4 text-[#0a0814] dark:bg-[#050309] dark:text-[#f6f0ff]"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      <ThemeToggle className="absolute end-4 top-4 z-20" />
       {/* هالة خلفية متدرجة */}
-      <div className="absolute w-96 h-96 rounded-full bg-orange-600/10 blur-3xl pointer-events-none" />
+      <div className="pointer-events-none absolute h-96 w-96 rounded-full bg-[#9d6bff]/10 blur-3xl" />
 
-      <div className="w-full max-w-md bg-[#161928] border border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative z-10 space-y-6">
+      {'\n'}
+      <div className="sonomir-auth-card relative z-10 w-full max-w-md space-y-6">
         {/* اللوجو والعنوان */}
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-600 p-2 mx-auto flex items-center justify-center shadow-lg shadow-orange-500/20">
+          <div className="sonomir-iridescent mx-auto flex h-16 w-16 items-center justify-center rounded-2xl p-2 shadow-lg shadow-[#9d6bff]/20">
             <img src="/Logo.png" alt="Logo" className="w-full h-full object-contain filter drop-shadow brightness-110" />
           </div>
-          <h1 className="text-xl font-black text-white tracking-tight">استعادة كلمة المرور (OTP)</h1>
-          <p className="text-xs text-slate-400">
+          <h1 className="sonomir-gradient-text text-xl font-black tracking-tight">استعادة كلمة المرور (OTP)</h1>
+          <p className="text-xs text-[#433b5c] dark:text-[#c9c0e8]">
             {step === 1 && 'أدخل رقم هاتفك لاستلام رمز التحقق في رسالة نصية قصيرة'}
             {step === 2 && `أدخل كود التحقق المرسل في رسالة SMS إلى هاتفك (${phone})`}
             {step === 3 && 'قم بإنشاء كلمة مرور قوية وجديدة لحسابك'}
@@ -224,17 +227,18 @@ export default function ForgotPasswordPage() {
           </div>
         )}
 
+        {'\n'}
         {/* المرحلة 1: طلب رقم الهاتف */}
         {step === 1 && (
           smsUnavailable ? (
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-200" role="status">
-              <p className="font-bold text-amber-100">استعادة كلمة المرور عبر SMS غير مفعّلة حاليًا.</p>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-900 dark:text-amber-200" role="status">
+              <p className="font-bold text-amber-950 dark:text-amber-100">استعادة كلمة المرور عبر SMS غير مفعّلة حاليًا.</p>
               <p className="mt-1">
                 لإعادة تعيين كلمة المرور فورًا، يرجى التواصل مع مدير الفرع أو مسؤول النظام.
               </p>
               <Link
                 href={`/${locale}/login`}
-                className="mt-3 inline-flex font-bold text-orange-300 underline underline-offset-2 hover:text-orange-200"
+                className="mt-3 inline-flex font-bold text-[#6e42bd] underline underline-offset-2 hover:text-[#9d6bff] dark:text-[#c9c0e8] dark:hover:text-[#46f4ff]"
               >
                 العودة إلى تسجيل الدخول
               </Link>
@@ -262,7 +266,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white font-black text-xs shadow-lg shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              className="sonomir-iridescent flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-black text-[#050309] shadow-lg shadow-[#9d6bff]/20 transition hover:-translate-y-0.5 disabled:opacity-50"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
               <span>إرسال رمز التحقق OTP في رسالة SMS</span>
@@ -271,6 +275,7 @@ export default function ForgotPasswordPage() {
           )
         )}
 
+        {'\n'}
         {/* المرحلة 2: إدخال كود الـ OTP */}
         {step === 2 && (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -294,7 +299,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white font-black text-xs shadow-lg shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              className="sonomir-iridescent flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-black text-[#050309] shadow-lg shadow-[#9d6bff]/20 transition hover:-translate-y-0.5 disabled:opacity-50"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
               <span>تأكيد الكود ومتابعة</span>
@@ -322,6 +327,7 @@ export default function ForgotPasswordPage() {
           </form>
         )}
 
+        {'\n'}
         {/* المرحلة 3: تعيين كلمة المرور الجديدة والقوية */}
         {step === 3 && (
           <form onSubmit={handleResetPassword} className="space-y-4">
@@ -334,7 +340,7 @@ export default function ForgotPasswordPage() {
                 placeholder="أدخل كلمة مرور قوية"
                 autoComplete="new-password"
                 dir="ltr"
-                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
+                className="w-full rounded-2xl border border-violet-950/15 bg-violet-50 px-4 py-3 text-left text-xs text-[#0a0814] transition focus:border-[#9d6bff] focus:outline-none dark:border-[#c4b2ff]/15 dark:bg-[#050309] dark:text-[#f6f0ff]"
               />
             </div>
 
@@ -347,13 +353,13 @@ export default function ForgotPasswordPage() {
                 placeholder="أعد إدخال كلمة المرور"
                 autoComplete="new-password"
                 dir="ltr"
-                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
+                className="w-full rounded-2xl border border-violet-950/15 bg-violet-50 px-4 py-3 text-left text-xs text-[#0a0814] transition focus:border-[#9d6bff] focus:outline-none dark:border-[#c4b2ff]/15 dark:bg-[#050309] dark:text-[#f6f0ff]"
               />
             </div>
 
             {/* الحد الأدنى لطول كلمة المرور */}
-            <div className="bg-[#0c0e18] p-3 rounded-2xl border border-white/5 space-y-1 text-[11px]">
-              <span className="font-bold text-slate-300 block mb-1">الحد الأدنى لطول كلمة المرور:</span>
+            <div className="space-y-1 rounded-2xl border border-violet-950/10 bg-violet-50 p-3 text-[11px] dark:border-[#c4b2ff]/10 dark:bg-[#050309]">
+              <span className="mb-1 block font-bold text-[#433b5c] dark:text-[#c9c0e8]">الحد الأدنى لطول كلمة المرور:</span>
               <p className={meetsPasswordMinimum(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
                 ✓ 6 محارف على الأقل
               </p>
@@ -370,11 +376,12 @@ export default function ForgotPasswordPage() {
           </form>
         )}
 
+        {'\n'}
         {/* العودة لتسجيل الدخول */}
-        <div className="text-center pt-2 border-t border-white/5">
+        <div className="border-t border-violet-950/10 pt-2 text-center dark:border-[#c4b2ff]/10">
           <Link
             href={`/${locale}/login`}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#433b5c] transition hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:text-[#f6f0ff]"
           >
             <ArrowRight size={13} />
             <span>العودة إلى صفحة تسجيل الدخول</span>

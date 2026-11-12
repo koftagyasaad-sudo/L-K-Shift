@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Cairo } from 'next/font/google';
 import '../globals.css';
 import { NextIntlClientProvider } from 'next-intl';
+import { AppProviders } from '@/components/providers/app-providers';
 import PwaInstallEventCapture from '@/components/PwaInstallEventCapture';
 import arabicMessages from '../../../messages/ar.json';
 import englishMessages from '../../../messages/en.json';
@@ -54,10 +55,14 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
-      <body className={`${cairo.variable} font-sans antialiased bg-[#080911] text-slate-100`}>
+      <body className={`${cairo.variable} font-sans antialiased`}>
         <NextIntlClientProvider messages={publicMessages}>
-          <PwaInstallEventCapture />
-          {children}
+          {'\n'}
+          <AppProviders>
+            <PwaInstallEventCapture />
+            {'\n'}
+            {children}
+          </AppProviders>
         </NextIntlClientProvider>
       </body>
     </html>

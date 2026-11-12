@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lk-shift-v2026-prod-final-v4';
+const CACHE_NAME = 'lk-shift-v2026-sonomir-exact-v8';
 
 // الملفات الأساسية المحفوظة مسبقاً لفتح التطبيق أوفلاين فوري
 const STATIC_ASSETS = [

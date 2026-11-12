@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { UserPlus, ArrowRight, Loader2 } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import PasswordInput from '@/components/ui/PasswordInput';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function LoginPage() {
   const params = useParams();
@@ -129,12 +130,15 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      className="relative flex min-h-screen w-full max-w-full flex-col items-center justify-center overflow-hidden bg-[#f6f5ff] p-4 text-[#0a0814] dark:bg-[#050309] dark:text-[#f6f0ff]"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
+      <ThemeToggle className="absolute end-4 top-4 z-20" />
+      {'\n'}
+      <div className="pointer-events-none absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-[#46f4ff]/15 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full bg-[#ff2bd6]/10 blur-3xl" />
 
+      {'\n'}
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
@@ -142,14 +146,15 @@ export default function LoginPage() {
             alt="L-K Shift Logo"
             className="h-20 w-auto mb-3 drop-shadow-xl mix-blend-screen object-contain"
           />
-          <h1 className="text-3xl font-black text-white tracking-wider">L-K Shift</h1>
-          <p className="text-gray-400 text-xs mt-2 font-medium">
+          <h1 className="sonomir-gradient-text text-3xl font-black tracking-wider">L-K Shift</h1>
+          <p className="mt-2 text-xs font-medium text-[#433b5c] dark:text-[#c9c0e8]">
             {isRtl ? 'نظام إدارة الحضور والانصراف والورديات الميدانية' : 'Attendance & Shift Management System'}
           </p>
         </div>
 
-        <div className="w-full bg-white/5 backdrop-blur-2xl border border-white/10 p-7 sm:p-8 rounded-[2rem] shadow-2xl">
-          <div className="flex rounded-2xl bg-black/40 p-1 mb-6 border border-white/5">
+        {'\n'}
+        <div className="sonomir-auth-card w-full backdrop-blur-2xl">
+          <div className="mb-6 flex rounded-2xl border border-violet-950/10 bg-violet-50 p-1 dark:border-[#c4b2ff]/10 dark:bg-[#050309]">
             <button
               type="button"
               onClick={() => {
@@ -159,8 +164,8 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'LOGIN'
-                  ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'sonomir-iridescent text-[#050309] shadow-md'
+                  : 'text-[#756c91] hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:text-[#f6f0ff]'
               }`}
             >
               {isRtl ? 'تسجيل الدخول' : 'Sign In'}
@@ -174,8 +179,8 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'REGISTER'
-                  ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'sonomir-iridescent text-[#050309] shadow-md'
+                  : 'text-[#756c91] hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:text-[#f6f0ff]'
               }`}
             >
               {isRtl ? 'إنشاء حساب موظف' : 'New Account'}
@@ -194,6 +199,7 @@ export default function LoginPage() {
             </div>
           )}
 
+          {'\n'}
           {activeTab === 'LOGIN' ? (
             <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
               <div>
@@ -236,7 +242,7 @@ export default function LoginPage() {
               <div className="flex justify-end pt-0.5">
                 <Link
                   href={`/${locale}/forgot-password`}
-                  className="text-xs text-orange-400 hover:text-orange-300 transition-colors font-medium"
+                  className="text-xs font-medium text-[#6e42bd] transition-colors hover:text-[#9d6bff] dark:text-[#c9c0e8] dark:hover:text-[#46f4ff]"
                 >
                   {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
                 </Link>
@@ -245,7 +251,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white rounded-xl font-bold text-sm shadow-lg shadow-orange-500/25 transition-all disabled:opacity-70 cursor-pointer"
+                className="sonomir-iridescent mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-[#050309] shadow-lg shadow-[#9d6bff]/25 transition-all hover:-translate-y-0.5 disabled:opacity-70"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -329,7 +335,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-70 cursor-pointer"
+                className="sonomir-iridescent mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-[#050309] shadow-lg shadow-[#9d6bff]/25 transition-all hover:-translate-y-0.5 disabled:opacity-70"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -343,9 +349,10 @@ export default function LoginPage() {
             </form>
           )}
 
-          <div className="mt-6 pt-4 border-t border-white/5 text-center text-[11px] text-gray-400 flex flex-col items-center gap-1">
+          {'\n'}
+          <div className="mt-6 flex flex-col items-center gap-1 border-t border-violet-950/10 pt-4 text-center text-[11px] text-[#433b5c] dark:border-[#c4b2ff]/10 dark:text-[#c9c0e8]">
             <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
-            <span className="font-semibold text-orange-400/80">Developed by Omar Abd Elhalim</span>
+            <span className="font-semibold text-[#6e42bd] dark:text-[#9d6bff]">Developed by Omar Abd Elhalim</span>
           </div>
         </div>
       </div>

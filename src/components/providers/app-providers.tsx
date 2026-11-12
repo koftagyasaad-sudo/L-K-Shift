@@ -6,10 +6,10 @@ import { Toaster } from "sonner";
 import type { Session } from "next-auth";
 import type { ReactNode } from "react";
 
-export function AppProviders({ children, session }: { children: ReactNode; session: Session | null }) {
+export function AppProviders({ children, session }: { children: ReactNode; session?: Session | null }) {
   return (
     <SessionProvider session={session}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
         {children}
         <Toaster position="top-center" richColors closeButton />
       </ThemeProvider>

@@ -46,18 +46,18 @@ export function PaginationControls({
         type="button"
         onClick={() => onPageChange(page - 1)}
         disabled={page <= 1}
-        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-slate-300"
+        className="rounded-lg border border-violet-950/10 bg-white px-3 py-1.5 font-semibold text-[#433b5c] transition hover:border-[#46f4ff] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:text-[#c9c0e8]"
       >
         {isRtl ? 'السابق' : 'Previous'}
       </button>
-      <span className="font-medium text-slate-500 dark:text-slate-400">
+      <span className="font-mono font-medium tabular-nums text-[#433b5c] dark:text-[#c9c0e8]">
         {isRtl ? `صفحة ${page} من ${pageCount}` : `Page ${page} of ${pageCount}`}
       </span>
       <button
         type="button"
         onClick={() => onPageChange(page + 1)}
         disabled={page >= pageCount}
-        className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-slate-300"
+        className="rounded-lg border border-violet-950/10 bg-white px-3 py-1.5 font-semibold text-[#433b5c] transition hover:border-[#ff2bd6] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:text-[#c9c0e8]"
       >
         {isRtl ? 'التالي' : 'Next'}
       </button>
