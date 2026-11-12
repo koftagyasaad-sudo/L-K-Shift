@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
     titleEn: 'Attendance & Payroll',
     href: '/admin/attendance-review',
     icon: ClipboardCheck,
-    adminOnly: false, // متاحة للمستخدم العادي والمدير
+    adminOnly: true,
   },
   {
     titleAr: 'الموظفين',
@@ -120,26 +120,42 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
   const [isOpenMobile, setIsOpenMobile] = useState(false);
 
   useEffect(() => {
-    try {
-      const storedName = localStorage.getItem('userName') || '';
-      const storedRole = localStorage.getItem('userRole') || 'موظف';
-      const permsRaw = localStorage.getItem('userPermissions') || '[]';
-      const perms: string[] = JSON.parse(permsRaw);
+    let active = true;
+    fetch('/api/auth/session', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Failed to load the authenticated user.');
+        return response.json();
+      })
+      .then((data: {
+        user?: {
+          name?: string;
+          role?: string;
+          systemRole?: string;
+          permissions?: unknown;
+        };
+      }) => {
+        if (!active) return;
+        const user = data.user;
+        const role = user?.role || 'موظف';
+        const permissions = Array.isArray(user?.permissions)
+          ? user.permissions.filter((permission): permission is string => typeof permission === 'string')
+          : [];
+        setUserName(user?.name || '');
+        setUserRole(role);
+        setIsAdmin(
+          user?.systemRole !== 'EMPLOYEE'
+          && (user?.systemRole === 'SUPER_ADMIN' || permissions.length > 0)
+        );
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        console.error('Failed to load sidebar permissions:', error);
+        setIsAdmin(false);
+      });
 
-      setUserName(storedName);
-      setUserRole(storedRole);
-
-      const hasAdminPrivilege =
-        perms.includes('*') ||
-        storedRole === 'SUPER_ADMIN' ||
-        storedRole === 'مدير النظام' ||
-        storedRole === 'مدير فرع' ||
-        perms.includes('dashboard.view');
-
-      setIsAdmin(hasAdminPrivilege);
-    } catch {
-      setIsAdmin(false);
-    }
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleLogout = () => {

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
-import { authorizeApi } from "@/lib/api-auth";
+import { authorizeApi, hasApiPermission } from "@/lib/api-auth";
 
 function requiredPermissions(pathname: string): string[] {
   const path = pathname.replace(/^\/(?:ar|en)(?=\/|$)/, "") || "/";
@@ -29,9 +29,16 @@ export default async function AdminLayout({
   const permissions = requiredPermissions(pathname);
   if (permissions.length === 0) notFound();
 
-  const authorization = await authorizeApi(permissions);
+  const authorization = await authorizeApi();
   if ("response" in authorization) {
     if (authorization.response?.status === 401) redirect(`/${locale}/login`);
+    notFound();
+  }
+  if (authorization.principal.systemRole === "EMPLOYEE") redirect(`/${locale}/attendance`);
+  if (
+    !hasApiPermission(authorization.principal, "*")
+    && !permissions.some((permission) => hasApiPermission(authorization.principal, permission))
+  ) {
     notFound();
   }
 

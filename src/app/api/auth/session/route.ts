@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { eq, or } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
-import { users, branches } from "@/db/schema";
+import { customRoles, users, branches } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -20,22 +20,34 @@ export async function GET() {
     }
 
     // استعلام فوري بحساب المستخدم عبر الهاتف أو المعرف
-    const conditions = [];
-    if (phone) conditions.push(eq(users.phone, phone));
-    if (rawId) conditions.push(eq(users.id, rawId));
-
     const [dbUser] = await db
       .select()
       .from(users)
-      .where(conditions.length > 1 ? or(...conditions) : conditions[0])
+      .where(rawId ? eq(users.id, rawId) : eq(users.phone, phone!))
       .limit(1);
 
     if (!dbUser || dbUser.isActive === false) {
       return NextResponse.json({ authenticated: false, message: "غير مصرح" }, { status: 401 });
     }
 
-    const isSuperAdmin = dbUser.systemRole === "SUPER_ADMIN" || dbUser.jobRole === "SUPER_ADMIN";
-    const permissions = isSuperAdmin ? ["*"] : ["dashboard.view", "attendance.view"];
+    const isSuperAdmin = dbUser.systemRole === "SUPER_ADMIN";
+    const [customRole] = isSuperAdmin
+      ? []
+      : await db
+        .select({ permissions: customRoles.permissions })
+        .from(customRoles)
+        .where(or(eq(customRoles.name, dbUser.jobRole), eq(customRoles.nameAr, dbUser.jobRole)))
+        .limit(1);
+    const rolePermissions = customRole?.permissions;
+    const permissions = isSuperAdmin
+      ? ["*"]
+      : Array.isArray(rolePermissions)
+        ? rolePermissions.filter((permission): permission is string => typeof permission === "string")
+        : typeof rolePermissions === "object" && rolePermissions !== null
+          ? Object.entries(rolePermissions)
+            .filter(([, enabled]) => enabled === true)
+            .map(([permission]) => permission)
+          : [];
 
     let branchName = "";
     let shiftStart = "10:00";
@@ -65,8 +77,8 @@ export async function GET() {
         name: dbUser.fullNameAr || dbUser.fullNameEn || sessionUser?.name || phone,
         fullName: dbUser.fullNameAr || dbUser.fullNameEn || sessionUser?.name || phone,
         phone: dbUser.phone,
-        role: dbUser.jobRole || "SUPER_ADMIN",
-        systemRole: dbUser.systemRole || "SUPER_ADMIN",
+        role: dbUser.jobRole || "EMPLOYEE",
+        systemRole: dbUser.systemRole || "EMPLOYEE",
         branchId: dbUser.primaryBranchId,
         branchName,
         shiftStart,

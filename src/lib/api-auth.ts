@@ -86,10 +86,6 @@ export async function authorizeApi(
     };
   }
 
-  const lookupConditions = [];
-  if (validId) lookupConditions.push(eq(users.id, validId));
-  if (sessionPhone) lookupConditions.push(eq(users.phone, sessionPhone));
-
   const [user] = await db
     .select({
       id: users.id,
@@ -99,7 +95,10 @@ export async function authorizeApi(
       isActive: users.isActive,
     })
     .from(users)
-    .where(and(lookupConditions.length > 1 ? or(...lookupConditions) : lookupConditions[0], eq(users.isActive, true)))
+    .where(and(
+      validId ? eq(users.id, validId) : eq(users.phone, sessionPhone!),
+      eq(users.isActive, true)
+    ))
     .limit(1);
 
   if (!user) {

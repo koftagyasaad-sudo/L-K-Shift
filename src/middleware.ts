@@ -31,6 +31,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const adminPath = pathname.match(/^\/(ar|en)\/admin(?:\/|$)/);
+  if (token && adminPath && (token.systemRole ?? "EMPLOYEE") === "EMPLOYEE") {
+    return NextResponse.redirect(new URL(`/${adminPath[1]}/attendance`, request.url));
+  }
+
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-lk-pathname", pathname);
   return NextResponse.next({ request: { headers: requestHeaders } });
