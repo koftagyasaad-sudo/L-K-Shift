@@ -19,6 +19,7 @@ interface NavItem {
 
 const adminItems: NavItem[] = [
   { titleAr: "النظرة العامة", titleEn: "Overview", href: "/admin/dashboard", icon: LayoutDashboard, adminOnly: true },
+  { titleAr: "تسجيل الحضور", titleEn: "Check-In", href: "/attendance", icon: Clock3 },
   { titleAr: "الفروع", titleEn: "Branches", href: "/admin/branches", icon: Building2, adminOnly: true },
   { titleAr: "الموظفين", titleEn: "Employees", href: "/admin/employees", icon: Users, adminOnly: true },
   { titleAr: "الحضور والرواتب", titleEn: "Attendance & Payroll", href: "/admin/attendance-review", icon: ClipboardCheck, adminOnly: true },
