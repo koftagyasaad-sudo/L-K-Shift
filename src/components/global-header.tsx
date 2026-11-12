@@ -1,31 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useParams } from 'next/navigation';
-import {
-  ArrowUpLeft,
-  ArrowUpRight,
-  LogOut,
-  Menu,
-  X,
-  ChevronRight,
-  ChevronLeft,
-  Bell,
-  Clock,
-  Calendar,
-  ShieldAlert,
-  CheckCheck,
-  Volume2,
-} from 'lucide-react';
+import { usePathname, useRouter, useParams } from 'next/navigation';
+import { Bell, CalendarDays, CheckCheck, Clock3, LogOut, ShieldAlert, UserRound, Volume2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
-
-interface GlobalHeaderProps {
-  onToggleSidebar?: () => void;
-  sidebarCollapsed?: boolean;
-  mobileSidebarOpen?: boolean;
-  onToggleMobileSidebar?: () => void;
-}
+import { DesktopNav } from '@/components/layout/Sidebar';
 
 interface NotificationItem {
   id: number;
@@ -45,209 +25,134 @@ function getSharedAudioContext(): AudioContext | null {
   if (!sharedAudioCtx) {
     const AudioContextClass = window.AudioContext
       || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (AudioContextClass) {
-      sharedAudioCtx = new AudioContextClass();
-    }
+    if (AudioContextClass) sharedAudioCtx = new AudioContextClass();
   }
-  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
-    sharedAudioCtx.resume().catch(() => {});
-  }
+  if (sharedAudioCtx?.state === 'suspended') sharedAudioCtx.resume().catch(() => {});
   return sharedAudioCtx;
 }
 
-// دالة رنين صفارة قوية ومرتفعة الصوت (High-Pitch Loud Double Alert)
 function playLoudNotificationAlert() {
   try {
     const ctx = getSharedAudioContext();
     if (!ctx) return;
-
     const now = ctx.currentTime;
-
-    // نبضة الصوت الأولى (1046 Hz - C6)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'square'; // موجة مربعة مسموعة بوضوح وقوة في الهاتف
-    osc1.frequency.setValueAtTime(1046.5, now);
-    gain1.gain.setValueAtTime(0.8, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.2);
-
-    // نبضة الصوت الثانية الأعلى والأقوى (1567 Hz - G6)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'square';
-    osc2.frequency.setValueAtTime(1567.98, now + 0.22);
-    gain2.gain.setValueAtTime(0.9, now + 0.22);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.22);
-    osc2.stop(now + 0.5);
-
-    // اهتزاز ثلاثي قوي للهاتف
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([300, 150, 300]);
-    }
-  } catch (e) {
-    console.warn('Audio alert error:', e);
+    [1046.5, 1567.98].forEach((frequency, index) => {
+      const start = now + index * 0.22;
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(index ? 0.9 : 0.8, start);
+      gain.gain.exponentialRampToValueAtTime(0.01, start + (index ? 0.28 : 0.2));
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(start);
+      oscillator.stop(start + (index ? 0.28 : 0.2));
+    });
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([300, 150, 300]);
+  } catch (error) {
+    console.warn('Audio alert error:', error);
   }
 }
 
-// إطلاق إشعار خارجي في درج الإشعارات وشاشة القفل عبر الـ Service Worker
 function triggerSystemOSNotification(title: string, message: string) {
-  if (typeof window === 'undefined') return;
-
-  if ('Notification' in window && Notification.permission === 'granted') {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then((reg) => {
-        reg.showNotification(title, {
-          body: message,
-          icon: '/Logo.png',
-          badge: '/Logo.png',
-          tag: 'lk-shift-os-alert',
-          requireInteraction: true,
-        });
-      }).catch(() => {
-        new Notification(title, { body: message, icon: '/Logo.png' });
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then((registration) => {
+      registration.showNotification(title, {
+        body: message,
+        icon: '/Logo.png',
+        badge: '/Logo.png',
+        tag: 'lk-shift-os-alert',
+        requireInteraction: true,
       });
-    } else {
-      new Notification(title, { body: message, icon: '/Logo.png' });
-    }
+    }).catch(() => new Notification(title, { body: message, icon: '/Logo.png' }));
+  } else {
+    new Notification(title, { body: message, icon: '/Logo.png' });
   }
 }
 
-export default function GlobalHeader({
-  onToggleSidebar,
-  sidebarCollapsed,
-  mobileSidebarOpen = false,
-  onToggleMobileSidebar,
-}: GlobalHeaderProps) {
+export default function GlobalHeader() {
   const router = useRouter();
+  const pathname = usePathname() || '';
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
+  const nextLocale = locale === 'ar' ? 'en' : 'ar';
+  const localizedPath = `/${nextLocale}${pathname.startsWith(`/${locale}/`) ? pathname.slice(locale.length + 1) : ''}`;
 
-  const [userName, setUserName] = useState('عمر محمد سعيد عبدالحليم');
-  const [userRole, setUserRole] = useState('مدير النظام');
+  const [userName, setUserName] = useState('');
+  const [userRole, setUserRole] = useState('');
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [hasAudioUnlocked, setHasAudioUnlocked] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const prevUnreadCountRef = useRef<number>(-1);
-  const [hasAudioUnlocked, setHasAudioUnlocked] = useState<boolean>(true);
-  const [shiftNotified, setShiftNotified] = useState<{ [key: string]: boolean }>({});
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const prevUnreadCountRef = useRef(-1);
 
   useEffect(() => {
-    try {
-      const storedName = localStorage.getItem('userName');
-      const storedRole = localStorage.getItem('userRole');
-      if (storedName) setUserName(storedName);
-      if (storedRole) setUserRole(storedRole);
-
-      const unlocked = localStorage.getItem('audio_notifications_unlocked');
-      if (!unlocked) {
-        setHasAudioUnlocked(false);
-      }
-    } catch {}
+    const storedName = localStorage.getItem('userName');
+    const storedRole = localStorage.getItem('userRole');
+    if (storedName) setUserName(storedName);
+    if (storedRole) setUserRole(storedRole);
+    setHasAudioUnlocked(Boolean(localStorage.getItem('audio_notifications_unlocked')));
   }, []);
 
   const handleUnlockAudioAndPush = async () => {
     try {
       const ctx = getSharedAudioContext();
-      if (ctx && ctx.state === 'suspended') {
-        await ctx.resume();
-      }
+      if (ctx?.state === 'suspended') await ctx.resume();
       playLoudNotificationAlert();
       localStorage.setItem('audio_notifications_unlocked', 'true');
       setHasAudioUnlocked(true);
-
       if (typeof window !== 'undefined' && 'Notification' in window) {
-        const perm = await Notification.requestPermission();
-        if (perm === 'granted') {
-          triggerSystemOSNotification('L-K Shift Core', 'تم تفعيل التنبيهات الصوتية القوية وقائمة إشعارات الهاتف بنجاح!');
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          triggerSystemOSNotification('L-K Shift Core', 'تم تفعيل التنبيهات الصوتية وإشعارات الهاتف بنجاح!');
         }
       }
-    } catch (e) {
-      console.warn('Unlock audio error:', e);
+    } catch (error) {
+      console.warn('Unlock audio error:', error);
     }
   };
 
   const fetchNotifications = async () => {
     const currentUid = localStorage.getItem('userId');
     if (!currentUid) return;
-
     try {
-      const res = await fetch(`/api/notifications?userId=${currentUid}`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        const items: NotificationItem[] = Array.isArray(data) ? data : [];
-        setNotifications(items);
-
-        const currentUnread = items.filter((n) => !n.isRead).length;
-
-        if (prevUnreadCountRef.current !== -1 && currentUnread > prevUnreadCountRef.current) {
-          playLoudNotificationAlert();
-
-          const newest = items.find((n) => !n.isRead);
-          if (newest) {
-            triggerSystemOSNotification(newest.title, newest.message);
-          }
-        }
-        prevUnreadCountRef.current = currentUnread;
+      const response = await fetch(`/api/notifications?userId=${currentUid}`, { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      const items: NotificationItem[] = Array.isArray(data) ? data : [];
+      setNotifications(items);
+      const unreadCount = items.filter((item) => !item.isRead).length;
+      if (prevUnreadCountRef.current !== -1 && unreadCount > prevUnreadCountRef.current) {
+        playLoudNotificationAlert();
+        const newest = items.find((item) => !item.isRead);
+        if (newest) triggerSystemOSNotification(newest.title, newest.message);
       }
-    } catch {}
+      prevUnreadCountRef.current = unreadCount;
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    }
   };
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 10000);
+    void fetchNotifications();
+    const interval = setInterval(() => void fetchNotifications(), 10000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) setShowNotifications(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) setShowUserMenu(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // فحص منبه اقتراب الوردية
-  useEffect(() => {
-    const checkShiftAlarm = () => {
-      const branchShift = localStorage.getItem('userBranchShift') || '10:00';
-      const match = branchShift.match(/(\d{1,2}):(\d{2})/);
-      if (!match) return;
-
-      const shiftHour = parseInt(match[1], 10);
-      const shiftMinute = parseInt(match[2], 10);
-
-      const now = new Date();
-      const shiftDate = new Date();
-      shiftDate.setHours(shiftHour, shiftMinute, 0, 0);
-
-      const diffMinutes = Math.round((shiftDate.getTime() - now.getTime()) / 60000);
-
-      [60, 30, 15].forEach((intervalMinutes) => {
-        if (diffMinutes === intervalMinutes && !shiftNotified[`${intervalMinutes}`]) {
-          playLoudNotificationAlert();
-          triggerSystemOSNotification(
-            'منبه موعد الوردية - L-K Shift',
-            `تنبيه هام: ستبدأ وردية العمل خلال ${intervalMinutes} دقيقة! يرجى الاستعداد لتسجيل البصمة داخل الفرع.`
-          );
-          setShiftNotified((prev) => ({ ...prev, [`${intervalMinutes}`]: true }));
-        }
-      });
-    };
-
-    const alarmInterval = setInterval(checkShiftAlarm, 25000);
-    return () => clearInterval(alarmInterval);
-  }, [shiftNotified]);
 
   const handleNotificationClick = async (item: NotificationItem) => {
     try {
@@ -256,29 +161,30 @@ export default function GlobalHeader({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationId: item.id }),
       });
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
-      );
-    } catch {}
-
-    setShowDropdown(false);
-    if (item.link) {
-      router.push(`/${locale}${item.link.startsWith('/') ? item.link : `/${item.link}`}`);
+      setNotifications((previous) => previous.map((notification) =>
+        notification.id === item.id ? { ...notification, isRead: true } : notification
+      ));
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
     }
+    setShowNotifications(false);
+    if (item.link) router.push(`/${locale}${item.link.startsWith('/') ? item.link : `/${item.link}`}`);
   };
 
   const handleMarkAllAsRead = async () => {
     const currentUid = localStorage.getItem('userId');
     if (!currentUid) return;
-
     try {
-      await fetch('/api/notifications', {
+      const response = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markAll: true, userId: currentUid }),
       });
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    } catch {}
+      if (!response.ok) throw new Error('Failed to mark notifications as read.');
+      setNotifications((previous) => previous.map((item) => ({ ...item, isRead: true })));
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
   };
 
   const handleLogout = () => {
@@ -286,193 +192,145 @@ export default function GlobalHeader({
     router.push(`/${locale}/login`);
   };
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-  const firstLetter = userName ? userName.trim().charAt(0) : 'ع';
-
+  const unreadCount = notifications.filter((item) => !item.isRead).length;
   const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'ATTENDANCE':
-        return <Clock size={16} className="text-emerald-600" />;
-      case 'PERMISSION':
-        return <Clock size={16} className="text-amber-500" />;
-      case 'COMPLAINT':
-        return <ShieldAlert size={16} className="text-rose-600" />;
-      default:
-        return <Calendar size={16} className="text-orange-600" />;
-    }
+    if (type === 'ATTENDANCE' || type === 'PERMISSION') return <Clock3 size={16} className="text-slate-500" />;
+    if (type === 'COMPLAINT') return <ShieldAlert size={16} className="text-slate-500" />;
+    return <CalendarDays size={16} className="text-slate-500" />;
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-x-hidden border-b border-violet-950/10 bg-white/90 px-2 text-[#0a0814] backdrop-blur-md dark:border-[#c4b2ff]/15 dark:bg-[#0a0814]/85 dark:text-[#f6f0ff] sm:px-4 lg:px-6">
-      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-        {onToggleSidebar && (
-          <button
-            type="button"
-            onClick={onToggleSidebar}
-            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-violet-950/10 bg-violet-50 text-[#433b5c] transition hover:bg-violet-100 hover:text-[#0a0814] dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] dark:hover:text-[#f6f0ff] lg:flex"
-            title="طي / فتح القائمة"
-          >
-            {isRtl ? (
-              sidebarCollapsed ? <ChevronLeft size={17} /> : <ChevronRight size={17} />
-            ) : (
-              sidebarCollapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />
-            )}
-          </button>
-        )}
-        {onToggleMobileSidebar && (
-          <button
-            type="button"
-            onClick={onToggleMobileSidebar}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-950/10 bg-violet-50 text-[#433b5c] transition hover:bg-violet-100 hover:text-[#0a0814] dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] dark:hover:text-[#f6f0ff] lg:hidden"
-            aria-label={mobileSidebarOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
-            aria-expanded={mobileSidebarOpen}
-          >
-            {mobileSidebarOpen ? <X size={17} /> : <Menu size={17} />}
-          </button>
-        )}
-
-        <Link
-          href={`/${locale}/profile`}
-          className="group flex min-w-0 items-center gap-2 rounded-2xl p-1.5 transition hover:bg-violet-50 dark:hover:bg-[#110e1f] sm:gap-3"
-          title="البيانات الشخصية"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#46f4ff] via-[#9d6bff] to-[#ff2bd6] text-[#050309] text-sm font-bold shadow-md shadow-[#9d6bff]/20 transition-transform group-hover:scale-105 sm:h-10 sm:w-10">
-            {firstLetter}
-          </div>
-          <div className="hidden min-w-0 max-w-[28vw] text-right sm:block sm:max-w-none">
-            <h3 className="truncate text-xs font-bold text-[#0a0814] transition group-hover:text-[#9d6bff] dark:text-[#f6f0ff] sm:text-sm">
-              {userName}
-            </h3>
-            <span className="block truncate text-[11px] font-semibold text-[#433b5c] dark:text-[#c9c0e8]">
-              {userRole}
-            </span>
-          </div>
+    <header className="sticky top-0 z-30 w-full border-b border-slate-200/90 bg-white/95 text-slate-900 backdrop-blur dark:border-white/[0.08] dark:bg-[#141519]/95 dark:text-zinc-100">
+      <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-3 px-3 sm:px-5 lg:px-8">
+        <Link href={`/${locale}/attendance`} className="flex shrink-0 items-center gap-2" aria-label="L-K Shift">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold tracking-tight text-white dark:bg-zinc-100 dark:text-slate-900">
+            LK
+          </span>
+          <span className="hidden text-sm font-semibold tracking-tight sm:inline">L-K Shift</span>
         </Link>
-      </div>
 
-      <div className="hidden shrink-0 items-center gap-2 text-[11px] font-mono tracking-wide text-[#433b5c] dark:text-[#c9c0e8] md:flex">
-        <span className="sonomir-live-dot relative inline-flex h-2.5 w-2.5 rounded-full">
-          <span className="absolute inset-0 animate-ping rounded-full bg-[#cdff4d] opacity-50" />
-        </span>
-        <span>{isRtl ? 'النظام نشط · L-K Shift Live' : 'System Live · L-K Shift'}</span>
-      </div>
+        <DesktopNav locale={locale} />
 
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        <Link
-          href={`/${locale}/attendance`}
-          prefetch
-          aria-label={isRtl ? 'تسجيل الحضور' : 'Open attendance'}
-          title={isRtl ? 'تسجيل الحضور' : 'Open attendance'}
-          className="inline-flex h-9 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-[#46f4ff] via-[#9d6bff] to-[#ff2bd6] px-2 text-[11px] font-black text-[#050309] shadow-md shadow-[#9d6bff]/20 transition hover:-translate-y-0.5 sm:px-3"
-        >
-          {isRtl ? <ArrowUpLeft size={15} /> : <ArrowUpRight size={15} />}
-          <span className="hidden sm:inline">{isRtl ? 'الحضور' : 'Attendance'}</span>
-        </Link>
-        <ThemeToggle />
-        {!hasAudioUnlocked && (
-          <button
-            type="button"
-            onClick={handleUnlockAudioAndPush}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#9d6bff]/30 bg-violet-50 text-[#433b5c] shadow-sm transition hover:bg-violet-100 dark:bg-[#110e1f] dark:text-[#c9c0e8]"
-            title="انقر لتفعيل صوت التنبيهات وإشعارات الهاتف"
+        <div className="ms-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <ThemeToggle />
+          <Link
+            href={localizedPath}
+            className="inline-flex h-9 min-w-10 items-center justify-center rounded-lg border border-slate-200 px-2 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+            aria-label={isRtl ? 'Switch to English' : 'التبديل إلى العربية'}
+            title={isRtl ? 'English' : 'العربية'}
           >
-            <Volume2 size={14} />
-          </button>
-        )}
-
-        <div className="relative" ref={dropdownRef}>
-          <button
-            type="button"
-            onClick={() => {
-              if (!hasAudioUnlocked) handleUnlockAudioAndPush();
-              setShowDropdown(!showDropdown);
-            }}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-violet-950/10 bg-violet-50 text-[#433b5c] transition hover:bg-violet-100 dark:border-[#c4b2ff]/15 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530]"
-            title="الإشعارات"
-          >
-            <Bell size={17} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white shadow-md animate-pulse">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
-
-          {showDropdown && (
-            <div
-              dir={isRtl ? 'rtl' : 'ltr'}
-              className="absolute top-full left-0 z-50 mt-2 flex w-80 max-w-[calc(100vw-1rem)] flex-col rounded-2xl border border-violet-950/10 bg-white p-3 text-[#433b5c] shadow-2xl dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:text-[#c9c0e8] sm:w-96"
+            {nextLocale.toUpperCase()}
+          </Link>
+          {!hasAudioUnlocked && (
+            <button
+              type="button"
+              onClick={handleUnlockAudioAndPush}
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#1c1e24] sm:flex"
+              title={isRtl ? 'تفعيل التنبيهات الصوتية' : 'Enable audio notifications'}
+              aria-label={isRtl ? 'تفعيل التنبيهات الصوتية' : 'Enable audio notifications'}
             >
-              <div className="flex items-center justify-between border-b border-violet-950/10 px-2 pb-2.5 dark:border-[#c4b2ff]/15">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-[#0a0814] dark:text-[#f6f0ff]">قائمة الإشعارات</span>
+              <Volume2 size={16} />
+            </button>
+          )}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!hasAudioUnlocked) void handleUnlockAudioAndPush();
+                setShowNotifications((open) => !open);
+              }}
+              className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+              title={isRtl ? 'الإشعارات' : 'Notifications'}
+              aria-label={isRtl ? 'الإشعارات' : 'Notifications'}
+              aria-expanded={showNotifications}
+            >
+              <Bell size={17} />
+              {unreadCount > 0 && (
+                <span className="absolute end-1 top-1 h-2 w-2 rounded-full bg-orange-600 ring-2 ring-white dark:bg-orange-500 dark:ring-[#141519]" />
+              )}
+            </button>
+            {showNotifications && (
+              <div
+                dir={isRtl ? 'rtl' : 'ltr'}
+                className="absolute end-0 top-full z-50 mt-2 flex w-80 max-w-[calc(100vw-1.5rem)] flex-col rounded-xl border border-slate-200 bg-white p-3 text-slate-700 shadow-lg dark:border-white/[0.08] dark:bg-[#141519] dark:text-zinc-300 sm:w-96"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 px-1 pb-2.5 dark:border-white/[0.08]">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-zinc-100">
+                    {isRtl ? 'الإشعارات' : 'Notifications'}
+                  </span>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-600">
-                      {unreadCount} غير مقروء
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void handleMarkAllAsRead()}
+                      className="flex items-center gap-1 text-[11px] font-medium text-orange-600 hover:text-orange-700 dark:text-orange-500"
+                    >
+                      <CheckCheck size={13} />
+                      {isRtl ? 'تحديد الكل كمقروء' : 'Mark all read'}
+                    </button>
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAllAsRead}
-                    className="flex items-center gap-1 text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
-                  >
-                    <CheckCheck size={13} />
-                    <span>تحديد الكل كمقروء</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-1 flex max-h-80 flex-col divide-y divide-violet-950/10 overflow-y-auto custom-scrollbar dark:divide-[#c4b2ff]/15">
-                {notifications.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400">لا توجد إشعارات حالياً</div>
-                ) : (
-                  notifications.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => handleNotificationClick(item)}
-                      className={`flex flex-row items-start gap-3 p-3 transition cursor-pointer rounded-xl text-right w-full ${
-                        item.isRead
-                          ? 'opacity-70 hover:bg-slate-50'
-                          : 'bg-orange-50/60 hover:bg-orange-50 border-r-2 border-orange-500'
-                      }`}
-                    >
-                      <div className="mt-0.5 shrink-0 p-1.5 rounded-lg bg-slate-100">
-                        {getNotificationIcon(item.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="truncate text-xs font-bold text-[#0a0814] dark:text-[#f6f0ff]">
-                            {item.title}
-                          </h4>
-                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                            {new Date(item.createdAt).toLocaleTimeString('ar-EG', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </div>
-                        <p className="mt-1 break-words text-[11px] leading-relaxed text-[#433b5c] dark:text-[#c9c0e8]">
-                          {item.message}
-                        </p>
-                      </div>
+                <div className="mt-1 flex max-h-80 flex-col divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.06]">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-500 dark:text-zinc-400">
+                      {isRtl ? 'لا توجد إشعارات حالياً' : 'No notifications yet'}
                     </div>
-                  ))
-                )}
+                  ) : notifications.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => void handleNotificationClick(item)}
+                      className={`flex w-full items-start gap-3 rounded-lg p-3 text-start transition hover:bg-slate-50 dark:hover:bg-[#1c1e24] ${item.isRead ? 'opacity-70' : ''}`}
+                    >
+                      <span className="mt-0.5 shrink-0">{getNotificationIcon(item.type)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-semibold text-slate-900 dark:text-zinc-100">{item.title}</span>
+                          <span className="shrink-0 font-mono text-[10px] tabular-nums text-slate-500 dark:text-zinc-400">
+                            {new Date(item.createdAt).toLocaleTimeString(locale === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </span>
+                        <span className="mt-1 block break-words text-[11px] leading-relaxed text-slate-600 dark:text-zinc-400">{item.message}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+          <div className="relative" ref={userMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowUserMenu((open) => !open)}
+              className="flex h-9 items-center gap-2 rounded-lg px-2 text-start transition hover:bg-slate-100 dark:hover:bg-[#1c1e24]"
+              aria-expanded={showUserMenu}
+              aria-label={isRtl ? 'قائمة المستخدم' : 'User menu'}
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700 dark:bg-[#1c1e24] dark:text-zinc-200">
+                <UserRound size={15} />
+              </span>
+              <span className="hidden max-w-32 truncate text-xs font-medium text-slate-700 dark:text-zinc-300 xl:block">{userName || userRole || (isRtl ? 'الحساب' : 'Account')}</span>
+            </button>
+            {showUserMenu && (
+              <div className="absolute end-0 top-full z-50 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-white/[0.08] dark:bg-[#141519]">
+                <Link
+                  href={`/${locale}/profile`}
+                  onClick={() => setShowUserMenu(false)}
+                  className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+                >
+                  {isRtl ? 'ملفي الشخصي' : 'My profile'}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+                >
+                  <LogOut size={15} />
+                  {isRtl ? 'تسجيل الخروج' : 'Sign out'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-500/20 bg-rose-500/10 text-rose-600 transition hover:bg-rose-500/20 sm:w-auto sm:gap-1.5 sm:px-3.5 sm:py-1.5 sm:text-xs sm:font-bold"
-        >
-          <LogOut size={13} />
-          <span className="hidden sm:inline">{isRtl ? 'خروج' : 'Sign out'}</span>
-        </button>
       </div>
     </header>
   );

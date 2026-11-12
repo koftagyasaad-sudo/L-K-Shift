@@ -1,126 +1,54 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Clock,
-  ClipboardCheck,
-  Calendar,
-  Users,
   Building2,
+  CalendarDays,
+  Clock3,
+  Ellipsis,
+  LayoutDashboard,
   Shield,
-  Briefcase,
+  Users,
+  Wallet,
+  UserRound,
+  ClipboardCheck,
+  BriefcaseBusiness,
   CheckCircle2,
-  UserCheck,
-  LogOut,
-  ChevronRight,
 } from 'lucide-react';
-
-interface SidebarProps {
-  locale?: string;
-  collapsed?: boolean;
-  mobileOpen?: boolean;
-  onMobileOpenChange?: (open: boolean) => void;
-}
 
 interface NavItem {
   titleAr: string;
   titleEn: string;
   href: string;
-  icon: React.ElementType;
+  icon: typeof Clock3;
   adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
-  {
-    titleAr: 'لوحة التحكم',
-    titleEn: 'Dashboard',
-    href: '/admin/dashboard',
-    icon: LayoutDashboard,
-    adminOnly: true,
-  },
-  {
-    titleAr: 'الحضور والانصراف',
-    titleEn: 'Attendance',
-    href: '/attendance',
-    icon: Clock,
-    adminOnly: false,
-  },
-  {
-    titleAr: 'البيانات الشخصية',
-    titleEn: 'Personal Profile',
-    href: '/profile',
-    icon: UserCheck,
-    adminOnly: false,
-  },
-  {
-    titleAr: 'تقديم إجازة / إذن / سلفة',
-    titleEn: 'Requests',
-    href: '/requests',
-    icon: Calendar,
-    adminOnly: false,
-  },
-  {
-    titleAr: 'مراجعة الحضور والرواتب',
-    titleEn: 'Attendance & Payroll',
-    href: '/admin/attendance-review',
-    icon: ClipboardCheck,
-    adminOnly: true,
-  },
-  {
-    titleAr: 'الموظفين',
-    titleEn: 'Employees',
-    href: '/admin/employees',
-    icon: Users,
-    adminOnly: true,
-  },
-  {
-    titleAr: 'الفروع والورديات',
-    titleEn: 'Branches & Shifts',
-    href: '/admin/branches',
-    icon: Building2,
-    adminOnly: true,
-  },
-  {
-    titleAr: 'الأدوار',
-    titleEn: 'Roles',
-    href: '/admin/roles',
-    icon: Shield,
-    adminOnly: true,
-  },
-  {
-    titleAr: 'التوظيف واستمارات التقديم',
-    titleEn: 'Recruitment',
-    href: '/admin/recruitment',
-    icon: Briefcase,
-    adminOnly: true,
-  },
-  {
-    titleAr: 'اعتماد الإجازات والطلبات',
-    titleEn: 'Leave Approvals',
-    href: '/admin/leave-requests',
-    icon: CheckCircle2,
-    adminOnly: true,
-  },
+const adminItems: NavItem[] = [
+  { titleAr: 'النظرة العامة', titleEn: 'Overview', href: '/admin/dashboard', icon: LayoutDashboard, adminOnly: true },
+  { titleAr: 'الفروع', titleEn: 'Branches', href: '/admin/branches', icon: Building2, adminOnly: true },
+  { titleAr: 'الموظفين', titleEn: 'Employees', href: '/admin/employees', icon: Users, adminOnly: true },
+  { titleAr: 'مراجعة الحضور', titleEn: 'Attendance', href: '/admin/attendance-review', icon: ClipboardCheck, adminOnly: true },
+  { titleAr: 'الطلبات', titleEn: 'Requests', href: '/requests', icon: CalendarDays },
+  { titleAr: 'الرواتب', titleEn: 'Payroll', href: '/admin/attendance-review', icon: Wallet, adminOnly: true },
+  { titleAr: 'الأدوار', titleEn: 'Roles', href: '/admin/roles', icon: Shield, adminOnly: true },
 ];
 
-export default function Sidebar({
-  locale: propLocale,
-  collapsed = false,
-  mobileOpen = false,
-  onMobileOpenChange,
-}: SidebarProps) {
-  const pathname = usePathname() || '';
-  const router = useRouter();
-  const params = useParams();
+const employeeItems: NavItem[] = [
+  { titleAr: 'الحضور', titleEn: 'Attendance', href: '/attendance', icon: Clock3 },
+  { titleAr: 'ملفي الشخصي', titleEn: 'Profile', href: '/profile', icon: UserRound },
+  { titleAr: 'الراتب', titleEn: 'Salary', href: '/employee/salary', icon: Wallet },
+  { titleAr: 'الطلبات', titleEn: 'Requests', href: '/requests', icon: CalendarDays },
+];
 
-  const locale = propLocale || (params?.locale as string) || 'ar';
-  const isRtl = locale === 'ar';
+const secondaryItems: NavItem[] = [
+  { titleAr: 'اعتماد الطلبات', titleEn: 'Approvals', href: '/admin/leave-requests', icon: CheckCircle2, adminOnly: true },
+  { titleAr: 'التوظيف', titleEn: 'Recruitment', href: '/admin/recruitment', icon: BriefcaseBusiness, adminOnly: true },
+];
 
-  const [, setUserName] = useState('');
-  const [userRole, setUserRole] = useState('موظف');
+function useNavigationRole() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -131,29 +59,20 @@ export default function Sidebar({
         return response.json();
       })
       .then((data: {
-        user?: {
-          name?: string;
-          role?: string;
-          systemRole?: string;
-          permissions?: unknown;
-        };
+        user?: { systemRole?: string; permissions?: unknown };
       }) => {
         if (!active) return;
-        const user = data.user;
-        const role = user?.role || 'موظف';
-        const permissions = Array.isArray(user?.permissions)
-          ? user.permissions.filter((permission): permission is string => typeof permission === 'string')
+        const permissions = Array.isArray(data.user?.permissions)
+          ? data.user.permissions.filter((permission): permission is string => typeof permission === 'string')
           : [];
-        setUserName(user?.name || '');
-        setUserRole(role);
         setIsAdmin(
-          user?.systemRole !== 'EMPLOYEE'
-          && (user?.systemRole === 'SUPER_ADMIN' || permissions.length > 0)
+          data.user?.systemRole !== 'EMPLOYEE'
+          && (data.user?.systemRole === 'SUPER_ADMIN' || permissions.length > 0)
         );
       })
       .catch((error: unknown) => {
         if (!active) return;
-        console.error('Failed to load sidebar permissions:', error);
+        console.error('Failed to load navigation permissions:', error);
         setIsAdmin(false);
       });
 
@@ -162,132 +81,166 @@ export default function Sidebar({
     };
   }, []);
 
-  const handleLogout = () => {
-    try {
-      localStorage.clear();
-      router.push(`/${locale}/login`);
-      router.refresh();
-    } catch (error) {
-      console.error('Failed to clear local session data:', error);
-      router.push(`/${locale}/login`);
-    }
-  };
+  return isAdmin;
+}
 
-  const visibleNavItems = navItems.filter((item) => {
-    if (!item.adminOnly) return true;
-    return isAdmin;
-  });
-  const closeMobileSidebar = () => onMobileOpenChange?.(false);
+function isItemActive(pathname: string, locale: string, href: string) {
+  const localizedHref = `/${locale}${href}`;
+  return pathname === localizedHref || pathname.startsWith(`${localizedHref}/`);
+}
+
+export function DesktopNav({ locale }: { locale: string }) {
+  const pathname = usePathname() || '';
+  const isRtl = locale === 'ar';
+  const isAdmin = useNavigationRole();
+  const [showMore, setShowMore] = useState(false);
+  const items = (isAdmin ? adminItems : employeeItems).filter((item) => !item.adminOnly || isAdmin);
 
   return (
-    <>
-      {mobileOpen && (
-        <div
-          onClick={closeMobileSidebar}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden"
+    <nav
+      aria-label={isRtl ? 'التنقل الرئيسي' : 'Primary navigation'}
+      className="hidden h-full min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
+    >
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = isItemActive(pathname, locale, item.href);
+        return (
+          <Link
+            key={item.href + item.titleEn}
+            href={`/${locale}${item.href}`}
+            prefetch
+            aria-current={active ? 'page' : undefined}
+            className={`relative flex h-full shrink-0 items-center gap-2 border-b-2 px-2.5 text-xs font-medium transition-colors xl:px-3 ${
+              active
+                ? 'border-orange-600 text-slate-950 dark:border-orange-500 dark:text-zinc-100'
+                : 'border-transparent text-slate-600 hover:text-slate-950 dark:text-zinc-400 dark:hover:text-zinc-100'
+            }`}
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span>{isRtl ? item.titleAr : item.titleEn}</span>
+          </Link>
+        );
+      })}
+      {isAdmin && (
+        <div className="relative flex h-full shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => setShowMore((open) => !open)}
+            aria-expanded={showMore}
+            className={`h-full border-b-2 px-2.5 text-xs font-medium transition-colors xl:px-3 ${
+              showMore
+                ? 'border-orange-600 text-slate-950 dark:border-orange-500 dark:text-zinc-100'
+                : 'border-transparent text-slate-600 hover:text-slate-950 dark:text-zinc-400 dark:hover:text-zinc-100'
+            }`}
+          >
+            {isRtl ? 'المزيد' : 'More'}
+          </button>
+          {showMore && (
+            <div className="absolute end-0 top-full z-50 mt-1 min-w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-white/[0.08] dark:bg-[#141519]">
+              {secondaryItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={`/${locale}${item.href}`}
+                    onClick={() => setShowMore(false)}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {isRtl ? item.titleAr : item.titleEn}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </nav>
+  );
+}
+
+export function MobileBottomNav({ locale }: { locale: string }) {
+  const pathname = usePathname() || '';
+  const isRtl = locale === 'ar';
+  const isAdmin = useNavigationRole();
+  const [showMore, setShowMore] = useState(false);
+  const items = isAdmin ? adminItems.slice(0, 4) : employeeItems;
+  const moreItems = isAdmin ? secondaryItems : [];
+
+  return (
+    <div className="lg:hidden">
+      {showMore && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/20"
+          aria-label={isRtl ? 'إغلاق القائمة' : 'Close menu'}
+          onClick={() => setShowMore(false)}
         />
       )}
-
-      <aside
-        className={`fixed inset-y-0 ${
-          isRtl ? 'right-0 border-l' : 'left-0 border-r'
-        } z-50 w-72 flex-col justify-between border-violet-950/10 bg-white text-[#0a0814] transition-all duration-300 ease-in-out dark:border-[#c4b2ff]/15 dark:bg-[#0a0814] dark:text-[#f6f0ff] lg:static lg:z-auto lg:flex ${
-          collapsed ? 'lg:w-20' : 'lg:w-72'
-        } ${
-          mobileOpen
-            ? 'flex translate-x-0'
-            : isRtl
-            ? 'hidden translate-x-full lg:translate-x-0'
-            : 'hidden -translate-x-full lg:translate-x-0'
-        }`}
-        dir={isRtl ? 'rtl' : 'ltr'}
-      >
-        {/* الترويسة والشعار */}
-        <div className="flex flex-col border-b border-violet-950/10 p-4 dark:border-[#c4b2ff]/15">
-          <Link
-            href={`/${locale}/profile`}
-            prefetch
-            className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} group cursor-pointer`}
-            title="البيانات الشخصية"
-          >
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#46f4ff] via-[#9d6bff] to-[#ff2bd6] p-1.5 shadow-md shadow-[#9d6bff]/20 transition-transform group-hover:scale-105">
-              <img
-                src="/Logo.png"
-                alt="L-K Shift Logo"
-                className="h-full w-full object-contain filter drop-shadow-sm brightness-110"
-              />
-            </div>
-            {!collapsed && (
-              <div className="overflow-hidden">
-                <h2 className="truncate text-base font-black tracking-wide text-[#0a0814] transition group-hover:text-[#9d6bff] dark:text-[#f6f0ff]">
-                  L-K Shift
-                </h2>
-                <span className="inline-block rounded-md bg-violet-500/10 px-2 py-0.5 text-[11px] font-bold text-[#6e42bd] dark:text-[#c9c0e8]">
-                  {userRole || 'موظف'}
-                </span>
-              </div>
-            )}
-          </Link>
-        </div>
-
-        {/* روابط التنقل */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 custom-scrollbar">
-          {visibleNavItems.map((item) => {
+      {showMore && moreItems.length > 0 && (
+        <div
+          className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] end-3 z-40 min-w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-white/[0.08] dark:bg-[#141519]"
+          dir={isRtl ? 'rtl' : 'ltr'}
+        >
+          {moreItems.map((item) => {
             const Icon = item.icon;
-            const fullHref = `/${locale}${item.href}`;
-            const isActive =
-              pathname === fullHref ||
-              (item.href !== '/admin/dashboard' &&
-                item.href !== '/attendance' &&
-                pathname.startsWith(fullHref));
-
             return (
               <Link
                 key={item.href}
-                href={fullHref}
-                prefetch
-                onClick={closeMobileSidebar}
-                title={collapsed ? (isRtl ? item.titleAr : item.titleEn) : undefined}
-                className={`flex items-center ${
-                  collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'
-                } rounded-2xl text-xs font-bold transition-all duration-200 cursor-pointer ${
-                  isActive
-                    ? 'sonomir-iridescent text-[#050309] shadow-lg shadow-[#9d6bff]/20 font-black'
-                    : 'text-[#433b5c] hover:bg-violet-50 hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] dark:hover:text-[#f6f0ff]'
-                }`}
+                href={`/${locale}${item.href}`}
+                onClick={() => setShowMore(false)}
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
               >
-                <Icon
-                  size={19}
-                  className={isActive ? 'text-[#050309]' : 'text-[#756c91] group-hover:text-[#0a0814] dark:text-[#c9c0e8] dark:group-hover:text-[#f6f0ff]'}
-                />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 truncate">{isRtl ? item.titleAr : item.titleEn}</span>
-                    {isActive && <ChevronRight size={14} className={isRtl ? 'rotate-180' : ''} />}
-                  </>
-                )}
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {isRtl ? item.titleAr : item.titleEn}
               </Link>
             );
           })}
         </div>
-
-        {/* زر تسجيل الخروج */}
-        <div className="border-t border-violet-950/10 p-3 dark:border-[#c4b2ff]/15">
+      )}
+      <nav
+        aria-label={isRtl ? 'التنقل الرئيسي' : 'Primary navigation'}
+        className={`fixed inset-x-0 bottom-0 z-40 grid h-[calc(4rem+env(safe-area-inset-bottom))] ${moreItems.length > 0 ? 'grid-cols-5' : 'grid-cols-4'} border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-white/[0.08] dark:bg-[#141519]/95`}
+        dir={isRtl ? 'rtl' : 'ltr'}
+      >
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = isItemActive(pathname, locale, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={`/${locale}${item.href}`}
+              prefetch
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-w-0 flex-col items-center justify-center gap-1 border-t-2 text-[10px] font-medium transition-colors ${
+                active
+                  ? 'border-orange-600 text-orange-600 dark:border-orange-500 dark:text-orange-500'
+                  : 'border-transparent text-slate-500 dark:text-zinc-400'
+              }`}
+            >
+              <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+              <span className="max-w-full truncate px-1">{isRtl ? item.titleAr : item.titleEn}</span>
+            </Link>
+          );
+        })}
+        {moreItems.length > 0 ? (
           <button
             type="button"
-            onClick={handleLogout}
-            title={collapsed ? (isRtl ? 'تسجيل الخروج' : 'Sign Out') : undefined}
-            className={`flex w-full items-center ${
-              collapsed ? 'justify-center p-3' : 'justify-center gap-2.5 px-4 py-3'
-            } rounded-2xl border border-rose-500/20 bg-rose-500/10 text-xs font-bold text-rose-500 hover:bg-rose-500/20 transition-all cursor-pointer`}
+            onClick={() => setShowMore((open) => !open)}
+            aria-expanded={showMore}
+            className={`flex min-w-0 flex-col items-center justify-center gap-1 border-t-2 text-[10px] font-medium ${
+              showMore ? 'border-orange-600 text-orange-600 dark:border-orange-500 dark:text-orange-500' : 'border-transparent text-slate-500 dark:text-zinc-400'
+            }`}
           >
-            <LogOut size={16} />
-            {!collapsed && <span>{isRtl ? 'تسجيل الخروج' : 'Sign Out'}</span>}
+            <Ellipsis className="h-[18px] w-[18px]" aria-hidden="true" />
+            <span>{isRtl ? 'المزيد' : 'More'}</span>
           </button>
-        </div>
-      </aside>
-    </>
+        ) : null}
+      </nav>
+    </div>
   );
 }
 
-export { Sidebar };
+export default function Sidebar() {
+  return null;
+}

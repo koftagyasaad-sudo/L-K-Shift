@@ -130,31 +130,28 @@ export default function LoginPage() {
 
   return (
     <div
-      className="relative flex min-h-screen w-full max-w-full flex-col items-center justify-center overflow-hidden bg-[#f6f5ff] p-4 text-[#0a0814] dark:bg-[#050309] dark:text-[#f6f0ff]"
+      className="relative flex min-h-screen w-full max-w-full flex-col items-center justify-center overflow-hidden bg-[#f8f9fa] p-4 text-slate-900 dark:bg-[#0c0d10] dark:text-zinc-100"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <ThemeToggle className="absolute end-4 top-4 z-20" />
       {'\n'}
-      <div className="pointer-events-none absolute left-1/4 top-1/4 h-96 w-96 rounded-full bg-[#46f4ff]/15 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-1/4 right-1/4 h-96 w-96 rounded-full bg-[#ff2bd6]/10 blur-3xl" />
-
       {'\n'}
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
             src="/Logo.png"
             alt="L-K Shift Logo"
-            className="h-20 w-auto mb-3 drop-shadow-xl mix-blend-screen object-contain"
+            className="mb-3 h-20 w-auto object-contain"
           />
-          <h1 className="sonomir-gradient-text text-3xl font-black tracking-wider">L-K Shift</h1>
-          <p className="mt-2 text-xs font-medium text-[#433b5c] dark:text-[#c9c0e8]">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-zinc-100">L-K Shift</h1>
+          <p className="mt-2 text-xs font-medium text-slate-600 dark:text-zinc-400">
             {isRtl ? 'نظام إدارة الحضور والانصراف والورديات الميدانية' : 'Attendance & Shift Management System'}
           </p>
         </div>
 
         {'\n'}
-        <div className="sonomir-auth-card w-full backdrop-blur-2xl">
-          <div className="mb-6 flex rounded-2xl border border-violet-950/10 bg-violet-50 p-1 dark:border-[#c4b2ff]/10 dark:bg-[#050309]">
+        <div className="w-full rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8 dark:border-white/[0.08] dark:bg-[#141519]">
+          <div className="mb-6 flex rounded-xl border border-slate-200/90 bg-slate-50 p-1 dark:border-white/[0.08] dark:bg-[#0c0d10]">
             <button
               type="button"
               onClick={() => {
@@ -164,8 +161,8 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'LOGIN'
-                  ? 'sonomir-iridescent text-[#050309] shadow-md'
-                  : 'text-[#756c91] hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:text-[#f6f0ff]'
+                  ? 'bg-white text-orange-600 shadow-sm dark:bg-[#1c1e24] dark:text-orange-500'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
               {isRtl ? 'تسجيل الدخول' : 'Sign In'}
@@ -179,8 +176,8 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'REGISTER'
-                  ? 'sonomir-iridescent text-[#050309] shadow-md'
-                  : 'text-[#756c91] hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:text-[#f6f0ff]'
+                  ? 'bg-white text-orange-600 shadow-sm dark:bg-[#1c1e24] dark:text-orange-500'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
               {isRtl ? 'إنشاء حساب موظف' : 'New Account'}
@@ -216,7 +213,7 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={isRtl ? 'أدخل رقم الهاتف المسجل' : '01xxxxxxxxx'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left text-sm"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-900 placeholder:text-slate-500 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/20"
                   dir="ltr"
                 />
               </div>
@@ -234,7 +231,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   showLabel={isRtl ? 'إظهار كلمة المرور' : 'Show password'}
                   hideLabel={isRtl ? 'إخفاء كلمة المرور' : 'Hide password'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-900 placeholder:text-slate-500 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/20"
                   dir="ltr"
                 />
               </div>
@@ -242,7 +239,7 @@ export default function LoginPage() {
               <div className="flex justify-end pt-0.5">
                 <Link
                   href={`/${locale}/forgot-password`}
-                  className="text-xs font-medium text-[#6e42bd] transition-colors hover:text-[#9d6bff] dark:text-[#c9c0e8] dark:hover:text-[#46f4ff]"
+                  className="text-xs font-medium text-orange-600 transition-colors hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400"
                 >
                   {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
                 </Link>
@@ -251,7 +248,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="sonomir-iridescent mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-[#050309] shadow-lg shadow-[#9d6bff]/25 transition-all hover:-translate-y-0.5 disabled:opacity-70"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-70"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -276,7 +273,7 @@ export default function LoginPage() {
                   value={regFullName}
                   onChange={(e) => setRegFullName(e.target.value)}
                   placeholder={isRtl ? 'أدخل اسمك رباعي' : 'Enter full name'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-sm"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-500 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/20"
                 />
               </div>
 
@@ -293,7 +290,7 @@ export default function LoginPage() {
                   value={regPhone}
                   onChange={(e) => setRegPhone(e.target.value)}
                   placeholder="01xxxxxxxxx"
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-all text-left text-sm"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-900 placeholder:text-slate-500 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/20"
                   dir="ltr"
                 />
               </div>
@@ -310,7 +307,7 @@ export default function LoginPage() {
                   placeholder="6 أحرف أو أرقام على الأقل"
                   showLabel={isRtl ? 'إظهار كلمة المرور' : 'Show password'}
                   hideLabel={isRtl ? 'إخفاء كلمة المرور' : 'Hide password'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-900 placeholder:text-slate-500 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/20"
                   dir="ltr"
                 />
               </div>
@@ -327,7 +324,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   showLabel={isRtl ? 'إظهار تأكيد كلمة المرور' : 'Show password confirmation'}
                   hideLabel={isRtl ? 'إخفاء تأكيد كلمة المرور' : 'Hide password confirmation'}
-                  className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-900 placeholder:text-slate-500 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-orange-500 dark:focus:ring-orange-500/20"
                   dir="ltr"
                 />
               </div>
@@ -335,7 +332,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="sonomir-iridescent mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold text-[#050309] shadow-lg shadow-[#9d6bff]/25 transition-all hover:-translate-y-0.5 disabled:opacity-70"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-70"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -350,9 +347,9 @@ export default function LoginPage() {
           )}
 
           {'\n'}
-          <div className="mt-6 flex flex-col items-center gap-1 border-t border-violet-950/10 pt-4 text-center text-[11px] text-[#433b5c] dark:border-[#c4b2ff]/10 dark:text-[#c9c0e8]">
+          <div className="mt-6 flex flex-col items-center gap-1 border-t border-slate-200/90 pt-4 text-center text-[11px] text-slate-600 dark:border-white/[0.08] dark:text-zinc-400">
             <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
-            <span className="font-semibold text-[#6e42bd] dark:text-[#9d6bff]">Developed by Omar Abd Elhalim</span>
+            <span className="font-medium">Developed by Omar Abd Elhalim</span>
           </div>
         </div>
       </div>

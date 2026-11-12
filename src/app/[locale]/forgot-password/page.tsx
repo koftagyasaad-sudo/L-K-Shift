@@ -180,22 +180,19 @@ export default function ForgotPasswordPage() {
 
   return (
     <div
-      className="relative flex min-h-screen w-full max-w-full items-center justify-center overflow-hidden bg-[#f6f5ff] p-4 text-[#0a0814] dark:bg-[#050309] dark:text-[#f6f0ff]"
+      className="relative flex min-h-screen w-full max-w-full items-center justify-center overflow-hidden bg-[#f8f9fa] p-4 text-slate-900 dark:bg-[#0c0d10] dark:text-zinc-100"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <ThemeToggle className="absolute end-4 top-4 z-20" />
-      {/* هالة خلفية متدرجة */}
-      <div className="pointer-events-none absolute h-96 w-96 rounded-full bg-[#9d6bff]/10 blur-3xl" />
-
       {'\n'}
-      <div className="sonomir-auth-card relative z-10 w-full max-w-md space-y-6">
+      <div className="relative z-10 w-full max-w-md space-y-6 rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm sm:p-8 dark:border-white/[0.08] dark:bg-[#141519]">
         {/* اللوجو والعنوان */}
         <div className="text-center space-y-2">
-          <div className="sonomir-iridescent mx-auto flex h-16 w-16 items-center justify-center rounded-2xl p-2 shadow-lg shadow-[#9d6bff]/20">
-            <img src="/Logo.png" alt="Logo" className="w-full h-full object-contain filter drop-shadow brightness-110" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 p-2 dark:bg-[#1c1e24]">
+            <img src="/Logo.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
-          <h1 className="sonomir-gradient-text text-xl font-black tracking-tight">استعادة كلمة المرور (OTP)</h1>
-          <p className="text-xs text-[#433b5c] dark:text-[#c9c0e8]">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-zinc-100">استعادة كلمة المرور (OTP)</h1>
+          <p className="text-xs text-slate-600 dark:text-zinc-400">
             {step === 1 && 'أدخل رقم هاتفك لاستلام رمز التحقق في رسالة نصية قصيرة'}
             {step === 2 && `أدخل كود التحقق المرسل في رسالة SMS إلى هاتفك (${phone})`}
             {step === 3 && 'قم بإنشاء كلمة مرور قوية وجديدة لحسابك'}
@@ -238,7 +235,7 @@ export default function ForgotPasswordPage() {
               </p>
               <Link
                 href={`/${locale}/login`}
-                className="mt-3 inline-flex font-bold text-[#6e42bd] underline underline-offset-2 hover:text-[#9d6bff] dark:text-[#c9c0e8] dark:hover:text-[#46f4ff]"
+                className="mt-3 inline-flex font-medium text-orange-600 underline underline-offset-2 hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400"
               >
                 العودة إلى تسجيل الدخول
               </Link>
@@ -256,7 +253,7 @@ export default function ForgotPasswordPage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="01xxxxxxxxx"
-                  className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white font-mono focus:outline-none focus:border-orange-500 transition text-left"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left font-mono text-xs text-slate-900 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:focus:border-orange-500"
                   dir="ltr"
                 />
                 <Phone size={16} className="absolute right-4 top-3.5 text-slate-500" />
@@ -266,7 +263,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="sonomir-iridescent flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-black text-[#050309] shadow-lg shadow-[#9d6bff]/20 transition hover:-translate-y-0.5 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-3.5 text-xs font-semibold text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
               <span>إرسال رمز التحقق OTP في رسالة SMS</span>
@@ -299,7 +296,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="sonomir-iridescent flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-xs font-black text-[#050309] shadow-lg shadow-[#9d6bff]/20 transition hover:-translate-y-0.5 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-3.5 text-xs font-semibold text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
               <span>تأكيد الكود ومتابعة</span>
@@ -340,7 +337,7 @@ export default function ForgotPasswordPage() {
                 placeholder="أدخل كلمة مرور قوية"
                 autoComplete="new-password"
                 dir="ltr"
-                className="w-full rounded-2xl border border-violet-950/15 bg-violet-50 px-4 py-3 text-left text-xs text-[#0a0814] transition focus:border-[#9d6bff] focus:outline-none dark:border-[#c4b2ff]/15 dark:bg-[#050309] dark:text-[#f6f0ff]"
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-xs text-slate-900 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:focus:border-orange-500"
               />
             </div>
 
@@ -353,13 +350,13 @@ export default function ForgotPasswordPage() {
                 placeholder="أعد إدخال كلمة المرور"
                 autoComplete="new-password"
                 dir="ltr"
-                className="w-full rounded-2xl border border-violet-950/15 bg-violet-50 px-4 py-3 text-left text-xs text-[#0a0814] transition focus:border-[#9d6bff] focus:outline-none dark:border-[#c4b2ff]/15 dark:bg-[#050309] dark:text-[#f6f0ff]"
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-xs text-slate-900 transition focus:border-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-600/20 dark:border-white/[0.08] dark:bg-[#0c0d10] dark:text-zinc-100 dark:focus:border-orange-500"
               />
             </div>
 
             {/* الحد الأدنى لطول كلمة المرور */}
-            <div className="space-y-1 rounded-2xl border border-violet-950/10 bg-violet-50 p-3 text-[11px] dark:border-[#c4b2ff]/10 dark:bg-[#050309]">
-              <span className="mb-1 block font-bold text-[#433b5c] dark:text-[#c9c0e8]">الحد الأدنى لطول كلمة المرور:</span>
+            <div className="space-y-1 rounded-xl border border-slate-200/90 bg-slate-50 p-3 text-[11px] dark:border-white/[0.08] dark:bg-[#0c0d10]">
+              <span className="mb-1 block font-semibold text-slate-600 dark:text-zinc-400">الحد الأدنى لطول كلمة المرور:</span>
               <p className={meetsPasswordMinimum(newPassword) ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
                 ✓ 6 محارف على الأقل
               </p>
@@ -368,7 +365,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white font-black text-xs shadow-lg shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 py-3.5 text-xs font-semibold text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={15} />}
               <span>تحديث وتأكيد كلمة المرور الآن</span>
@@ -378,10 +375,10 @@ export default function ForgotPasswordPage() {
 
         {'\n'}
         {/* العودة لتسجيل الدخول */}
-        <div className="border-t border-violet-950/10 pt-2 text-center dark:border-[#c4b2ff]/10">
+        <div className="border-t border-slate-200/90 pt-2 text-center dark:border-white/[0.08]">
           <Link
             href={`/${locale}/login`}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#433b5c] transition hover:text-[#0a0814] dark:text-[#c9c0e8] dark:hover:text-[#f6f0ff]"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 transition hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
             <ArrowRight size={13} />
             <span>العودة إلى صفحة تسجيل الدخول</span>

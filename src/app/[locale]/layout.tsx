@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Cairo } from 'next/font/google';
+import { IBM_Plex_Sans_Arabic } from 'next/font/google';
 import '../globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { AppProviders } from '@/components/providers/app-providers';
@@ -7,9 +7,10 @@ import PwaInstallEventCapture from '@/components/PwaInstallEventCapture';
 import arabicMessages from '../../../messages/ar.json';
 import englishMessages from '../../../messages/en.json';
 
-const cairo = Cairo({
+const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ['arabic', 'latin'],
-  variable: '--font-cairo',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-ibm-plex-arabic',
 });
 
 export const metadata: Metadata = {
@@ -55,7 +56,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
-      <body className={`${cairo.variable} font-sans antialiased`}>
+      <body className={`${ibmPlexSansArabic.variable} font-sans antialiased`}>
         <NextIntlClientProvider messages={publicMessages}>
           {'\n'}
           <AppProviders>

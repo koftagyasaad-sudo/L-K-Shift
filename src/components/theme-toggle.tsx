@@ -28,12 +28,12 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-violet-950/15 bg-white px-2.5 text-xs font-bold text-[#433b5c] shadow-sm transition hover:bg-violet-50 dark:border-[#c4b2ff]/20 dark:bg-[#110e1f] dark:text-[#c9c0e8] dark:hover:bg-[#1a1530] ${className}`}
+      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-white/[0.08] dark:bg-[#141519] dark:text-zinc-400 dark:hover:bg-[#1c1e24] ${className}`}
       aria-label={actionLabel}
       title={actionLabel}
       type="button"
     >
-      {isDark ? <Moon className="h-4 w-4 text-[#c9c0e8]" /> : <Sun className="h-4 w-4 text-amber-500" />}
+      {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
       <span>{label}</span>
     </button>
   );
