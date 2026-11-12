@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export interface EmployeeFormData {
-  id?: string | number;
+  id?: string;
   name?: string;
   phone?: string;
   role?: string;
-  branchId?: string | number | null;
+  branchId?: string | null;
   employeeCode?: string;
   basicSalary?: number | string;
   annualLeaveDays?: number | string;
@@ -19,7 +19,7 @@ export interface EmployeeFormData {
 
 interface EmployeeFormProps {
   initialData?: EmployeeFormData | null;
-  branches?: Array<{ id: string | number; name?: string; nameAr?: string; name_ar?: string }>;
+  branches?: Array<{ id: string; name?: string; nameAr?: string; name_ar?: string }>;
   roles?: Array<{ id: string | number; name?: string; nameAr?: string; name_ar?: string }>;
   locale?: string;
   onSuccess?: () => void;
@@ -106,7 +106,7 @@ export default function EmployeeForm({
       phone: phone.trim(),
       password: password ? password.trim() : '123456',
       employeeCode: employeeCode.trim(),
-      branchId: branchId ? parseInt(branchId, 10) : null,
+      branchId: branchId || null,
       role: role.trim(),
       basicSalary: parseFloat(basicSalary) || 0,
       workingHoursPerDay: parseInt(workingHoursPerDay, 10) || 8,

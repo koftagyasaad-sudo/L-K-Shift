@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         u.is_active as "isActive",
         b.name_ar as "branchName"
       FROM users u
-      LEFT JOIN branches b ON u.primary_branch_id = b.id
+      LEFT JOIN branches b ON u.primary_branch_id::text = b.id::text
       WHERE u.id::text = ${employeeId}
       LIMIT 1;
     `);

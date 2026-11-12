@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 interface EmployeeItem {
-  id: number;
+  id: string;
   fullNameAr: string;
   fullNameEn: string;
   phone: string;
@@ -51,7 +51,7 @@ interface EmployeeItem {
   workingHoursPerDay: number;
   workingDaysPerMonth: number;
   isActive: boolean;
-  branchId: number;
+  branchId: string | null;
   branchName: string;
   hireDate: string;
   shiftName?: string;
@@ -60,7 +60,7 @@ interface EmployeeItem {
 }
 
 interface BranchOption {
-  id: number;
+  id: string;
   name: string;
   nameAr: string;
 }
@@ -168,7 +168,7 @@ export default function EmployeesManagementPage() {
       if (resB.ok) {
         const dataB = await resB.json();
         const mappedB: BranchOption[] = (Array.isArray(dataB) ? dataB : []).map((b: {
-          id: number;
+          id: string;
           name?: string;
           nameAr?: string;
           name_ar?: string;
@@ -229,7 +229,7 @@ export default function EmployeesManagementPage() {
         phone: emp.phone,
         employeeCode: emp.employeeCode || '',
         role: emp.role || 'عضو مطبخ',
-        branchId: emp.branchId || (allBranches[0]?.id ?? 1),
+        branchId: emp.branchId || allBranches[0]?.id || '',
         monthlySalary: emp.monthlySalary || 5000,
         workingHoursPerDay: emp.workingHoursPerDay || 8,
         isActive: emp.isActive !== false,
@@ -244,7 +244,7 @@ export default function EmployeesManagementPage() {
         phone: '',
         employeeCode: '',
         role: 'عضو مطبخ',
-        branchId: allBranches[0]?.id ?? 1,
+        branchId: allBranches[0]?.id || '',
         monthlySalary: 5000,
         workingHoursPerDay: 8,
         isActive: true,
@@ -516,8 +516,8 @@ export default function EmployeesManagementPage() {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">فرع العمل *</label>
                   <select
-                    value={editingEmp.branchId || (allBranches[0]?.id ?? 1)}
-                    onChange={(e) => setEditingEmp({ ...editingEmp, branchId: Number(e.target.value) })}
+                    value={editingEmp.branchId || allBranches[0]?.id || ''}
+                    onChange={(e) => setEditingEmp({ ...editingEmp, branchId: e.target.value || null })}
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-orange-500 cursor-pointer"
                   >
                     {allBranches.map((b) => (

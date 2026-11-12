@@ -12,7 +12,7 @@ interface PageProps {
 }
 
 interface ManagerOption {
-  id: string | number;
+  id: string;
   name?: string;
   fullName?: string;
   role?: string;

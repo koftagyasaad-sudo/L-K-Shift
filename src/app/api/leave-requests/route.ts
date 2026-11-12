@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'معرف المستخدم غير صالح' }, { status: 400 });
     }
     const isSelf = requestedId === authorization.principal.id;
-    const canView = ['leaves.view', 'leaves.approve', 'staff_requests.manage'].some((permission) =>
+    const canView = authorization.principal.systemRole === 'SUPER_ADMIN'
+      || ['leaves.view', 'leaves.approve', 'staff_requests.manage'].some((permission) =>
       hasApiPermission(authorization.principal, permission)
     );
     if (!isSelf && !canView) {
@@ -73,8 +74,8 @@ export async function GET(request: NextRequest) {
         COALESCE(r.rejection_reason, '') as "rejectionReason",
         r.created_at as "createdAt"
       FROM leave_requests r
-      LEFT JOIN users u ON r.user_id = u.id
-      LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
+      LEFT JOIN users u ON r.user_id::text = u.id::text
+      LEFT JOIN branches b ON COALESCE(u.primary_branch_id::text, u.branch_id::text) = b.id::text
       WHERE ${userFilter}
         AND ${branchFilter}
       ORDER BY r.id DESC
@@ -164,7 +165,7 @@ export async function PATCH(request: NextRequest) {
       SELECT r.user_id, r.request_type, r.leave_type,
              COALESCE(u.primary_branch_id, u.branch_id) AS branch_id
       FROM leave_requests r
-      LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN users u ON u.id::text = r.user_id::text
       WHERE r.id = ${reqNumericId} LIMIT 1;
     `);
     const reqRows = resultRows<{

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, ilike, or } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { notifications, users } from '@/db/schema';
+import { getSqlRows } from '@/lib/db';
 import { hashPassword } from '@/lib/passwords';
 import { meetsPasswordMinimum } from '@/lib/password-policy';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
@@ -67,16 +69,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        fullNameAr: fullName,
-        phone,
-        passwordHash: await hashPassword(password),
-        systemRole: 'EMPLOYEE',
-        jobRole: 'موظف',
-      })
-      .returning({ id: users.id });
+    const insertedUsers = getSqlRows<{ id: string }>(await db.execute(sql`
+      INSERT INTO users (id, full_name_ar, name, phone, password_hash, system_role, job_role)
+      VALUES (
+        ${randomUUID()},
+        ${fullName},
+        COALESCE(NULLIF(${fullName}, ''), ${fullName}),
+        ${phone},
+        ${await hashPassword(password)},
+        'EMPLOYEE',
+        'موظف'
+      )
+      RETURNING id;
+    `));
+    const newUser = insertedUsers[0];
     if (!newUser) throw new Error('Registration did not return a user record.');
 
     let notificationStatus: 'sent' | 'not_required' | 'failed' = 'not_required';

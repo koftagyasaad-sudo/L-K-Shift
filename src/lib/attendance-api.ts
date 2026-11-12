@@ -304,7 +304,8 @@ export async function getAttendanceRecords(
   principal: ApiPrincipal,
   searchParams: URLSearchParams
 ): Promise<AttendanceRecord[]> {
-  const canViewAll = hasApiPermission(principal, "attendance.view")
+  const canViewAll = principal.systemRole === "SUPER_ADMIN"
+    || hasApiPermission(principal, "attendance.view")
     || hasApiPermission(principal, "attendance.review")
     || hasApiPermission(principal, "attendance.export");
   const canViewPayroll = hasApiPermission(principal, "payroll.view")
@@ -361,8 +362,8 @@ export async function getAttendanceRecords(
       branchName: branches.nameAr,
     })
     .from(attendanceLogs)
-    .leftJoin(users, eq(attendanceLogs.userId, users.id))
-    .leftJoin(branches, eq(attendanceLogs.branchId, branches.id))
+    .leftJoin(users, sql`${attendanceLogs.userId}::text = ${users.id}::text`)
+    .leftJoin(branches, sql`${attendanceLogs.branchId}::text = ${branches.id}::text`)
     .where(and(...conditions))
     .orderBy(desc(attendanceLogs.workDate), desc(attendanceLogs.id))
     .limit(500);

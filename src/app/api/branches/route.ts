@@ -31,16 +31,16 @@ export async function GET() {
 
     const raw = await db.execute(sql`
       SELECT 
-        b.id,
+        b.id::text as id,
         COALESCE(b.name, 'Branch') as name,
         COALESCE(b.name_en, b.name, 'Branch') as "nameEn",
         COALESCE(b.name_ar, b.name, 'فرع') as name_ar,
         COALESCE(b.name_ar, b.name, 'فرع') as "nameAr",
         COALESCE(b.latitude, 31.1308) as latitude,
         COALESCE(b.longitude, 30.6475) as longitude,
-        COALESCE(b.geofence_radius, 100) as geofence_radius,
-        COALESCE(b.geofence_radius, 100) as "geofenceRadius",
-        b.manager_id as "managerId",
+        GREATEST(COALESCE(b.geofence_radius, 100), 100) as geofence_radius,
+        GREATEST(COALESCE(b.geofence_radius, 100), 100) as "geofenceRadius",
+        b.manager_id::text as "managerId",
         COALESCE(u.full_name_ar, u.name, '') as "managerName",
         COALESCE(b.phone, '') as phone,
         COALESCE(b.address, '') as address,

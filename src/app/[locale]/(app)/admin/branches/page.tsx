@@ -17,14 +17,14 @@ import {
 } from 'lucide-react';
 
 interface BranchItem {
-  id: number;
+  id: string;
   name: string;
   nameEn: string;
   nameAr: string;
   latitude: number;
   longitude: number;
   geofenceRadius: number;
-  managerId: number | null;
+  managerId: string | null;
   managerName?: string;
   phone?: string;
   address?: string;
@@ -38,7 +38,7 @@ interface BranchItem {
 }
 
 interface UserOption {
-  id: string | number;
+  id: string;
   name: string;
   role: string;
 }
@@ -52,7 +52,7 @@ export default function BranchesManagementPage() {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [, setLoading] = useState(true);
 
-  const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('EDIT');
+  const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('LIST');
 
   const [editingBranch, setEditingBranch] = useState<Partial<BranchItem>>({
     nameAr: '',
@@ -92,7 +92,7 @@ export default function BranchesManagementPage() {
       if (resU.ok) {
         const dataU = await resU.json();
         const mappedUsers: UserOption[] = (Array.isArray(dataU) ? dataU : []).map((u: {
-          id: string | number;
+          id: string;
           fullNameAr?: string;
           name?: string;
           fullName?: string;
@@ -208,7 +208,7 @@ export default function BranchesManagementPage() {
     }
   };
 
-  const handleDeleteBranch = async (id: number, nameAr: string) => {
+  const handleDeleteBranch = async (id: string, nameAr: string) => {
     if (!confirm(`هل أنت متأكد من رغبتك في حذف فرع "${nameAr}" نهائياً من السيستم؟`)) {
       return;
     }
@@ -352,7 +352,7 @@ export default function BranchesManagementPage() {
                   onChange={(e) =>
                     setEditingBranch({
                       ...editingBranch,
-                      managerId: e.target.value ? Number(e.target.value) : null,
+                      managerId: e.target.value || null,
                     })
                   }
                   className="w-full bg-white border border-slate-300 text-slate-900 font-semibold rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-orange-500 transition cursor-pointer"

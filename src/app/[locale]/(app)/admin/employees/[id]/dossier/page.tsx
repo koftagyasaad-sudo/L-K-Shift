@@ -15,7 +15,7 @@ interface PageProps {
 }
 
 interface EmployeeDossier {
-  id: string | number;
+  id: string;
   employeeCode?: string;
   fullName?: string;
   name?: string;

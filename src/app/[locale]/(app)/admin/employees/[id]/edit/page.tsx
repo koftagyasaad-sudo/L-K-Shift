@@ -12,7 +12,7 @@ interface PageProps {
 }
 
 interface BranchOption {
-  id: string | number;
+  id: string;
   name?: string;
   nameAr?: string;
   name_ar?: string;
@@ -91,7 +91,7 @@ export default function EditEmployeePage({ params }: PageProps) {
       phone: phone.trim(),
       password: password.trim(),
       role: role.trim(),
-      branchId: branchId ? parseInt(branchId, 10) : null,
+      branchId: branchId || null,
       basicSalary: parseFloat(basicSalary) || 0,
       annualLeaveDays: parseInt(annualLeaveDays, 10) || 21,
       isActive: Boolean(isActive),

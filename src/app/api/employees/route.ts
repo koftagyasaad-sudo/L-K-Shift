@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth';
+import { hashPassword } from '@/lib/passwords';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,6 +14,12 @@ function resultRows<T>(result: unknown): T[] {
     return result.rows as T[];
   }
   return [];
+}
+
+function nullableText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text === '' ? null : text;
 }
 
 export async function GET(request: NextRequest) {
@@ -120,16 +128,22 @@ export async function POST(request: NextRequest) {
       shiftName,
     } = body;
 
-    if (!fullNameAr || !phone) {
+    const normalizedFullNameAr = nullableText(fullNameAr)
+      || nullableText(body.fullName)
+      || nullableText(body.name);
+    const normalizedPhone = nullableText(phone);
+    const salaryValue = monthlySalary ?? body.basicSalary;
+    if (!normalizedFullNameAr || !normalizedPhone) {
       return NextResponse.json({ message: 'الاسم ورقم الهاتف مطلوبان' }, { status: 400 });
     }
 
-    const requestedBranchId = branchId == null || String(branchId).trim() === ''
-      ? authorization.principal.primaryBranchId
-      : String(branchId).trim();
-    if (!requestedBranchId) {
-      return NextResponse.json({ message: 'معرف الفرع غير صالح' }, { status: 400 });
-    }
+    const selectedBranchId = branchId == null ? '' : String(branchId).trim();
+    const fallbackBranchId = authorization.principal.primaryBranchId || '';
+    const requestedBranchId = selectedBranchId && selectedBranchId !== '0' && selectedBranchId !== 'NaN'
+      ? selectedBranchId
+      : fallbackBranchId && fallbackBranchId !== '0' && fallbackBranchId !== 'NaN'
+        ? fallbackBranchId
+        : null;
     if (!canAccessBranch(authorization.principal, requestedBranchId)) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
@@ -151,13 +165,13 @@ export async function POST(request: NextRequest) {
       await db.execute(sql`
         UPDATE users
         SET 
-          full_name_ar = ${fullNameAr},
-          name = ${fullNameAr},
-          phone = ${phone},
+          full_name_ar = ${normalizedFullNameAr},
+          name = ${normalizedFullNameAr},
+          phone = ${normalizedPhone},
           employee_number = COALESCE(NULLIF(TRIM(${employeeCode || ''}), ''), employee_number),
           primary_branch_id = ${requestedBranchId},
           job_role = ${role || 'موظف'},
-          monthly_salary = ${monthlySalary ? parseFloat(monthlySalary) : 5000},
+          monthly_salary = ${salaryValue ? parseFloat(salaryValue) : 5000},
           working_hours_per_day = ${workingHoursPerDay ? parseInt(workingHoursPerDay, 10) : 8},
           is_active = ${isActive !== false},
           shift_start_time = ${shiftStartTime || '10:00'},
@@ -179,14 +193,24 @@ export async function POST(request: NextRequest) {
 
       await db.execute(sql`
         INSERT INTO users (
+          id,
           full_name_ar,
           name,
           phone,
           employee_number,
           password_hash,
           primary_branch_id,
+          branch_id,
           job_role,
           system_role,
+          national_id,
+          email,
+          phone_alt,
+          social_insurance_no,
+          driving_license,
+          address,
+          birth_date,
+          national_id_expiry,
           monthly_salary,
           working_hours_per_day,
           is_active,
@@ -196,15 +220,25 @@ export async function POST(request: NextRequest) {
           created_at,
           updated_at
         ) VALUES (
-          ${fullNameAr},
-          ${fullNameAr},
-          ${phone},
+          ${randomUUID()},
+          ${normalizedFullNameAr},
+          COALESCE(NULLIF(${nullableText(body.name) || ''}, ''), ${normalizedFullNameAr}),
+          ${normalizedPhone},
           ${finalCode},
-          '123456',
+          ${await hashPassword(nullableText(body.password) || '123456')},
+          ${requestedBranchId},
           ${requestedBranchId},
           ${role || 'عضو مطبخ'},
           'EMPLOYEE',
-          ${monthlySalary ? parseFloat(monthlySalary) : 5000},
+          ${nullableText(body.nationalId)},
+          ${nullableText(body.email)},
+          ${nullableText(body.phoneAlt)},
+          ${nullableText(body.socialInsuranceNo)},
+          ${nullableText(body.drivingLicense)},
+          ${nullableText(body.address)},
+          NULLIF(${nullableText(body.birthDate) || ''}, '')::date,
+          NULLIF(${nullableText(body.nationalIdExpiry) || ''}, '')::date,
+          ${salaryValue ? parseFloat(salaryValue) : 5000},
           ${workingHoursPerDay ? parseInt(workingHoursPerDay, 10) : 8},
           true,
           ${shiftStartTime || '10:00'},
