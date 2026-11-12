@@ -1,1 +1,1 @@
-const CACHE_NAME = 'lk-shift-v2026-cairo-nav-v13
+const CACHE_NAME = 'lk-shift-v2026-build-style-v17
