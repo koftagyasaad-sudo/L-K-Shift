@@ -6,7 +6,8 @@ import { meetsPasswordMinimum } from "./password-policy";
 describe("password storage", () => {
   it("accepts passwords with at least six characters", () => {
     expect(meetsPasswordMinimum("12345")).toBe(false);
-    expect(meetsPasswordMinimum("123456")).toBe(true);
+    expect(meetsPasswordMinimum("123456")).toBe(false);
+    expect(meetsPasswordMinimum("Lk@2026")).toBe(true);
   });
 
   it("hashes passwords and verifies them without exposing the original value", async () => {

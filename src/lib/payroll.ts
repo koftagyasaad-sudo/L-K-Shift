@@ -22,6 +22,7 @@ export interface PayrollRequest {
   durationDays: number | null;
   totalDays: number | null;
   advanceAmount: number | string | null;
+  deductionAmount?: number | string | null;
 }
 
 export function calculatePayroll(
@@ -44,17 +45,27 @@ export function calculatePayroll(
     (request) => request.finalStatus === "APPROVED" || request.status === "APPROVED"
   );
   const approvedLeaveDays = approvedRequests
-    .filter((request) => request.requestType !== "ADVANCE")
+    .filter((request) => request.requestType !== "ADVANCE" && request.requestType !== "PENALTY")
     .reduce((total, request) => total + (request.durationDays ?? request.totalDays ?? 0), 0);
   const advanceDeductions = approvedRequests
     .filter((request) => request.requestType === "ADVANCE")
     .reduce((total, request) => total + Number(request.advanceAmount || 0), 0);
+  const penaltyDeductions = approvedRequests
+    .filter((request) => request.requestType === "PENALTY")
+    .reduce(
+      (total, request) =>
+        total + Number(request.deductionAmount || request.advanceAmount || 0),
+      0
+    );
   const workedHours = workedMinutes / 60;
   const overtimeHours = overtimeMinutes / 60;
   const earnedBase = (workedHours + approvedLeaveDays * hoursPerDay) * hourlyRate;
   const overtimePay = overtimeHours * hourlyRate * 1.5;
-  const lateDeduction = lateMinutes * hourlyRate / 60;
-  const netSalary = Math.max(0, earnedBase + overtimePay - lateDeduction - advanceDeductions);
+  const lateDeduction = (lateMinutes * hourlyRate) / 60;
+  const netSalary = Math.max(
+    0,
+    earnedBase + overtimePay - lateDeduction - advanceDeductions - penaltyDeductions
+  );
 
   return {
     userId: employee.id,
@@ -66,9 +77,12 @@ export function calculatePayroll(
     workedHours: Math.round(workedHours),
     workedDays,
     lateMinutes,
+    lateDeduction: Math.round(lateDeduction),
     overtimeHours: Math.round(overtimeHours),
+    overtimePay: Math.round(overtimePay),
     approvedLeaveDays,
     advanceDeductions: Math.round(advanceDeductions),
+    penaltyDeductions: Math.round(penaltyDeductions),
     hourlyRate: hourlyRate.toFixed(2),
     netSalary: Math.round(netSalary),
   };

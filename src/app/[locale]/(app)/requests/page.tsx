@@ -26,7 +26,7 @@ export default function EmployeeRequestsPage() {
 
   // أنواع الطلبات
   const [requestType, setRequestType] = useState<
-    'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST'
+    'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST' | 'PENALTY'
   >('LEAVE');
 
   const [startDate, setStartDate] = useState('');
@@ -44,6 +44,11 @@ export default function EmployeeRequestsPage() {
   const [targetRole, setTargetRole] = useState('عضو مطبخ');
   const [staffCount, setStaffCount] = useState('1');
   const [targetBranch, setTargetBranch] = useState('فرع العمل الحالي');
+  const [employeesList, setEmployeesList] = useState<Array<{ id: string; fullNameAr?: string; name?: string; branchName?: string }>>([]);
+  const [targetUserId, setTargetUserId] = useState('');
+  const [penaltyCategory, setPenaltyCategory] = useState('DEDUCTION_DAYS');
+  const [penaltyDays, setPenaltyDays] = useState('1');
+  const [penaltyAmount, setPenaltyAmount] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -68,6 +73,14 @@ export default function EmployeeRequestsPage() {
       perms.includes('manager');
 
     setIsManager(hasManagerRole);
+    const urlType = new URLSearchParams(window.location.search).get('type');
+    if (urlType === 'PENALTY' && hasManagerRole) setRequestType('PENALTY');
+    if (hasManagerRole) {
+      fetch('/api/employees', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list) => { if (Array.isArray(list)) setEmployeesList(list); })
+        .catch(() => {});
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,11 +108,14 @@ export default function EmployeeRequestsPage() {
           requestType,
           startDate,
           endDate: requestType === 'LEAVE' ? endDate : startDate,
-          durationDays: requestType === 'STAFF_REQUEST' ? staffCount : durationDays,
           advanceAmount,
           reason: finalReason,
           targetRole: requestType === 'STAFF_REQUEST' ? targetRole : null,
           staffCount: requestType === 'STAFF_REQUEST' ? parseInt(staffCount, 10) : 1,
+          targetUserId: requestType === 'PENALTY' ? targetUserId : null,
+          penaltyCategory: requestType === 'PENALTY' ? penaltyCategory : null,
+          durationDays: requestType === 'PENALTY' ? penaltyDays : (requestType === 'STAFF_REQUEST' ? staffCount : durationDays),
+          deductionAmount: requestType === 'PENALTY' ? penaltyAmount : null,
         }),
       });
 
@@ -161,13 +177,14 @@ export default function EmployeeRequestsPage() {
                 { id: 'ADVANCE', label: 'سلفة مالية', icon: DollarSign, visible: true },
                 { id: 'COMPLAINT', label: 'شكوى', icon: MessageSquare, visible: true },
                 { id: 'STAFF_REQUEST', label: 'طلب عمالة', icon: Users2, visible: isManager },
+                { id: 'PENALTY', label: 'جزاء / خصم', icon: AlertCircle, visible: isManager },
               ]
                 .filter((t) => t.visible)
                 .map((t) => (
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setRequestType(t.id as 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST')}
+                    onClick={() => setRequestType(t.id as 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST' | 'PENALTY')}
                     className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
                       requestType === t.id
                         ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white border-orange-500 shadow-md'
@@ -180,6 +197,70 @@ export default function EmployeeRequestsPage() {
                 ))}
             </div>
           </div>
+
+          {requestType === 'PENALTY' && (
+            <div className="sm:col-span-2 bg-rose-500/5 border border-rose-500/25 p-5 rounded-2xl space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-400 border-b border-rose-500/15 pb-2">
+                <AlertCircle size={16} />
+                <span>إرسال جزاء أو خصم إداري إلى HR ومدير النظام (يُضاف تلقائياً لشيت القبض بعد الاعتماد):</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">الموظف المستهدف</label>
+                  <select
+                    required
+                    value={targetUserId}
+                    onChange={(e) => setTargetUserId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="">-- اختر الموظف --</option>
+                    {employeesList.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullNameAr || emp.name} {emp.branchName ? `(${emp.branchName})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">نوع الجزاء / الخصم</label>
+                  <select
+                    value={penaltyCategory}
+                    onChange={(e) => setPenaltyCategory(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="DEDUCTION_DAYS">خصم أيام من الراتب</option>
+                    <option value="DEDUCTION_AMOUNT">خصم مبلغ مالي ثابت (ج.م)</option>
+                    <option value="LATE_PENALTY">جزاء تأخير / عدم التزام بالمواعيد</option>
+                    <option value="POLICY_PENALTY">جزاء مخالفة لائحة العمل / سلوك</option>
+                    <option value="DAMAGE_DEDUCTION">خصم تلفيات / عجز عهدة</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">عدد أيام الخصم (إن وُجد)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="30"
+                    value={penaltyDays}
+                    onChange={(e) => setPenaltyDays(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white font-mono font-bold rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">أو مبلغ خصم محدد بالجنيه (ج.م)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="اتركه فارغاً للحساب التلقائي بالأيام"
+                    value={penaltyAmount}
+                    onChange={(e) => setPenaltyAmount(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 text-white font-mono font-bold rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* في حالة طلب عمالة (للمديرين فقط) */}
           {requestType === 'STAFF_REQUEST' && (

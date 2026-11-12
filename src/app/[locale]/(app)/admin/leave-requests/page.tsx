@@ -25,7 +25,7 @@ interface RequestItem {
   userName: string;
   userPhone: string;
   branchName: string;
-  requestType: 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST';
+  requestType: 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST' | 'PENALTY';
   startDate: string;
   endDate: string;
   durationDays: number;
@@ -158,6 +158,8 @@ export default function LeaveApprovalsPage() {
         return { label: 'شكوى', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
       case 'STAFF_REQUEST':
         return { label: 'طلب عمالة', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
+      case 'PENALTY':
+        return { label: 'جزاء / خصم إداري', color: 'bg-red-500/15 text-red-400 border-red-500/30' };
       default:
         return { label: 'طلب عام', color: 'bg-slate-800 text-slate-300 border-slate-700' };
     }
@@ -242,6 +244,7 @@ export default function LeaveApprovalsPage() {
             { id: 'PERMISSION', label: 'أذونات' },
             { id: 'ADVANCE', label: 'سلف مالية' },
             { id: 'STAFF_REQUEST', label: 'طلبات عمالة' },
+            { id: 'PENALTY', label: 'جزاءات وخصومات' },
             { id: 'COMPLAINT', label: 'شكاوى' },
           ].map((t) => (
             <button

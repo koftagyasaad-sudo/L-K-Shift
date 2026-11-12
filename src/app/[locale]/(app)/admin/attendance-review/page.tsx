@@ -43,6 +43,7 @@ export default function AttendanceReviewPage() {
   const [activeTab, setActiveTab] = useState<'LOGS' | 'PAYROLL'>('LOGS');
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [approvedFinanceItems, setApprovedFinanceItems] = useState<Array<{ userId: string; requestType: string; status: string; advanceAmount: number; deductionAmount?: number; startDate: string }>>([]);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
 
   // الفلاتر
@@ -76,7 +77,8 @@ export default function AttendanceReviewPage() {
     try {
       setLoading(true);
       // القراءة المباشرة من مسار attendance العام لضمان ظهور كافة البصمات الجديدة والقديمة فوراً
-      const res = await fetch('/api/attendance', { cache: 'no-store' });
+      const [res, reqRes] = await Promise.all([fetch('/api/attendance', { cache: 'no-store' }), fetch('/api/requests', { cache: 'no-store' })]);
+      if (reqRes.ok) { const reqData = await reqRes.json(); setApprovedFinanceItems(Array.isArray(reqData) ? reqData : []); }
       if (res.ok) {
         const data = await res.json();
         setRecords(Array.isArray(data) ? data : []);
@@ -397,11 +399,13 @@ export default function AttendanceReviewPage() {
                 <tr>
                   <th className="p-4">الموظف</th>
                   <th className="p-4">الفرع</th>
-                  <th className="p-4 text-center">إجمالي الساعات</th>
+                  <th className="p-4 text-center">أيام / ساعات العمل</th>
                   <th className="p-4 text-center">الراتب الأساسي</th>
-                  <th className="p-4 text-center">أجر اليوم (30 يوم)</th>
-                  <th className="p-4 text-center">خصم التأخير</th>
-                  <th className="p-4 text-center">الصافي التقريبي</th>
+                  <th className="p-4 text-center">الإضافي</th>
+                  <th className="p-4 text-center">التأخيرات</th>
+                  <th className="p-4 text-center">السلف المعتمدة</th>
+                  <th className="p-4 text-center">الخصومات والجزاءات</th>
+                  <th className="p-4 text-center">صافي القبض</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -412,6 +416,15 @@ export default function AttendanceReviewPage() {
                   const dailyRate = (basic / 30).toFixed(2);
                   const totalWorkedMins = empLogs.reduce((acc, r) => acc + r.workedMinutes, 0);
                   const totalLateMins = empLogs.reduce((acc, r) => acc + r.lateMinutes, 0);
+                  const totalOvertimeMins = empLogs.reduce((acc, r) => acc + (r.overtimeMinutes || 0), 0);
+                  const hourlyRate = basic / (30 * 8);
+                  const overtimePay = (totalOvertimeMins / 60) * hourlyRate * 1.5;
+                  const lateDeduction = (totalLateMins / 60) * hourlyRate;
+                  const empApproved = approvedFinanceItems.filter((item) => String(item.userId) === String(emp.id) && item.status === "APPROVED" && (!fromDate || item.startDate >= fromDate) && (!toDate || item.startDate <= toDate));
+                  const advancesTotal = empApproved.filter((i) => i.requestType === "ADVANCE").reduce((s, i) => s + Number(i.advanceAmount || 0), 0);
+                  const penaltiesTotal = empApproved.filter((i) => i.requestType === "PENALTY").reduce((s, i) => s + Number(i.deductionAmount || i.advanceAmount || 0), 0);
+                  const earnedBase = (totalWorkedMins / (8 * 60)) * parseFloat(dailyRate);
+                  const netPay = Math.max(0, earnedBase + overtimePay - lateDeduction - advancesTotal - penaltiesTotal);
 
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 transition">
@@ -421,13 +434,23 @@ export default function AttendanceReviewPage() {
                       </td>
                       <td className="p-4 font-semibold text-slate-700">{first?.branchName}</td>
                       <td className="p-4 text-center font-mono font-bold text-slate-900">
-                        {(totalWorkedMins / 60).toFixed(1)} ساعة
+                        {empLogs.length} يوم / {(totalWorkedMins / 60).toFixed(1)} س
                       </td>
                       <td className="p-4 text-center font-mono font-bold text-slate-800">{basic} ج.م</td>
-                      <td className="p-4 text-center font-mono text-slate-500">{dailyRate} ج.م/يوم</td>
-                      <td className="p-4 text-center font-mono text-rose-600 font-bold">-{totalLateMins} دقيقة</td>
+                      <td className="p-4 text-center font-mono text-emerald-600 font-bold">
+                        +{(totalOvertimeMins / 60).toFixed(1)}س ({overtimePay.toFixed(0)} ج.م)
+                      </td>
+                      <td className="p-4 text-center font-mono text-rose-600 font-bold">
+                        -{totalLateMins}د ({lateDeduction.toFixed(0)} ج.م)
+                      </td>
+                      <td className="p-4 text-center font-mono text-amber-600 font-bold">
+                        -{advancesTotal.toFixed(0)} ج.م
+                      </td>
+                      <td className="p-4 text-center font-mono text-rose-700 font-bold">
+                        -{penaltiesTotal.toFixed(0)} ج.م
+                      </td>
                       <td className="p-4 text-center font-mono font-black text-orange-600 bg-orange-50/70">
-                        {((totalWorkedMins / (8 * 60)) * parseFloat(dailyRate)).toFixed(2)} ج.م
+                        {netPay.toFixed(2)} ج.م
                       </td>
                     </tr>
                   );

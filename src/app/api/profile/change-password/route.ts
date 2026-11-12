@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { users } from '@/db/schema';
 import { authorizeApi } from '@/lib/api-auth';
 import { hashPassword, verifyPassword } from '@/lib/passwords';
-import { meetsPasswordMinimum } from '@/lib/password-policy';
+import { validateStrongPassword } from '@/lib/password-policy';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { getSqlRows } from '@/lib/db';
 
@@ -40,8 +40,9 @@ export async function POST(request: NextRequest) {
     if (!currentPassword || !newPassword) {
       return NextResponse.json({ message: 'كلمة المرور الحالية والجديدة مطلوبتان' }, { status: 400 });
     }
-    if (!meetsPasswordMinimum(newPassword) || newPassword.length > 128) {
-      return NextResponse.json({ message: 'كلمة المرور الجديدة يجب أن تكون بين 6 و128 محرفًا' }, { status: 400 });
+    const pwCheck = validateStrongPassword(newPassword);
+    if (!pwCheck.valid) {
+      return NextResponse.json({ message: pwCheck.message }, { status: 400 });
     }
 
     const raw = await db.execute(sql`

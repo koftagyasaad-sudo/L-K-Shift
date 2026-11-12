@@ -5,7 +5,7 @@ import { db } from '@/db';
 import { notifications, users } from '@/db/schema';
 import { getSqlRows } from '@/lib/db';
 import { hashPassword } from '@/lib/passwords';
-import { meetsPasswordMinimum } from '@/lib/password-policy';
+import { validateStrongPassword } from '@/lib/password-policy';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   const password = typeof values.password === 'string' ? values.password : '';
 
   if (fullName.length < 2 || fullName.length > 120 || phone.length < 6 || phone.length > 32
-    || !meetsPasswordMinimum(password) || password.length > 128) {
+    || !validateStrongPassword(password) || password.length > 128) {
     return NextResponse.json(
       { success: false, message: 'يرجى إدخال اسم ورقم هاتف صحيحين وكلمة مرور من 6 محارف على الأقل.' },
       { status: 400 }

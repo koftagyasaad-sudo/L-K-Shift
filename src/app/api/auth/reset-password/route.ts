@@ -3,7 +3,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import { hashPassword } from '@/lib/passwords';
-import { meetsPasswordMinimum } from '@/lib/password-policy';
+import { validateStrongPassword } from '@/lib/password-policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -25,11 +25,9 @@ export async function POST(request: NextRequest) {
     }
 
     // التحقق الصارم من شروط الباسورد القوي
-    if (!meetsPasswordMinimum(cleanPass)) {
-      return NextResponse.json(
-        { message: 'يجب أن تتكون كلمة المرور من 6 محارف على الأقل.' },
-        { status: 400 }
-      );
+    const pwCheck = validateStrongPassword(cleanPass);
+    if (!pwCheck.valid) {
+      return NextResponse.json({ message: pwCheck.message }, { status: 400 });
     }
 
     const hashedNewPassword = await hashPassword(cleanPass);

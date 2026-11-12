@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { authorizeApi } from '@/lib/api-auth';
 import { hashPassword } from '@/lib/passwords';
-import { meetsPasswordMinimum } from '@/lib/password-policy';
+import { validateStrongPassword } from '@/lib/password-policy';
 import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -101,8 +101,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const values = body as Record<string, unknown>;
     const newPassword = typeof values.newPassword === 'string' ? values.newPassword : '';
-    if (!meetsPasswordMinimum(newPassword) || newPassword.length > 128) {
-      return NextResponse.json({ message: 'كلمة المرور يجب أن تكون بين 6 و128 محرفًا' }, { status: 400 });
+    const pwCheck = validateStrongPassword(newPassword);
+    if (!pwCheck.valid) {
+      return NextResponse.json({ message: pwCheck.message }, { status: 400 });
     }
 
     const newPasswordHash = await hashPassword(newPassword);
