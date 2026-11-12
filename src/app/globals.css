@@ -53,6 +53,10 @@
   * {
     @apply border-border;
   }
+  html,
+  body {
+    @apply max-w-full overflow-x-hidden;
+  }
   body {
     @apply bg-background text-foreground;
   }

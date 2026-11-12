@@ -31,6 +31,7 @@ export interface BranchData {
   type?: string | null;
   address?: string | null;
   phone?: string | null;
+  managerId?: string | null;
   managerName?: string | null;
   managerPhone?: string | null;
   employeeCount?: number;
@@ -146,6 +147,9 @@ export async function createBranchAction(
         latitude: Number(data.latitude) || 0,
         longitude: Number(data.longitude) || 0,
         geofenceRadius,
+        managerId: data.managerId == null || data.managerId.trim() === ''
+          ? null
+          : data.managerId.trim(),
         qrSecretKey: `lk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         qrRefreshSec: 60,
         shiftSchedule: data.shiftSchedule || '',
@@ -192,6 +196,11 @@ export async function updateBranchAction(
         ...(data.nameAr && { nameAr: data.nameAr }),
         ...((data.name || data.nameEn) && { nameEn: data.nameEn || data.name }),
         ...(data.address !== undefined && { address: data.address }),
+        ...(data.managerId !== undefined && {
+          managerId: data.managerId == null || data.managerId.trim() === ''
+            ? null
+            : data.managerId.trim(),
+        }),
         ...(data.latitude !== undefined && { latitude: Number(data.latitude) || 0 }),
         ...(data.longitude !== undefined && { longitude: Number(data.longitude) || 0 }),
         ...(geofenceRadius !== undefined && { geofenceRadius }),

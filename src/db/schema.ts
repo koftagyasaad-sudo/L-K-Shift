@@ -54,6 +54,7 @@ export const branches = pgTable('branches', {
   latitude: doublePrecision('latitude').notNull(),
   longitude: doublePrecision('longitude').notNull(),
   geofenceRadius: integer('geofence_radius').default(100).notNull(),
+  managerId: text('manager_id'),
   qrSecretKey: text('qr_secret_key'),
   qrRefreshSec: integer('qr_refresh_sec').default(60),
   shiftSchedule: text('shift_schedule'),

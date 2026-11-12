@@ -300,8 +300,8 @@ export default function GlobalHeader({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/95 px-4 sm:px-6 backdrop-blur-md">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 flex h-16 w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-x-hidden border-b border-slate-200 bg-white/95 px-3 sm:px-6 backdrop-blur-md">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         {onToggleSidebar && (
           <button
             type="button"
@@ -330,24 +330,24 @@ export default function GlobalHeader({
 
         <Link
           href={`/${locale}/profile`}
-          className="flex items-center gap-3 rounded-2xl p-1.5 hover:bg-slate-50 transition cursor-pointer group"
+          className="flex min-w-0 items-center gap-2 rounded-2xl p-1.5 hover:bg-slate-50 transition cursor-pointer group sm:gap-3"
           title="البيانات الشخصية"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-rose-600 text-white font-bold text-sm shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
             {firstLetter}
           </div>
-          <div className="text-right">
-            <h3 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-orange-600 transition">
+          <div className="min-w-0 max-w-[28vw] text-right sm:max-w-none">
+            <h3 className="truncate text-xs sm:text-sm font-bold text-slate-900 group-hover:text-orange-600 transition">
               {userName}
             </h3>
-            <span className="text-[11px] font-semibold text-emerald-600 block">
+            <span className="block truncate text-[11px] font-semibold text-emerald-600">
               {userRole}
             </span>
           </div>
         </Link>
       </div>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
         {!hasAudioUnlocked && (
           <button
             type="button"
@@ -381,7 +381,7 @@ export default function GlobalHeader({
           {showDropdown && (
             <div
               dir={isRtl ? 'rtl' : 'ltr'}
-              className="absolute top-full mt-2 left-0 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl z-50 flex flex-col text-slate-800"
+              className="absolute top-full mt-2 left-0 w-80 max-w-[calc(100vw-1.5rem)] sm:w-96 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl z-50 flex flex-col text-slate-800"
             >
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 px-2">
                 <div className="flex items-center gap-2">

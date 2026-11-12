@@ -6,6 +6,7 @@ import {
   Printer, ShieldCheck, KeyRound,
   User, Phone, CreditCard, Building2, Save, ArrowRight, Loader2, CheckCircle2 
 } from 'lucide-react';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 interface PageProps {
   params: Promise<{
@@ -228,12 +229,13 @@ export default function EmployeeDossierPage({ params }: PageProps) {
                 تعيين كلمة مرور جديدة للموظف:
               </label>
               <div className="relative">
-                <input
-                  type="text"
+                <PasswordInput
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="اكتب كلمة مرور جديدة..."
-                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs font-mono focus:outline-none focus:border-orange-500 pl-10"
+                  autoComplete="new-password"
+                  dir="ltr"
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-xs font-mono focus:outline-none focus:border-orange-500 ps-10"
                 />
                 <KeyRound size={15} className="absolute left-3 top-3 text-slate-500" />
               </div>

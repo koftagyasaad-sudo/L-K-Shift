@@ -12,11 +12,10 @@ import {
   AlertCircle,
   Loader2,
   Send,
-  Eye,
-  EyeOff,
   RefreshCw,
 } from 'lucide-react';
 import { meetsPasswordMinimum } from '@/lib/password-policy';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -33,7 +32,6 @@ export default function ForgotPasswordPage() {
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -327,36 +325,27 @@ export default function ForgotPasswordPage() {
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور الجديدة *</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="أدخل كلمة مرور قوية"
-                  className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
-                  dir="ltr"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-3 text-slate-400 hover:text-white cursor-pointer"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
+              <PasswordInput
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="أدخل كلمة مرور قوية"
+                autoComplete="new-password"
+                dir="ltr"
+                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
+              />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">تأكيد كلمة المرور الجديدة *</label>
-              <input
-                type={showPassword ? 'text' : 'password'}
+              <PasswordInput
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="أعد إدخال كلمة المرور"
-                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
+                autoComplete="new-password"
                 dir="ltr"
+                className="w-full bg-[#0c0e18] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-orange-500 transition text-left"
               />
             </div>
 

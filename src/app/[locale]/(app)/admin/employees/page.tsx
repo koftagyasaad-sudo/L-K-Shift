@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
+import PasswordInput from '@/components/ui/PasswordInput';
 import {
   Users,
   Search,
@@ -729,8 +730,7 @@ export default function EmployeesManagementPage() {
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   كلمة المرور المؤقتة الجديدة
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   minLength={6}
                   maxLength={128}

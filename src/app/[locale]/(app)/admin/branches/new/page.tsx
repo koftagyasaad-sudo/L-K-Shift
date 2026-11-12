@@ -94,7 +94,7 @@ export default function NewBranchPage({ params }: PageProps) {
       nameAr: nameAr.trim(),
       nameEn: nameEn.trim() || nameAr.trim(),
       phone: phone.trim(),
-      managerId: managerId ? parseInt(managerId, 10) : null,
+      managerId: managerId || null,
       managerName: managerName.trim(),
       googleMapsUrl: googleMapsUrl.trim(),
       address: address.trim(),

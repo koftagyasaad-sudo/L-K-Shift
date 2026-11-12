@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { toast } from "sonner";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 export function SignInForm() {
   const t = useTranslations("auth");
@@ -56,10 +57,11 @@ export function SignInForm() {
 
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("password")}</span>
-        <input
-          type="password"
+        <PasswordInput
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          showLabel={locale === "ar" ? "إظهار كلمة المرور" : "Show password"}
+          hideLabel={locale === "ar" ? "إخفاء كلمة المرور" : "Hide password"}
           className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-[#D8261C] focus:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white"
           autoComplete="current-password"
         />

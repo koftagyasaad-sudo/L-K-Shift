@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 interface PageProps {
   params: Promise<{
@@ -28,7 +29,6 @@ export default function EditEmployeePage({ params }: PageProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState('موظف');
   const [branchId, setBranchId] = useState('');
   const [basicSalary, setBasicSalary] = useState('0');
@@ -197,22 +197,15 @@ export default function EditEmployeePage({ params }: PageProps) {
               <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
                 {isRtl ? 'كلمة المرور الحالية (قابلة للتعديل)' : 'Password (Editable)'} <span className="text-rose-500">*</span>
               </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 left-0 flex items-center px-3 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                >
-                  {showPassword ? 'إخفاء' : 'عرض'}
-                </button>
-              </div>
+              <PasswordInput
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                dir="ltr"
+                showLabel={isRtl ? 'إظهار كلمة المرور' : 'Show password'}
+                hideLabel={isRtl ? 'إخفاء كلمة المرور' : 'Hide password'}
+                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 transition-colors focus:border-orange-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
             </div>
 
             <div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 export interface EmployeeFormData {
   id?: string;
@@ -189,8 +190,7 @@ export default function EmployeeFormComponent({
           <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
             كلمة المرور {initialData?.id && <span className="text-slate-400 font-normal">(اتركه فارغاً لعدم التغيير)</span>}
           </label>
-          <input
-            type="password"
+          <PasswordInput
             required={!initialData?.id}
             value={password}
             onChange={(e) => setPassword(e.target.value)}

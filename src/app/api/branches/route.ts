@@ -125,7 +125,9 @@ async function saveBranch(request: NextRequest) {
     if ((!id || hasRequestedRadius) && (!Number.isSafeInteger(radiusValue) || radiusValue < 1)) {
       return NextResponse.json({ message: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' }, { status: 400 });
     }
-    const mgrId = managerId ? String(managerId) : null;
+    const mgrId = managerId == null || String(managerId).trim() === ''
+      ? null
+      : String(managerId).trim();
     const s1Start = shift1Start || '09:00';
     const s1End = shift1End || '17:00';
     const s2Start = shift2Start || '13:00';

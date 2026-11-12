@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { UserPlus, ArrowRight, Loader2 } from 'lucide-react';
 import { signIn } from 'next-auth/react';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 export default function LoginPage() {
   const params = useParams();
@@ -215,14 +216,15 @@ export default function LoginPage() {
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   {isRtl ? 'كلمة المرور' : 'Password'}
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   autoComplete="new-password"
                   name="login_pwd_field_lk"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  showLabel={isRtl ? 'إظهار كلمة المرور' : 'Show password'}
+                  hideLabel={isRtl ? 'إخفاء كلمة المرور' : 'Hide password'}
                   className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
                   dir="ltr"
                 />
@@ -289,13 +291,14 @@ export default function LoginPage() {
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   {isRtl ? 'كلمة المرور' : 'Password'} <span className="text-orange-500">*</span>
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   autoComplete="new-password"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   placeholder="6 أحرف أو أرقام على الأقل"
+                  showLabel={isRtl ? 'إظهار كلمة المرور' : 'Show password'}
+                  hideLabel={isRtl ? 'إخفاء كلمة المرور' : 'Hide password'}
                   className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
                   dir="ltr"
                 />
@@ -305,13 +308,14 @@ export default function LoginPage() {
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   {isRtl ? 'تأكيد كلمة المرور' : 'Confirm Password'} <span className="text-orange-500">*</span>
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   autoComplete="new-password"
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
                   placeholder="••••••••"
+                  showLabel={isRtl ? 'إظهار تأكيد كلمة المرور' : 'Show password confirmation'}
+                  hideLabel={isRtl ? 'إخفاء تأكيد كلمة المرور' : 'Hide password confirmation'}
                   className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all text-left text-sm"
                   dir="ltr"
                 />
