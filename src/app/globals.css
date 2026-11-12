@@ -467,3 +467,39 @@ html.dark .app-main .text-slate-400 {
 .app-main > div {
   animation: buildAnimatedFadeInUp 0.4s cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
+
+/* === GLOBAL FORMAL ARABIC TYPOGRAPHY (IBM PLEX SANS ARABIC) === */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --font-formal-arabic: var(--font-ibm-plex-arabic), 'IBM Plex Sans Arabic', sans-serif;
+}
+
+html,
+body,
+.app-shell,
+.app-main,
+*,
+*::before,
+*::after,
+h1, h2, h3, h4, h5, h6,
+p, span, div, a, li, ul, ol, label, small, strong, b,
+button, input, select, textarea, optgroup, option,
+table, thead, tbody, tfoot, tr, th, td,
+.font-sans,
+.font-mono {
+  font-family: var(--font-ibm-plex-arabic), 'IBM Plex Sans Arabic', sans-serif !important;
+  letter-spacing: 0 !important;
+}
+
+/* Keep financial & attendance numbers aligned in tables while rendering Arabic words formally */
+.font-mono,
+table td,
+table th {
+  font-variant-numeric: tabular-nums !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  font-family: var(--font-ibm-plex-arabic), 'IBM Plex Sans Arabic', sans-serif !important;
+}
