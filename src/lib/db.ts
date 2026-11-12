@@ -1,8 +1,19 @@
 
+import { Pool, type QueryResultRow } from "pg";
+
 declare global {
-  var globalNeonPool: unknown | undefined;
+  var globalNeonPool: Pool | undefined;
 }
-import { neon } from "@neondatabase/serverless";
+
+function getPool(connectionString: string): Pool {
+  globalThis.globalNeonPool ??= new Pool({
+    connectionString,
+    max: 5,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+  });
+  return globalThis.globalNeonPool;
+}
 
 export function getSqlRows<T extends Record<string, unknown>>(result: unknown): T[] {
   if (Array.isArray(result)) return result.filter(isRecord) as T[];
@@ -18,7 +29,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export async function query<T extends Record<string, unknown> = Record<string, unknown>>(
   text: string,
-  params: unknown[] = []
+  params: Array<string | number | boolean | Date | null | string[]> = []
 ): Promise<{ rows: T[]; rowCount: number }> {
   const connectionString =
     process.env.DATABASE_URL ||
@@ -31,10 +42,8 @@ export async function query<T extends Record<string, unknown> = Record<string, u
   }
 
   try {
-    const sql = neon(connectionString);
-    const result: unknown = await sql(text, params);
-    const rows = getSqlRows<T>(result);
-    return { rows, rowCount: rows.length };
+    const result = await getPool(connectionString).query<T & QueryResultRow>(text, params);
+    return { rows: result.rows, rowCount: result.rowCount ?? result.rows.length };
   } catch (error) {
     console.error("Database Query Error:", error);
     throw new Error(error instanceof Error ? error.message : "فشل تنفيذ الاستعلام في قاعدة البيانات");
