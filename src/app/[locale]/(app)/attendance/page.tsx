@@ -224,8 +224,9 @@ export default function AttendancePage() {
           facingMode: 'user',
           width: { ideal: 720 },
           height: { ideal: 1280 },
-          aspectRatio: { ideal: 3 / 4 },
+          aspectRatio: { ideal: 0.75 },
         },
+        audio: false,
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -511,7 +512,7 @@ export default function AttendancePage() {
           <span className="text-[11px] text-slate-400 font-semibold">مطلوبة مع كل بصمة</span>
         </div>
 
-        <div className="relative aspect-[3/4] max-w-xs mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
+        <div className="relative aspect-[3/4] w-full max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
           {selfiePhoto ? (
             <img src={selfiePhoto} alt="Captured Selfie" className="w-full h-full object-cover" />
           ) : (

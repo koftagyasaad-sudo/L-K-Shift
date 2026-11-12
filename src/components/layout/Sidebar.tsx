@@ -16,13 +16,13 @@ import {
   UserCheck,
   LogOut,
   ChevronRight,
-  Menu,
-  X,
 } from 'lucide-react';
 
 interface SidebarProps {
   locale?: string;
   collapsed?: boolean;
+  mobileOpen?: boolean;
+  onMobileOpenChange?: (open: boolean) => void;
 }
 
 interface NavItem {
@@ -106,7 +106,12 @@ const navItems: NavItem[] = [
   },
 ];
 
-export default function Sidebar({ locale: propLocale, collapsed = false }: SidebarProps) {
+export default function Sidebar({
+  locale: propLocale,
+  collapsed = false,
+  mobileOpen = false,
+  onMobileOpenChange,
+}: SidebarProps) {
   const pathname = usePathname() || '';
   const router = useRouter();
   const params = useParams();
@@ -117,7 +122,6 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
   const [, setUserName] = useState('');
   const [userRole, setUserRole] = useState('موظف');
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isOpenMobile, setIsOpenMobile] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -173,38 +177,28 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
     if (!item.adminOnly) return true;
     return isAdmin;
   });
+  const closeMobileSidebar = () => onMobileOpenChange?.(false);
 
   return (
     <>
-      {/* زر الموبايل للشاشات الصغيرة */}
-      <button
-        type="button"
-        onClick={() => setIsOpenMobile(!isOpenMobile)}
-        className="fixed top-4 right-4 z-50 rounded-xl bg-slate-900 border border-slate-800 p-2 text-slate-300 md:hidden shadow-lg cursor-pointer"
-        aria-label="Toggle Menu"
-      >
-        {isOpenMobile ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
-      {isOpenMobile && (
+      {mobileOpen && (
         <div
-          onClick={() => setIsOpenMobile(false)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden"
+          onClick={closeMobileSidebar}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden"
         />
       )}
 
-      {/* السايدبار المتكيف (يتصغر لـ w-20 بالأيقونات فقط أو يتمدد لـ w-72) */}
       <aside
         className={`fixed inset-y-0 ${
           isRtl ? 'right-0 border-l' : 'left-0 border-r'
-        } z-40 flex flex-col justify-between border-slate-200 bg-white transition-all duration-300 ease-in-out md:static ${
-          collapsed ? 'w-20' : 'w-72'
+        } z-50 flex w-72 flex-col justify-between border-slate-200 bg-white transition-all duration-300 ease-in-out lg:static lg:z-auto ${
+          collapsed ? 'lg:w-20' : 'lg:w-72'
         } ${
-          isOpenMobile
+          mobileOpen
             ? 'translate-x-0'
             : isRtl
-            ? 'translate-x-full md:translate-x-0'
-            : '-translate-x-full md:translate-x-0'
+            ? 'translate-x-full lg:translate-x-0'
+            : '-translate-x-full lg:translate-x-0'
         }`}
         dir={isRtl ? 'rtl' : 'ltr'}
       >
@@ -252,7 +246,7 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
                 key={item.href}
                 href={fullHref}
                 prefetch
-                onClick={() => setIsOpenMobile(false)}
+                onClick={closeMobileSidebar}
                 title={collapsed ? (isRtl ? item.titleAr : item.titleEn) : undefined}
                 className={`flex items-center ${
                   collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'

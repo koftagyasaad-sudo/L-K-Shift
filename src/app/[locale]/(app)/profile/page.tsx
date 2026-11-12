@@ -30,6 +30,7 @@ export default function PersonalProfilePage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [userId, setUserId] = useState<string>('');
 
   const [profilePhoto, setProfilePhoto] = useState<string>('');
@@ -162,24 +163,48 @@ export default function PersonalProfilePage() {
     reader.readAsDataURL(file);
   };
 
+  const handleChangePassword = async () => {
+    setStatusMsg(null);
+    if (!currentPassword || !newPassword) {
+      setStatusMsg({ type: 'err', text: 'يرجى إدخال كلمة المرور الحالية والجديدة' });
+      return;
+    }
+    if (newPassword.length < 6 || newPassword.length > 128) {
+      setStatusMsg({ type: 'err', text: 'كلمة المرور الجديدة يجب أن تكون بين 6 و128 محرفًا' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setStatusMsg({ type: 'err', text: 'كلمة المرور الجديدة وتأكيدها غير متطابقين' });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const response = await fetch('/api/profile/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'تعذر تغيير كلمة المرور');
+
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setStatusMsg({ type: 'ok', text: data.message || 'تم تغيير كلمة المرور بنجاح' });
+    } catch (error: unknown) {
+      setStatusMsg({
+        type: 'err',
+        text: error instanceof Error ? error.message : 'تعذر تغيير كلمة المرور',
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusMsg(null);
-
-    if (newPassword) {
-      if (!currentPassword) {
-        setStatusMsg({ type: 'err', text: 'يرجى إدخال كلمة المرور الحالية لتأكيد التغيير' });
-        return;
-      }
-      if (newPassword.length < 6) {
-        setStatusMsg({ type: 'err', text: 'كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف أو أرقام' });
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setStatusMsg({ type: 'err', text: 'كلمة المرور الجديدة وتأكيدها غير متطابقين' });
-        return;
-      }
-    }
 
     if (nationalId && nationalId.trim().length !== 14) {
       setStatusMsg({ type: 'err', text: 'الرقم القومي يجب أن يتكون من 14 رقماً بدقة' });
@@ -217,8 +242,6 @@ export default function PersonalProfilePage() {
           educationField: educationField.trim(),
           graduationYear,
           profilePhoto,
-          currentPassword: currentPassword ? currentPassword.trim() : null,
-          newPassword: newPassword ? newPassword.trim() : null,
         }),
       });
 
@@ -230,9 +253,6 @@ export default function PersonalProfilePage() {
         text: 'تم حفظ وتحديث جميع بيانات استمارتك وصورتك الشخصية بنجاح!',
       });
 
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
       localStorage.setItem('userName', fullName.trim());
       localStorage.setItem('userPhone', phone.trim());
     } catch (err: unknown) {
@@ -685,7 +705,7 @@ export default function PersonalProfilePage() {
               <Lock size={18} className="text-rose-600" /> 6. أمان الحساب وتغيير كلمة المرور
             </h2>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              اترك الحقول فارغة إذا كنت لا ترغب في تغيير كلمة المرور.
+              أدخل كلمة المرور الحالية والجديدة، ثم احفظ التغيير بشكل مستقل عن بيانات الملف الشخصي.
             </p>
           </div>
 
@@ -742,6 +762,17 @@ export default function PersonalProfilePage() {
                 className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500"
               />
             </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleChangePassword}
+              disabled={changingPassword}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 hover:opacity-95 transition cursor-pointer disabled:opacity-50"
+            >
+              {changingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+              <span>{changingPassword ? 'جارٍ تغيير كلمة المرور...' : 'تغيير كلمة المرور'}</span>
+            </button>
           </div>
         </div>
 

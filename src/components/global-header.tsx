@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import {
   LogOut,
+  Menu,
+  X,
   ChevronRight,
   ChevronLeft,
   Bell,
@@ -18,6 +20,8 @@ import {
 interface GlobalHeaderProps {
   onToggleSidebar?: () => void;
   sidebarCollapsed?: boolean;
+  mobileSidebarOpen?: boolean;
+  onToggleMobileSidebar?: () => void;
 }
 
 interface NotificationItem {
@@ -112,7 +116,12 @@ function triggerSystemOSNotification(title: string, message: string) {
   }
 }
 
-export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: GlobalHeaderProps) {
+export default function GlobalHeader({
+  onToggleSidebar,
+  sidebarCollapsed,
+  mobileSidebarOpen = false,
+  onToggleMobileSidebar,
+}: GlobalHeaderProps) {
   const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
@@ -297,7 +306,7 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+            className="hidden h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer lg:flex"
             title="طي / فتح القائمة"
           >
             {isRtl ? (
@@ -305,6 +314,17 @@ export default function GlobalHeader({ onToggleSidebar, sidebarCollapsed }: Glob
             ) : (
               sidebarCollapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />
             )}
+          </button>
+        )}
+        {onToggleMobileSidebar && (
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer lg:hidden"
+            aria-label={mobileSidebarOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
+            aria-expanded={mobileSidebarOpen}
+          >
+            {mobileSidebarOpen ? <X size={17} /> : <Menu size={17} />}
           </button>
         )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import type { BranchData } from "@/actions/branchActions";
@@ -44,6 +44,10 @@ export default function BranchesClient({ initialBranches }: Props) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string>("");
   const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    setBranches(initialBranches);
+  }, [initialBranches]);
 
   const filteredBranches = useMemo(() => {
     const q = search.trim().toLowerCase();

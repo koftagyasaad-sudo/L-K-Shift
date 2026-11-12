@@ -18,6 +18,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const isRtl = locale === 'ar';
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   return (
     <div
@@ -32,16 +33,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <ServiceWorkerRegister />
 
       {/* 3. السايدبار المتكيف (يعرض الأيقونات فقط عند الطي) */}
-      <Sidebar locale={locale} collapsed={sidebarCollapsed} />
+      <Sidebar
+        locale={locale}
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        onMobileOpenChange={setMobileSidebarOpen}
+      />
 
       {/* 4. منطقة العمل والمحتوى */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
+      <div className="flex w-full min-w-0 max-w-full flex-1 flex-col overflow-x-hidden transition-all duration-300">
         <GlobalHeader
           sidebarCollapsed={sidebarCollapsed}
+          mobileSidebarOpen={mobileSidebarOpen}
+          onToggleMobileSidebar={() => setMobileSidebarOpen((open) => !open)}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
           {children}
         </main>
       </div>

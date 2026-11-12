@@ -8,6 +8,22 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function isSmsGatewayConfigured(): boolean {
+  const smsMisrConfigured = Boolean(process.env.SMSMISR_USERNAME && process.env.SMSMISR_PASSWORD);
+  const twilioConfigured = Boolean(
+    process.env.TWILIO_ACCOUNT_SID
+    && process.env.TWILIO_AUTH_TOKEN
+    && process.env.TWILIO_PHONE_NUMBER
+  );
+  return smsMisrConfigured || twilioConfigured;
+}
+
+export async function GET() {
+  return NextResponse.json({ smsEnabled: isSmsGatewayConfigured() }, {
+    headers: { 'Cache-Control': 'no-store' },
+  });
+}
+
 // دالة إرسال رسالة SMS حقيقية إلى هاتف الموظف
 async function sendSmsOtp(phone: string, otpCode: string): Promise<boolean> {
   const messageText = `كود التحقق الخاص بك لتطبيق L-K Shift هو: ${otpCode} (صالح لمدة 10 دقائق). لا تشارك هذا الرمز مع أي شخص.`;
@@ -88,6 +104,16 @@ export async function POST(request: NextRequest) {
 
     // 1. إجراء إرسال كود الـ OTP في رسالة SMS
     if (action === 'SEND_OTP') {
+      if (!isSmsGatewayConfigured()) {
+        return NextResponse.json(
+          {
+            code: 'SMS_DISABLED',
+            message: 'استعادة كلمة المرور عبر SMS غير مفعّلة حاليًا. يرجى التواصل مع مدير الفرع أو مسؤول النظام لإعادة تعيين كلمة المرور.',
+          },
+          { status: 503 }
+        );
+      }
+
       const [user] = await db
         .select({ id: users.id, phone: users.phone })
         .from(users)
@@ -117,7 +143,7 @@ export async function POST(request: NextRequest) {
           .where(and(eq(users.id, user.id), eq(users.resetOtp, otpCode)));
 
         return NextResponse.json(
-          { message: 'تعذر إرسال رمز التحقق. خدمة الرسائل غير مهيأة، يرجى التواصل مع الإدارة.' },
+          { code: 'SMS_UNAVAILABLE', message: 'تعذر إرسال رمز التحقق حاليًا. يرجى المحاولة لاحقًا أو التواصل مع الإدارة.' },
           { status: 503 }
         );
       }

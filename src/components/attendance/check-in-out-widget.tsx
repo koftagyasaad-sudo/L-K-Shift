@@ -104,7 +104,7 @@ export function CheckInOutWidget({
           facingMode: "user",
           width: { ideal: 720 },
           height: { ideal: 1280 },
-          aspectRatio: { ideal: 3 / 4 },
+          aspectRatio: { ideal: 0.75 },
         },
         audio: false,
       });
@@ -260,7 +260,7 @@ export function CheckInOutWidget({
       </div>
 
       {/* معاينة الكاميرا */}
-      <div className="relative bg-black rounded-2xl overflow-hidden aspect-[3/4] max-w-xs mx-auto flex items-center justify-center border border-gray-200 dark:border-slate-800">
+      <div className="relative bg-black rounded-2xl overflow-hidden aspect-[3/4] w-full max-w-sm mx-auto flex items-center justify-center border border-gray-200 dark:border-slate-800">
         {photoPreview ? (
           <img src={photoPreview} alt="Live Selfie" className="w-full h-full object-cover" />
         ) : (

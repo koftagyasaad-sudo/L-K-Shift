@@ -37,7 +37,9 @@ export interface BranchData {
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadius?: number | string | null;
+  geofence_radius?: number | string | null;
   radiusMeters?: number | string | null;
+  radius?: number | string | null;
   googleMapsUrl?: string | null;
   qrSecretKey?: string | null;
   qrRefreshSec?: number | null;
@@ -75,6 +77,7 @@ export async function getBranchesAction(): Promise<BranchData[]> {
         NULLIF(b.latitude::text, '')::double precision AS latitude,
         NULLIF(b.longitude::text, '')::double precision AS longitude,
         COALESCE(b.geofence_radius, 100) AS "geofenceRadius",
+        COALESCE(b.geofence_radius, 100) AS "radiusMeters",
         COALESCE(b.is_active, true) AS "isActive",
         b.created_at AS "createdAt",
         b.updated_at AS "updatedAt"
@@ -129,7 +132,7 @@ export async function createBranchAction(
   const principal = await requireApiPrincipal('branches.manage');
   if (principal.branchScope !== 'ALL') throw new Error('ممنوع إنشاء فرع خارج نطاقك');
   try {
-    const radiusValue = data.geofenceRadius ?? data.radiusMeters ?? 100;
+    const radiusValue = data.radius ?? data.radiusMeters ?? data.geofenceRadius ?? data.geofence_radius ?? 100;
     const geofenceRadius = Number(radiusValue);
     if (!Number.isSafeInteger(geofenceRadius) || geofenceRadius < 1) {
       return { success: false, error: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' };
@@ -170,7 +173,7 @@ export async function createBranchAction(
 export async function updateBranchAction(
   id: string | number | undefined,
   data: BranchData
-): Promise<{ success: boolean; message?: string; error?: string }> {
+): Promise<{ success: boolean; message?: string; error?: string; branch?: { id: string; geofenceRadius: number } }> {
   const principal = await requireApiPrincipal('branches.manage');
   const branchId = id == null ? '' : String(id).trim();
   if (!branchId) {
@@ -178,12 +181,12 @@ export async function updateBranchAction(
   }
   await assertBranchAccess(principal, branchId);
   try {
-    const radiusValue = data.geofenceRadius ?? data.radiusMeters;
+    const radiusValue = data.radius ?? data.radiusMeters ?? data.geofenceRadius ?? data.geofence_radius;
     const geofenceRadius = radiusValue === undefined ? undefined : Number(radiusValue);
     if (geofenceRadius !== undefined && (!Number.isSafeInteger(geofenceRadius) || geofenceRadius < 1)) {
       return { success: false, message: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا', error: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' };
     }
-    await db
+    const updated = await db
       .update(branches)
       .set({
         ...(data.nameAr && { nameAr: data.nameAr }),
@@ -199,11 +202,15 @@ export async function updateBranchAction(
         ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
         updatedAt: new Date(),
       })
-      .where(eq(branches.id, branchId));
+      .where(eq(branches.id, branchId))
+      .returning({ id: branches.id, geofenceRadius: branches.geofenceRadius });
+    if (!updated.length) {
+      return { success: false, message: 'الفرع غير موجود', error: 'الفرع غير موجود' };
+    }
 
     revalidatePath('/[locale]/admin/branches', 'page');
     revalidatePath('/[locale]/branches', 'page');
-    return { success: true };
+    return { success: true, branch: updated[0] };
   } catch (error) {
     console.error('Error updating branch:', error);
     const message = errorMessage(error, 'فشل تحديث الفرع');

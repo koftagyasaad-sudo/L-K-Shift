@@ -115,7 +115,7 @@ export default function EditBranchPage({ params }: PageProps) {
       nameAr: nameAr.trim(),
       nameEn: nameEn.trim() || nameAr.trim(),
       phone: phone.trim(),
-      managerId: managerId ? parseInt(managerId, 10) : null,
+      managerId: managerId || null,
       managerName: managerName.trim(),
       address: address.trim(),
       latitude: latitude.trim(),

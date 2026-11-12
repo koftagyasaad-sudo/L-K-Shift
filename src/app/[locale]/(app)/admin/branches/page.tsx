@@ -215,6 +215,14 @@ export default function BranchesManagementPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'فشل حفظ بيانات الفرع');
 
+      const savedRadius = data.branch?.geofenceRadius;
+      if (editingBranch.id && Number.isSafeInteger(savedRadius) && savedRadius >= 1) {
+        setBranches((prev) => prev.map((branch) => (
+          branch.id === editingBranch.id
+            ? { ...branch, geofenceRadius: savedRadius }
+            : branch
+        )));
+      }
       setStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الفرع والورديات بنجاح!' });
       await fetchBranchesData();
     } catch (err: unknown) {
@@ -557,12 +565,14 @@ export default function BranchesManagementPage() {
               </label>
               <input
                 type="number"
+                min="1"
+                step="1"
                 required
                 value={editingBranch.geofenceRadius ?? 100}
                 onChange={(e) =>
                   setEditingBranch({
                     ...editingBranch,
-                    geofenceRadius: parseInt(e.target.value, 10) || 100,
+                    geofenceRadius: e.target.value === '' ? 0 : Number(e.target.value),
                   })
                 }
                 className="w-full bg-white border border-slate-300 text-slate-900 font-mono font-bold rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-orange-500 transition"

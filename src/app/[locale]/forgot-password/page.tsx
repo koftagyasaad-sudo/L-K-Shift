@@ -37,7 +37,27 @@ export default function ForgotPasswordPage() {
 
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [smsUnavailable, setSmsUnavailable] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/forgot-password', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Unable to check SMS availability.');
+        return response.json();
+      })
+      .then((data: { smsEnabled?: boolean }) => {
+        if (active && data.smsEnabled === false) setSmsUnavailable(true);
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to check SMS availability:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // مؤقت إعادة الإرسال
   useEffect(() => {
@@ -66,6 +86,11 @@ export default function ForgotPasswordPage() {
       });
 
       const data = await res.json();
+      if (data.code === 'SMS_DISABLED') {
+        setSmsUnavailable(true);
+        setStatusMsg(null);
+        return;
+      }
       if (!res.ok) throw new Error(data.message || 'فشل إرسال كود التحقق');
 
       setStatusMsg({ type: 'ok', text: data.message });
@@ -203,6 +228,20 @@ export default function ForgotPasswordPage() {
 
         {/* المرحلة 1: طلب رقم الهاتف */}
         {step === 1 && (
+          smsUnavailable ? (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-200" role="status">
+              <p className="font-bold text-amber-100">استعادة كلمة المرور عبر SMS غير مفعّلة حاليًا.</p>
+              <p className="mt-1">
+                لإعادة تعيين كلمة المرور فورًا، يرجى التواصل مع مدير الفرع أو مسؤول النظام.
+              </p>
+              <Link
+                href={`/${locale}/login`}
+                className="mt-3 inline-flex font-bold text-orange-300 underline underline-offset-2 hover:text-orange-200"
+              >
+                العودة إلى تسجيل الدخول
+              </Link>
+            </div>
+          ) : (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم التليفون المسجل بالحساب</label>
@@ -229,6 +268,7 @@ export default function ForgotPasswordPage() {
               <span>إرسال رمز التحقق OTP في رسالة SMS</span>
             </button>
           </form>
+          )
         )}
 
         {/* المرحلة 2: إدخال كود الـ OTP */}

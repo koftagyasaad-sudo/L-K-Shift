@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lk-shift-v2026-offline';
+const CACHE_NAME = 'lk-shift-v2026-offline-layout-password-v2';
 
 // الملفات الأساسية المحفوظة مسبقاً لفتح التطبيق أوفلاين فوري
 const STATIC_ASSETS = [

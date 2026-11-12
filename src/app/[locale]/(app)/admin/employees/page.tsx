@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Timer,
   Hash,
+  Lock,
 } from 'lucide-react';
 
 interface EmployeeItem {
@@ -173,6 +174,10 @@ export default function EmployeesManagementPage() {
   const [editingEmp, setEditingEmp] = useState<Partial<EmployeeItem>>({});
   const [savingEmp, setSavingEmp] = useState(false);
   const [modalStatusMsg, setModalStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [passwordResetEmployee, setPasswordResetEmployee] = useState<EmployeeItem | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetPasswordStatus, setResetPasswordStatus] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const fetchEmployeesData = async () => {
     try {
@@ -294,6 +299,35 @@ export default function EmployeesManagementPage() {
       setModalStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ' });
     } finally {
       setSavingEmp(false);
+    }
+  };
+
+  const handleResetEmployeePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordResetEmployee || resetPassword.length < 6 || resetPassword.length > 128) {
+      setResetPasswordStatus({ type: 'err', text: 'كلمة المرور يجب أن تكون بين 6 و128 محرفًا' });
+      return;
+    }
+
+    setResetPasswordLoading(true);
+    setResetPasswordStatus(null);
+    try {
+      const response = await fetch(`/api/employees/${encodeURIComponent(passwordResetEmployee.id)}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: resetPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'تعذر إعادة تعيين كلمة المرور');
+      setResetPasswordStatus({ type: 'ok', text: 'تم تغيير كلمة المرور. أبلغ الموظف بها عبر قناة آمنة.' });
+      setResetPassword('');
+    } catch (error: unknown) {
+      setResetPasswordStatus({
+        type: 'err',
+        text: error instanceof Error ? error.message : 'تعذر إعادة تعيين كلمة المرور',
+      });
+    } finally {
+      setResetPasswordLoading(false);
     }
   };
 
@@ -427,6 +461,20 @@ export default function EmployeesManagementPage() {
                         >
                           <Edit2 size={13} />
                           <span>تعديل</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasswordResetEmployee(emp);
+                            setResetPassword('');
+                            setResetPasswordStatus(null);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                          title="إعادة تعيين كلمة مرور الموظف"
+                        >
+                          <Lock size={13} />
+                          <span>إعادة تعيين كلمة المرور</span>
                         </button>
 
                         <button
@@ -635,6 +683,79 @@ export default function EmployeesManagementPage() {
                 >
                   {savingEmp ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   <span>حفظ البيانات والمسلسل</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {passwordResetEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Lock size={18} className="text-rose-600" />
+                <span>إعادة تعيين كلمة المرور</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPasswordResetEmployee(null)}
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+                aria-label="إغلاق"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              الموظف: <strong className="text-slate-900">{passwordResetEmployee.fullNameAr}</strong>
+            </p>
+
+            {resetPasswordStatus && (
+              <div
+                className={`p-3 rounded-xl text-xs font-bold ${
+                  resetPasswordStatus.type === 'ok'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                }`}
+              >
+                {resetPasswordStatus.text}
+              </div>
+            )}
+
+            <form onSubmit={handleResetEmployeePassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  كلمة المرور المؤقتة الجديدة
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  maxLength={128}
+                  value={resetPassword}
+                  onChange={(event) => setResetPassword(event.target.value)}
+                  autoComplete="new-password"
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-orange-500"
+                  dir="ltr"
+                />
+              </div>
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setPasswordResetEmployee(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                >
+                  إغلاق
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordLoading}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md shadow-orange-500/20 transition cursor-pointer disabled:opacity-50"
+                >
+                  {resetPasswordLoading ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                  <span>{resetPasswordLoading ? 'جارٍ التعيين...' : 'تعيين كلمة المرور'}</span>
                 </button>
               </div>
             </form>

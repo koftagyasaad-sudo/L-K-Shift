@@ -89,7 +89,9 @@ async function saveBranch(request: NextRequest) {
       nameAr,
       latitude,
       longitude,
+      radius,
       geofenceRadius,
+      geofence_radius,
       radiusMeters,
       managerId,
       phone,
@@ -117,14 +119,12 @@ async function saveBranch(request: NextRequest) {
     const enName = nameEn || name || 'Branch';
     const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
     const lng = longitude !== undefined && longitude !== null ? parseFloat(longitude) : 30.6475;
-    const requestedRadius = geofenceRadius ?? radiusMeters;
-    const radiusValue = requestedRadius == null || requestedRadius === ''
-      ? 100
-      : Number(requestedRadius);
-    if (!Number.isSafeInteger(radiusValue) || radiusValue < 1) {
+    const requestedRadius = radius ?? radiusMeters ?? geofenceRadius ?? geofence_radius;
+    const hasRequestedRadius = requestedRadius !== undefined && requestedRadius !== null && requestedRadius !== '';
+    const radiusValue = hasRequestedRadius ? Number(requestedRadius) : 100;
+    if ((!id || hasRequestedRadius) && (!Number.isSafeInteger(radiusValue) || radiusValue < 1)) {
       return NextResponse.json({ message: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' }, { status: 400 });
     }
-    const radius = radiusValue;
     const mgrId = managerId ? String(managerId) : null;
     const s1Start = shift1Start || '09:00';
     const s1End = shift1End || '17:00';
@@ -135,7 +135,7 @@ async function saveBranch(request: NextRequest) {
     const grace = gracePeriodMinutes !== undefined ? parseInt(gracePeriodMinutes, 10) : 15;
 
     if (id) {
-      await db.execute(sql`
+      const raw = await db.execute(sql`
         UPDATE branches
         SET 
           name = ${enName},
@@ -143,7 +143,10 @@ async function saveBranch(request: NextRequest) {
           name_ar = ${nameAr},
           latitude = ${lat},
           longitude = ${lng},
-          geofence_radius = ${radius},
+          geofence_radius = CASE
+            WHEN ${hasRequestedRadius} THEN ${radiusValue}
+            ELSE geofence_radius
+          END,
           manager_id = ${mgrId},
           phone = ${phone || null},
           address = ${address || null},
@@ -154,9 +157,18 @@ async function saveBranch(request: NextRequest) {
           shift3_start = ${s3Start},
           shift3_end = ${s3End},
           grace_period_minutes = ${grace}
-        WHERE id::text = ${String(id)};
+        WHERE id::text = ${String(id)}
+        RETURNING id::text AS id, geofence_radius AS "geofenceRadius";
       `);
-      return NextResponse.json({ success: true, message: 'تم تحديث بيانات الفرع بنجاح' });
+      const updated = resultRows<{ id: string; geofenceRadius: number }>(raw);
+      if (!updated.length) {
+        return NextResponse.json({ message: 'الفرع غير موجود' }, { status: 404 });
+      }
+      return NextResponse.json({
+        success: true,
+        message: 'تم تحديث بيانات الفرع بنجاح',
+        branch: { ...updated[0], radiusMeters: updated[0].geofenceRadius },
+      });
     } else {
       await db.execute(sql`
         INSERT INTO branches (
@@ -165,7 +177,7 @@ async function saveBranch(request: NextRequest) {
           shift1_start, shift1_end, shift2_start, shift2_end, shift3_start, shift3_end,
           grace_period_minutes, qr_secret_key
         ) VALUES (
-          ${enName}, ${enName}, ${nameAr}, ${lat}, ${lng}, ${radius},
+          ${enName}, ${enName}, ${nameAr}, ${lat}, ${lng}, ${radiusValue},
           ${mgrId}, ${phone || null}, ${address || null},
           ${s1Start}, ${s1End}, ${s2Start}, ${s2End}, ${s3Start}, ${s3End},
           ${grace}, md5(random()::text)
