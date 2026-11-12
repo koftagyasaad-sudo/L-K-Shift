@@ -22,15 +22,16 @@
   },
   "auth": {
     "title": "Sign in to L&K Shift",
-    "subtitle": "Use the seeded demo credentials or your assigned branch account.",
+    "subtitle": "Use your management-issued account credentials.",
     "phone": "Phone number",
     "password": "Password",
     "submit": "Sign in",
     "pending": "Signing in...",
     "error": "Invalid phone or password.",
-    "demoTitle": "Demo accounts",
-    "adminDemo": "Admin: 0500000000 / admin123",
-    "employeeDemo": "Employee: 0501111111 / employee123"
+    "demoTitle": "Account credentials",
+    "adminDemo": "Use your management-issued credentials",
+    "employeeDemo": "Use your management-issued credentials",
+    "phonePlaceholder": "Enter the phone number on your account"
   },
   "home": {
     "heroEyebrow": "Phase 1 demo",
@@ -45,7 +46,7 @@
     "statsAttendance": "Recent attendance logs",
     "branchesTitle": "Branch network",
     "branchesDescription": "Configured with geo coordinates, geofence radii, QR secrets, and operational types.",
-    "demoCredentials": "Quick demo credentials",
+    "demoCredentials": "Sign in with your assigned account credentials",
     "featuresTitle": "Phase 1 delivered",
     "features": {
       "i18n": "Arabic RTL and English LTR switching with next-intl",

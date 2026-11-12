@@ -49,7 +49,7 @@ export function SignInForm() {
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-[#D8261C] focus:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white"
-          placeholder="0500000000"
+          placeholder={t("phonePlaceholder")}
           autoComplete="tel"
         />
       </label>
