@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const requestedUserId = searchParams.get('userId');
-    const requestedId = requestedUserId ? Number(requestedUserId) : null;
-    if (requestedId !== null && (!Number.isSafeInteger(requestedId) || requestedId < 1)) {
+    const requestedId = requestedUserId?.trim() || null;
+    if (requestedUserId && !requestedId) {
       return NextResponse.json({ message: 'معرف المستخدم غير صالح' }, { status: 400 });
     }
     const isSelf = requestedId === authorization.principal.id;
@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
     const branchFilter = isSelf || authorization.principal.branchScope === 'ALL'
       ? sql`1=1`
       : authorization.principal.branchScope === 'CUSTOM'
-        ? sql`COALESCE(u.primary_branch_id, u.branch_id) = ANY(${authorization.principal.allowedBranchIds}::int[])`
+        ? authorization.principal.allowedBranchIds.length
+          ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text) = ANY(${authorization.principal.allowedBranchIds}::text[])`
+          : sql`1=0`
         : authorization.principal.primaryBranchId
           ? sql`COALESCE(u.primary_branch_id, u.branch_id) = ${authorization.principal.primaryBranchId}`
           : sql`1=0`;
@@ -100,8 +102,8 @@ export async function POST(request: NextRequest) {
         ${userId},
         ${requestType},
         ${requestType},
-        ${sDate}::date,
-        ${eDate}::date,
+        NULLIF(${sDate}, '')::date,
+        NULLIF(${eDate}, '')::date,
         ${days},
         ${days},
         ${amount},
@@ -153,7 +155,7 @@ export async function PATCH(request: NextRequest) {
     const requiredPermission = rawType === 'STAFF_REQUEST' || rawType === 'COMPLAINT'
       ? 'staff_requests.manage'
       : 'leaves.approve';
-    const targetBranchId = reqRows[0].branch_id == null ? null : Number(reqRows[0].branch_id);
+    const targetBranchId = reqRows[0].branch_id == null ? null : String(reqRows[0].branch_id);
     if (
       !hasApiPermission(authorization.principal, requiredPermission) ||
       !canAccessBranch(authorization.principal, targetBranchId)

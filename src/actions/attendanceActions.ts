@@ -13,19 +13,15 @@ export async function recordAttendanceAction(
   const principal = await requireApiPrincipal();
   const empId = input.employeeId || input.employee_id;
   const branchId = input.branchId || input.branch_id;
-  const targetUserId = Number(empId);
-  if (!Number.isSafeInteger(targetUserId) || targetUserId < 1) {
+  const targetUserId = empId == null ? "" : String(empId).trim();
+  if (!targetUserId) {
     return { success: false, error: "معرف الموظف غير صالح" };
   }
   if (targetUserId !== principal.id && !hasApiPermission(principal, "attendance.override")) {
     throw new Error("ممنوع تسجيل الحضور لموظف آخر");
   }
-  if (branchId !== undefined && branchId !== null) {
-    const parsedBranchId = Number(branchId);
-    if (!Number.isSafeInteger(parsedBranchId) || parsedBranchId < 1) {
-      return { success: false, error: "معرف الفرع غير صالح" };
-    }
-  }
+  const parsedBranchId = branchId == null ? null : String(branchId).trim();
+  if (branchId != null && !parsedBranchId) return { success: false, error: "معرف الفرع غير صالح" };
   const [targetUser] = await db
     .select({ primaryBranchId: users.primaryBranchId })
     .from(users)
@@ -34,15 +30,15 @@ export async function recordAttendanceAction(
   if (!targetUser) throw new Error("الموظف غير موجود");
 
   const canOverride = hasApiPermission(principal, "attendance.override");
-  if (!canOverride && branchId && Number(branchId) !== targetUser.primaryBranchId) {
+  if (!canOverride && parsedBranchId && parsedBranchId !== targetUser.primaryBranchId) {
     throw new Error("ممنوع تسجيل الحضور في هذا الفرع");
   }
-  const effectiveBranchId = branchId
-    ? String(branchId)
+  const effectiveBranchId = parsedBranchId
+    ? parsedBranchId
     : targetUser.primaryBranchId
-      ? String(targetUser.primaryBranchId)
+    ? targetUser.primaryBranchId
       : undefined;
-  if (effectiveBranchId && !canAccessBranch(principal, Number(effectiveBranchId))) {
+  if (effectiveBranchId && !canAccessBranch(principal, effectiveBranchId)) {
     throw new Error("ممنوع تسجيل الحضور في هذا الفرع");
   }
   try {
@@ -74,9 +70,9 @@ export async function recordAttendanceAction(
     };
 
     return { success: true, log, data: log };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error recording attendance:", err);
-    return { success: false, error: err.message || "فشل تسجيل الحركة" };
+    return { success: false, error: err instanceof Error ? err.message : "فشل تسجيل الحركة" };
   }
 }
 
@@ -105,7 +101,7 @@ export async function getAttendanceLogsAction(
     ) {
       empId = String(principal.id);
     }
-    if (branchId && !canAccessBranch(principal, Number(branchId))) {
+    if (branchId && !canAccessBranch(principal, branchId)) {
       throw new Error("ممنوع الوصول إلى سجلات هذا الفرع");
     }
 
@@ -117,8 +113,14 @@ export async function getAttendanceLogsAction(
       LEFT JOIN branches b ON a.branch_id = b.id
       WHERE 1=1
     `;
-    const params: any[] = [];
+    const params: Array<string | number | boolean | null | string[]> = [];
+    const canViewAll = hasApiPermission(principal, "attendance.view")
+      || hasApiPermission(principal, "attendance.review")
+      || hasApiPermission(principal, "attendance.export");
 
+    if (!canViewAll) {
+      empId = principal.id;
+    }
     if (empId) {
       params.push(empId);
       sql += ` AND a.employee_id = $${params.length}`;
@@ -127,24 +129,31 @@ export async function getAttendanceLogsAction(
     if (branchId) {
       params.push(branchId);
       sql += ` AND a.branch_id = $${params.length}`;
+    } else if (canViewAll && principal.systemRole !== "SUPER_ADMIN" && principal.branchScope !== "ALL") {
+      const branchIds = principal.branchScope === "CUSTOM"
+        ? principal.allowedBranchIds
+        : principal.primaryBranchId
+          ? [principal.primaryBranchId]
+          : [];
+      if (branchIds.length) {
+        params.push(branchIds);
+        sql += ` AND COALESCE(a.branch_id::text, e.branch_id::text) = ANY($${params.length}::text[])`;
+      } else {
+        sql += " AND FALSE";
+      }
     }
 
-    if (startDate) {
-      params.push(startDate);
-      sql += ` AND a.created_at >= $${params.length}`;
-    }
-
-    if (endDate) {
-      params.push(endDate);
-      sql += ` AND a.created_at <= $${params.length}`;
-    }
+    params.push(startDate || "");
+    sql += ` AND a.created_at::date >= COALESCE(NULLIF($${params.length}, '')::date, a.created_at::date)`;
+    params.push(endDate || "");
+    sql += ` AND a.created_at::date <= COALESCE(NULLIF($${params.length}, '')::date, a.created_at::date)`;
 
     sql += ` ORDER BY a.created_at DESC LIMIT 100`;
 
     const result = await query(sql, params);
 
     const logs: AttendanceRecord[] = result.rows
-      .filter((row) => canAccessBranch(principal, row.branch_id == null ? null : Number(row.branch_id)))
+      .filter((row) => canAccessBranch(principal, row.branch_id == null ? null : String(row.branch_id)))
       .map((row) => ({
       id: row.id,
       employee_id: row.employee_id,
@@ -159,8 +168,8 @@ export async function getAttendanceLogsAction(
       }));
 
     return { success: true, logs, data: logs };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error fetching attendance logs:", err);
-    return { success: false, error: err.message || "فشل جلب سجلات الحضور" };
+    return { success: false, error: err instanceof Error ? err.message : "فشل جلب سجلات الحضور" };
   }
 }

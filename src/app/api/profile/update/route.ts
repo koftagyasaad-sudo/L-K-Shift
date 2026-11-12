@@ -37,10 +37,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const requestedUserId = searchParams.get('id');
-    if (requestedUserId && Number(requestedUserId) !== authorization.principal.id) {
+    if (requestedUserId && requestedUserId !== authorization.principal.id) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
-    const userId = String(authorization.principal.id);
+    const userId = authorization.principal.id;
 
     const raw = await db.execute(sql`
       SELECT 
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
 
     // جلب الباسورد الحالي من قاعدة البيانات للتحقق الدقيق
     const currentQuery = await db.execute(sql`
-      SELECT id, password_hash, password FROM users WHERE id::text = ${userId.toString()} LIMIT 1;
+      SELECT id, password_hash, password FROM users WHERE id::text = ${userId} LIMIT 1;
     `);
     const currentRows = Array.isArray(currentQuery) ? currentQuery : (currentQuery as any)?.rows || [];
     if (!currentRows.length) {
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
         avatar_url = COALESCE(NULLIF(${profilePhoto || ''}, ''), avatar_url),
         password_hash = ${finalPasswordHash},
         updated_at = NOW()
-      WHERE id::text = ${userId.toString()};
+      WHERE id::text = ${userId};
     `);
 
     return NextResponse.json({

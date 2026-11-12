@@ -6,12 +6,12 @@ import { db } from "@/db";
 import { customRoles, users } from "@/db/schema";
 
 export interface ApiPrincipal {
-  id: number;
+  id: string;
   systemRole: string;
   jobRole: string;
-  primaryBranchId: number | null;
+  primaryBranchId: string | null;
   branchScope: string;
-  allowedBranchIds: number[];
+  allowedBranchIds: string[];
   permissions: string[];
 }
 
@@ -23,7 +23,7 @@ export function hasApiPermission(principal: ApiPrincipal, permission: string): b
   return principal.permissions.includes("*") || principal.permissions.includes(permission);
 }
 
-export function canAccessBranch(principal: ApiPrincipal, branchId: number | null): boolean {
+export function canAccessBranch(principal: ApiPrincipal, branchId: string | null): boolean {
   if (principal.systemRole === "SUPER_ADMIN" || principal.branchScope === "ALL") return true;
   if (branchId === null) return false;
   if (principal.branchScope === "CUSTOM") {
@@ -54,7 +54,7 @@ function parsePermissions(value: unknown): string[] {
   return [];
 }
 
-function parseBranchIds(value: unknown): number[] {
+function parseBranchIds(value: unknown): string[] {
   const parsed = typeof value === "string" ? (() => {
     try {
       return JSON.parse(value) as unknown;
@@ -65,8 +65,9 @@ function parseBranchIds(value: unknown): number[] {
 
   if (!Array.isArray(parsed)) return [];
   return parsed
-    .map(Number)
-    .filter((branchId) => Number.isSafeInteger(branchId) && branchId > 0);
+    .filter((branchId): branchId is string | number => typeof branchId === "string" || typeof branchId === "number")
+    .map(String)
+    .filter((branchId) => branchId.length > 0);
 }
 
 export async function authorizeApi(
@@ -75,8 +76,9 @@ export async function authorizeApi(
   const session = await getServerSession(authOptions);
   const sessionUser = session?.user as any;
   const sessionPhone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
-  const rawId = sessionUser?.id ? Number(sessionUser.id) : null;
-  const validId = rawId && Number.isSafeInteger(rawId) && rawId > 0 ? rawId : null;
+  const validId = typeof sessionUser?.id === "string" && sessionUser.id.trim()
+    ? sessionUser.id.trim()
+    : null;
 
   if (!session?.user || (!sessionPhone && !validId)) {
     return {
@@ -108,7 +110,7 @@ export async function authorizeApi(
 
   let permissions: string[] = [];
   let branchScope = "OWN_BRANCH";
-  let allowedBranchIds: number[] = [];
+  let allowedBranchIds: string[] = [];
   if (user.systemRole === "SUPER_ADMIN") {
     permissions = ["*"];
     branchScope = "ALL";

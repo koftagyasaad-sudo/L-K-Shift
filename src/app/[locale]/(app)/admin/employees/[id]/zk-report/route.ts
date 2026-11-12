@@ -19,10 +19,7 @@ export async function GET(
     if (!id) {
       return NextResponse.json({ message: 'معرف الموظف غير محدد' }, { status: 400 });
     }
-    const employeeId = Number(id);
-    if (!Number.isSafeInteger(employeeId) || employeeId < 1) {
-      return NextResponse.json({ message: 'معرف الموظف غير صالح' }, { status: 400 });
-    }
+    const employeeId = id.trim();
 
     const [scopedEmployee] = await db
       .select({ branchId: users.primaryBranchId })

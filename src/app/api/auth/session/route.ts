@@ -10,10 +10,10 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as any;
+    const sessionUser = session?.user as { phone?: string | null; id?: string | null; name?: string | null } | undefined;
 
     const phone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
-    const rawId = sessionUser?.id ? Number(sessionUser.id) : null;
+    const rawId = sessionUser?.id ? String(sessionUser.id).trim() : null;
 
     if (!session || (!phone && !rawId)) {
       return NextResponse.json({ authenticated: false, message: "غير مصرح" }, { status: 401 });
@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest) {
     // استعلام فوري بحساب المستخدم عبر الهاتف أو المعرف
     const conditions = [];
     if (phone) conditions.push(eq(users.phone, phone));
-    if (rawId && Number.isSafeInteger(rawId) && rawId > 0) conditions.push(eq(users.id, rawId));
+    if (rawId) conditions.push(eq(users.id, rawId));
 
     const [dbUser] = await db
       .select()
@@ -53,7 +53,9 @@ export async function GET(_request: NextRequest) {
           shiftStart = b.start || "10:00";
           shiftEnd = b.end || "18:00";
         }
-      } catch (_) {}
+      } catch (error) {
+        console.error("Session branch lookup failed:", error);
+      }
     }
 
     return NextResponse.json({
@@ -73,7 +75,7 @@ export async function GET(_request: NextRequest) {
         isOnboarded: true,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Session endpoint error:", error);
     return NextResponse.json({ authenticated: false, message: "خطأ في السيرفر" }, { status: 500 });
   }

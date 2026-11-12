@@ -9,7 +9,9 @@ export interface OfflineAttendanceRecord {
   longitude: number;
   distanceMeters: number;
   photoBase64: string;
-  timestamp: string; // ISO string
+  timestamp: string;
+  recordedAt?: string;
+  deviceTimestamp?: string;
 }
 
 const DB_NAME = 'LKShiftOfflineDB';
@@ -98,7 +100,7 @@ export async function syncOfflineAttendance(): Promise<{ syncedCount: number; er
           longitude: record.longitude,
           distanceMeters: record.distanceMeters,
           photoBase64: record.photoBase64,
-          offlineTimestamp: record.timestamp,
+          recordedAt: record.recordedAt || record.deviceTimestamp || record.timestamp,
         }),
       });
 

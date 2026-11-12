@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { calculatePayroll } from "./payroll";
 
 const employee = {
-  id: 8,
+  id: "user-8",
   name: "Test Employee",
   role: "Employee",
   branchName: "Main branch",

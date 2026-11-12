@@ -27,11 +27,6 @@ export default async function EmployeeSalaryPage({ params }: PageProps) {
   if (!sessionUserId) {
     redirect(`/${locale}/login`);
   }
-  const userId = Number(sessionUserId);
-  if (!Number.isSafeInteger(userId) || userId < 1) {
-    redirect(`/${locale}/login`);
-  }
-
   // 2. استعلام يقتصر حصراً على الأعمدة الحقيقية في جدول users لمنع سقوط SQL Engine
   const userResults = await db
     .select({
@@ -41,7 +36,7 @@ export default async function EmployeeSalaryPage({ params }: PageProps) {
       role: users.jobRole,
     })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(eq(users.id, String(sessionUserId)))
     .limit(1)
     .catch((err) => {
       console.error('Database query error in EmployeeSalaryPage:', err);

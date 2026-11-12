@@ -23,10 +23,12 @@ function parsePermissions(value: unknown): string[] | null {
   return null;
 }
 
-function parseBranchIds(value: unknown): number[] | null {
+function parseBranchIds(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
-  const ids = value.map(Number);
-  return ids.every((id) => Number.isSafeInteger(id) && id > 0) ? ids : null;
+  const ids = value
+    .filter((id): id is string | number => typeof id === "string" || typeof id === "number")
+    .map(String);
+  return ids.length === value.length && ids.every(Boolean) ? ids : null;
 }
 
 export async function GET(_request: NextRequest, { params }: RouteContext) {

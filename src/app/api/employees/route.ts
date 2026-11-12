@@ -6,6 +6,14 @@ import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth'
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (typeof result === 'object' && result !== null && 'rows' in result && Array.isArray(result.rows)) {
+    return result.rows as T[];
+  }
+  return [];
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authorization = await authorizeApi('employees.view');
@@ -13,6 +21,16 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const empId = searchParams.get('id');
+    const principal = authorization.principal;
+    const branchFilter = principal.systemRole === 'SUPER_ADMIN' || principal.branchScope === 'ALL'
+      ? sql`TRUE`
+      : principal.branchScope === 'CUSTOM'
+        ? principal.allowedBranchIds.length
+          ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text, '') = ANY(${principal.allowedBranchIds}::text[])`
+          : sql`FALSE`
+        : principal.primaryBranchId
+          ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text, '') = ${principal.primaryBranchId}`
+          : sql`FALSE`;
 
     const raw = await db.execute(sql`
       SELECT 
@@ -44,41 +62,40 @@ export async function GET(request: NextRequest) {
         COALESCE(u.avatar_url, '') as "avatarUrl",
         COALESCE(u.job_role, u.system_role::text, 'موظف') as "role",
         COALESCE(u.system_role::text, 'EMPLOYEE') as "systemRole",
-        COALESCE(NULLIF(TRIM(u.employee_number), ''), LPAD(u.id::text, 3, '0')) as "employeeCode",
+        COALESCE(NULLIF(TRIM(u.employee_number), ''), u.id::text) as "employeeCode",
         COALESCE(u.monthly_salary, 5000) as "monthlySalary",
         COALESCE(u.working_hours_per_day, 8) as "workingHoursPerDay",
         COALESCE(u.working_days_per_month, 26) as "workingDaysPerMonth",
         COALESCE(u.is_active, true) as "isActive",
-        COALESCE(b.id, 1) as "branchId",
+        b.id::text as "branchId",
         COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
         b.latitude as "branchLat",
         b.longitude as "branchLng",
-        COALESCE(b.geofence_radius, 150) as "branchRadius",
+        GREATEST(COALESCE(b.geofence_radius, 100), 100) as "branchRadius",
         TO_CHAR(u.created_at, 'YYYY-MM-DD') as "hireDate",
         COALESCE(u.shift_name, 'الشيفت الصباحي') as "shiftName",
         COALESCE(u.shift_start_time, '10:00') as "shiftStartTime",
         COALESCE(u.shift_end_time, '18:00') as "shiftEndTime"
       FROM users u
       LEFT JOIN branches b ON b.id::text = COALESCE(u.primary_branch_id::text, u.branch_id::text, '')
-      WHERE ${empId ? sql`u.id::text = ${empId}` : sql`1=1`}
-      ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, 999999) ASC, u.id ASC;
+      WHERE ${empId ? sql`u.id::text = ${empId}` : sql`TRUE`}
+        AND ${branchFilter}
+      ORDER BY COALESCE(NULLIF(regexp_replace(u.employee_number, '\D', '', 'g'), '')::integer, 999999) ASC, u.id ASC
+      LIMIT 500;
     `);
 
-    const employees = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    const visibleEmployees = employees.filter((employee: any) => {
-      const branchId = employee.branchId == null ? null : Number(employee.branchId);
-      if (authorization.principal.systemRole === 'SUPER_ADMIN') return true; return canAccessBranch(authorization.principal, branchId);
-    }).map((employee: any) => ({
+    const employees = resultRows<Record<string, unknown>>(raw);
+    const visibleEmployees = employees.map((employee) => ({
       ...employee,
-      monthlySalary: hasApiPermission(authorization.principal, 'payroll.view')
-        || hasApiPermission(authorization.principal, 'reports.view')
+      monthlySalary: hasApiPermission(principal, 'payroll.view')
+        || hasApiPermission(principal, 'reports.view')
         ? employee.monthlySalary
         : null,
     }));
     return NextResponse.json(visibleEmployees, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Employees GET error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ message: 'تعذر تحميل بيانات الموظفين.' }, { status: 500 });
   }
 }
 
@@ -107,10 +124,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'الاسم ورقم الهاتف مطلوبان' }, { status: 400 });
     }
 
-    const requestedBranchId = branchId
-      ? Number.parseInt(String(branchId), 10)
-      : authorization.principal.primaryBranchId;
-    if (requestedBranchId !== null && !Number.isSafeInteger(requestedBranchId)) {
+    const requestedBranchId = branchId == null || String(branchId).trim() === ''
+      ? authorization.principal.primaryBranchId
+      : String(branchId).trim();
+    if (!requestedBranchId) {
       return NextResponse.json({ message: 'معرف الفرع غير صالح' }, { status: 400 });
     }
     if (!canAccessBranch(authorization.principal, requestedBranchId)) {
@@ -119,14 +136,14 @@ export async function POST(request: NextRequest) {
 
     if (id) {
       const currentRaw = await db.execute(sql`
-        SELECT COALESCE(primary_branch_id, branch_id) AS branch_id
-        FROM users WHERE id = ${parseInt(id, 10)} LIMIT 1;
+        SELECT COALESCE(primary_branch_id, branch_id)::text AS branch_id
+        FROM users WHERE id::text = ${String(id)} LIMIT 1;
       `);
-      const currentRows = Array.isArray(currentRaw) ? currentRaw : (currentRaw as any)?.rows || [];
+      const currentRows = resultRows<{ branch_id: string | null }>(currentRaw);
       if (!currentRows.length) {
         return NextResponse.json({ message: 'الموظف غير موجود' }, { status: 404 });
       }
-      const currentBranchId = currentRows[0].branch_id == null ? null : Number(currentRows[0].branch_id);
+      const currentBranchId = currentRows[0].branch_id;
       if (!canAccessBranch(authorization.principal, currentBranchId)) {
         return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
       }
@@ -138,7 +155,7 @@ export async function POST(request: NextRequest) {
           name = ${fullNameAr},
           phone = ${phone},
           employee_number = COALESCE(NULLIF(TRIM(${employeeCode || ''}), ''), employee_number),
-          primary_branch_id = ${branchId ? parseInt(branchId, 10) : 1},
+          primary_branch_id = ${requestedBranchId},
           job_role = ${role || 'موظف'},
           monthly_salary = ${monthlySalary ? parseFloat(monthlySalary) : 5000},
           working_hours_per_day = ${workingHoursPerDay ? parseInt(workingHoursPerDay, 10) : 8},
@@ -147,7 +164,7 @@ export async function POST(request: NextRequest) {
           shift_end_time = ${shiftEndTime || '18:00'},
           shift_name = ${shiftName || 'الشيفت الصباحي'},
           updated_at = NOW()
-        WHERE id = ${parseInt(id, 10)};
+        WHERE id::text = ${String(id)};
       `);
       return NextResponse.json({ success: true, message: 'تم تحديث بيانات الموظف بنجاح' });
     } else {
@@ -157,8 +174,7 @@ export async function POST(request: NextRequest) {
           SELECT LPAD((COALESCE(MAX(NULLIF(regexp_replace(employee_number, '\D', '', 'g'), '')::integer), 0) + 1)::text, 3, '0') as next_code
           FROM users;
         `);
-        const rows = Array.isArray(codeQuery) ? codeQuery : (codeQuery as any)?.rows || [];
-        finalCode = rows[0]?.next_code || '001';
+        finalCode = resultRows<{ next_code: string }>(codeQuery)[0]?.next_code || '001';
       }
 
       await db.execute(sql`
@@ -185,7 +201,7 @@ export async function POST(request: NextRequest) {
           ${phone},
           ${finalCode},
           '123456',
-          ${branchId ? parseInt(branchId, 10) : 1},
+          ${requestedBranchId},
           ${role || 'عضو مطبخ'},
           'EMPLOYEE',
           ${monthlySalary ? parseFloat(monthlySalary) : 5000},
@@ -200,8 +216,8 @@ export async function POST(request: NextRequest) {
       `);
       return NextResponse.json({ success: true, message: `تمت إضافة الموظف الجديد بالمسلسل (#${finalCode}) بنجاح` });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Employees POST error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل حفظ الموظف' }, { status: 500 });
+    return NextResponse.json({ message: 'فشل حفظ الموظف' }, { status: 500 });
   }
 }

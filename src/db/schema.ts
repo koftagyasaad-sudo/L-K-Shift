@@ -2,6 +2,7 @@ import {
   pgTable, serial, text, integer, boolean, 
   timestamp, doublePrecision, numeric, pgEnum, jsonb, index, uniqueIndex
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // 1. تعريف الـ Enums
 export const userRoleEnum = pgEnum('user_role', ['SUPER_ADMIN', 'EMPLOYEE']);
@@ -13,7 +14,7 @@ export const leaveStatusEnum = pgEnum('leave_status', ['PENDING', 'APPROVED', 'R
 
 // 2. جدول المستخدمين (users)
 export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
+  id: text('id').default(sql`gen_random_uuid()::text`).primaryKey(),
   fullNameAr: text('full_name_ar').notNull(),
   fullNameEn: text('full_name_en'),
   phone: text('phone').notNull(),
@@ -21,7 +22,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   systemRole: userRoleEnum('system_role').default('EMPLOYEE').notNull(),
   jobRole: text('job_role').notNull(),
-  primaryBranchId: integer('primary_branch_id'),
+  primaryBranchId: text('primary_branch_id'),
   verificationMode: verificationModeEnum('verification_mode').default('QR_GPS').notNull(),
   monthlySalary: numeric('monthly_salary'),
   workingHoursPerDay: integer('working_hours_per_day').default(8).notNull(),
@@ -30,6 +31,10 @@ export const users = pgTable('users', {
   emergencyContact: text('emergency_contact'),
   employeeNumber: text('employee_number'),
   employeeCode: text('employee_code'),
+  payoutMethod: text('payout_method'),
+  shiftName: text('shift_name'),
+  shiftStartTime: text('shift_start_time'),
+  shiftEndTime: text('shift_end_time'),
   resetOtp: text('reset_otp'),
   resetOtpExpiresAt: timestamp('reset_otp_expires_at', { withTimezone: true }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
@@ -42,7 +47,7 @@ export const users = pgTable('users', {
 
 // 3. جدول الفروع (branches)
 export const branches = pgTable('branches', {
-  id: serial('id').primaryKey(),
+  id: text('id').default(sql`gen_random_uuid()::text`).primaryKey(),
   nameAr: text('name_ar').notNull(),
   nameEn: text('name_en'),
   address: text('address'),
@@ -63,8 +68,8 @@ export const branches = pgTable('branches', {
 // 4. جدول سجلات الحضور والانصراف (attendance_logs)
 export const attendanceLogs = pgTable('attendance_logs', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').notNull(),
-  branchId: integer('branch_id'),
+  userId: text('user_id').notNull(),
+  branchId: text('branch_id'),
   workDate: timestamp('work_date', { mode: 'string' }).notNull(),
   checkInTime: timestamp('check_in_time', { withTimezone: true }),
   checkInLat: doublePrecision('check_in_lat'),
@@ -89,7 +94,7 @@ export const attendanceLogs = pgTable('attendance_logs', {
 // 5. جدول طلبات الإجازات والسلف (leave_requests)
 export const leaveRequests = pgTable('leave_requests', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').notNull(),
+  userId: text('user_id').notNull(),
   leaveType: text('leave_type'),
   requestType: text('request_type'),
   startDate: timestamp('start_date', { mode: 'string' }).notNull(),
@@ -114,7 +119,7 @@ export const customRoles = pgTable('custom_roles', {
   nameAr: text('name_ar').notNull(),
   permissions: jsonb('permissions').notNull(),
   branchScope: text('branch_scope').default('ALL').notNull(),
-  allowedBranchIds: jsonb('allowed_branch_ids').$type<number[]>().default([]).notNull(),
+  allowedBranchIds: jsonb('allowed_branch_ids').$type<string[]>().default([]).notNull(),
   isSystem: boolean('is_system').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -128,7 +133,7 @@ export const roles = customRoles;
 // 7. جدول الإشعارات (notifications)
 export const notifications = pgTable('notifications', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').notNull(),
+  userId: text('user_id').notNull(),
   title: text('title').notNull(),
   message: text('message').notNull(),
   isRead: boolean('is_read').default(false).notNull(),

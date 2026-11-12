@@ -153,16 +153,19 @@ function sanitizePermissions(perms: any): string[] {
   return [];
 }
 
-function sanitizeBranchIds(ids: any): number[] {
+function sanitizeBranchIds(ids: unknown): string[] {
   if (!ids) return [];
   if (Array.isArray(ids)) {
-    return ids.map((x) => Number(x)).filter((n) => Number.isSafeInteger(n) && n > 0);
+    return ids
+      .filter((id): id is string | number => typeof id === 'string' || typeof id === 'number')
+      .map(String)
+      .filter((id) => id.length > 0);
   }
   if (typeof ids === 'string') {
     try {
       const parsed = JSON.parse(ids);
       if (Array.isArray(parsed)) {
-        return parsed.map((x) => Number(x)).filter((n) => Number.isSafeInteger(n) && n > 0);
+        return sanitizeBranchIds(parsed);
       }
     } catch {
       return [];

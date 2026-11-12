@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendanceLogs, branches, users } from "@/db/schema";
 import { canAccessBranch, hasApiPermission, type ApiPrincipal } from "@/lib/api-auth";
+import { isValidCoordinates, isValidGpsAccuracy } from "@/lib/geo";
 
 export type AttendanceAction = "CHECK_IN" | "CHECK_OUT";
 
@@ -10,20 +11,21 @@ export interface AttendanceInput {
   action: AttendanceAction;
   latitude: number;
   longitude: number;
+  accuracy: number | null;
   photoUrl: string | null;
-  userId: number | null;
-  branchId: number | null;
+  userId: string | null;
+  branchId: string | null;
   timestamp: Date;
 }
 
 export interface AttendanceRecord {
   id: number;
-  userId: number;
+  userId: string;
   userName: string;
   employeeCode: string;
   userPhone: string;
   branchName: string;
-  branchId: number | null;
+  branchId: string | null;
   workDate: string;
   checkInTime: string | null;
   checkOutTime: string | null;
@@ -72,6 +74,7 @@ export async function parseAttendanceInput(
   let action: string | null = forcedAction || null;
   let latitude: string | null = null;
   let longitude: string | null = null;
+  let accuracy: string | null = null;
   let photoUrl: string | null = null;
   let userId: string | null = null;
   let branchId: string | null = null;
@@ -85,7 +88,8 @@ export async function parseAttendanceInput(
     photoUrl = formValue(form, "photoBase64", "photoUrl");
     userId = formValue(form, "userId");
     branchId = formValue(form, "branchId");
-    timestamp = formValue(form, "offlineTimestamp", "timestamp");
+    accuracy = formValue(form, "accuracy");
+    timestamp = formValue(form, "recordedAt", "deviceTimestamp", "offlineTimestamp", "timestamp");
 
     const photo = form.get("photo");
     if (!photoUrl && photo instanceof File) {
@@ -104,6 +108,7 @@ export async function parseAttendanceInput(
     action ||= typeof values.action === "string" ? values.action : typeof values.type === "string" ? values.type : null;
     latitude = values.latitude == null ? null : String(values.latitude);
     longitude = values.longitude == null ? null : String(values.longitude);
+    accuracy = values.accuracy == null ? null : String(values.accuracy);
     photoUrl = typeof values.photoBase64 === "string"
       ? values.photoBase64
       : typeof values.photoUrl === "string"
@@ -111,7 +116,11 @@ export async function parseAttendanceInput(
         : null;
     userId = values.userId == null ? null : String(values.userId);
     branchId = values.branchId == null ? null : String(values.branchId);
-    timestamp = typeof values.offlineTimestamp === "string"
+    timestamp = typeof values.recordedAt === "string"
+      ? values.recordedAt
+      : typeof values.deviceTimestamp === "string"
+        ? values.deviceTimestamp
+        : typeof values.offlineTimestamp === "string"
       ? values.offlineTimestamp
       : typeof values.timestamp === "string"
         ? values.timestamp
@@ -124,19 +133,23 @@ export async function parseAttendanceInput(
 
   const lat = latitude === null ? Number.NaN : Number(latitude);
   const lng = longitude === null ? Number.NaN : Number(longitude);
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+  if (!isValidCoordinates(lat, lng)) {
     throw new Error("إحداثيات الموقع غير صالحة.");
+  }
+  const parsedAccuracy = accuracy === null ? null : Number(accuracy);
+  if (parsedAccuracy !== null && !isValidGpsAccuracy(parsedAccuracy)) {
+    throw new Error("دقة إشارة GPS غير صالحة.");
   }
   if (photoUrl && photoUrl.length > 7_000_000) {
     throw new Error("حجم الصورة يتجاوز الحد المسموح.");
   }
 
-  const parsedUserId = userId === null ? null : Number(userId);
-  const parsedBranchId = branchId === null ? null : Number(branchId);
-  if (parsedUserId !== null && (!Number.isSafeInteger(parsedUserId) || parsedUserId < 1)) {
+  const parsedUserId = userId?.trim() || null;
+  const parsedBranchId = branchId?.trim() || null;
+  if (userId !== null && !parsedUserId) {
     throw new Error("معرف الموظف غير صالح.");
   }
-  if (parsedBranchId !== null && (!Number.isSafeInteger(parsedBranchId) || parsedBranchId < 1)) {
+  if (branchId !== null && !parsedBranchId) {
     throw new Error("معرف الفرع غير صالح.");
   }
 
@@ -149,6 +162,7 @@ export async function parseAttendanceInput(
     action,
     latitude: lat,
     longitude: lng,
+    accuracy: parsedAccuracy,
     photoUrl,
     userId: parsedUserId,
     branchId: parsedBranchId,
@@ -217,7 +231,7 @@ export async function submitAttendance(
   if (!branch) return errorResponse("الفرع غير موجود.", 404);
 
   const distance = distanceMeters(input.latitude, input.longitude, branch.latitude, branch.longitude);
-  const allowedRadius = branch.geofenceRadius + 100;
+  const allowedRadius = Math.max(100, branch.geofenceRadius) + 100;
   if (distance > allowedRadius) {
     return errorResponse(`أنت خارج نطاق الفرع. المسافة ${distance}م (المسموح ${allowedRadius}م).`, 400);
   }
@@ -295,6 +309,35 @@ export async function getAttendanceRecords(
     || hasApiPermission(principal, "attendance.export");
   const canViewPayroll = hasApiPermission(principal, "payroll.view")
     || hasApiPermission(principal, "reports.view");
+  const requestedUserId = searchParams.get("userId");
+  const requestedCode = searchParams.get("code");
+  const requestedPhone = searchParams.get("phone");
+  const fromDate = searchParams.get("from");
+  const toDate = searchParams.get("to");
+  const conditions = [];
+
+  if (!canViewAll) {
+    conditions.push(eq(attendanceLogs.userId, principal.id));
+  } else if (principal.systemRole !== "SUPER_ADMIN" && principal.branchScope !== "ALL") {
+    const branchIds = principal.branchScope === "CUSTOM"
+      ? principal.allowedBranchIds
+      : principal.primaryBranchId
+        ? [principal.primaryBranchId]
+        : [];
+    if (branchIds.length === 0) {
+      conditions.push(sql`FALSE`);
+    } else {
+      conditions.push(sql`COALESCE(${attendanceLogs.branchId}, ${users.primaryBranchId}) = ANY(${branchIds}::text[])`);
+    }
+  }
+  if (canViewAll && requestedUserId && requestedUserId !== "ALL") {
+    conditions.push(eq(attendanceLogs.userId, requestedUserId));
+  }
+  if (canViewAll && requestedCode) conditions.push(eq(users.employeeNumber, requestedCode));
+  if (canViewAll && requestedPhone) conditions.push(eq(users.phone, requestedPhone));
+  conditions.push(sql`${attendanceLogs.workDate}::date >= COALESCE(NULLIF(${fromDate ?? ""}, '')::date, ${attendanceLogs.workDate}::date)`);
+  conditions.push(sql`${attendanceLogs.workDate}::date <= COALESCE(NULLIF(${toDate ?? ""}, '')::date, ${attendanceLogs.workDate}::date)`);
+
   const rows = await db
     .select({
       id: attendanceLogs.id,
@@ -320,19 +363,15 @@ export async function getAttendanceRecords(
     .from(attendanceLogs)
     .leftJoin(users, eq(attendanceLogs.userId, users.id))
     .leftJoin(branches, eq(attendanceLogs.branchId, branches.id))
-    .orderBy(desc(attendanceLogs.workDate), desc(attendanceLogs.id));
-
-  const requestedUserId = searchParams.get("userId");
-  const requestedCode = searchParams.get("code");
-  const requestedPhone = searchParams.get("phone");
-  const fromDate = searchParams.get("from");
-  const toDate = searchParams.get("to");
+    .where(and(...conditions))
+    .orderBy(desc(attendanceLogs.workDate), desc(attendanceLogs.id))
+    .limit(500);
 
   const canonicalRecords: AttendanceRecord[] = rows.map((row) => ({
     id: row.id,
     userId: row.userId,
     userName: row.userName || "موظف",
-    employeeCode: row.employeeNumber || row.employeeCode || String(row.userId).padStart(3, "0"),
+    employeeCode: row.employeeNumber || row.employeeCode || String(row.userId),
     userPhone: row.phone || "",
     branchName: row.branchName || "الفرع الرئيسي",
     branchId: row.branchId,
@@ -354,8 +393,52 @@ export async function getAttendanceRecords(
   )[0];
   let legacyRecords: AttendanceRecord[] = [];
   if (legacyTable?.tableName) {
+    const branchIds = principal.branchScope === "CUSTOM"
+      ? principal.allowedBranchIds
+      : principal.primaryBranchId
+        ? [principal.primaryBranchId]
+        : [];
+    const legacyUserId = sql`COALESCE(
+      to_jsonb(attendance)->>'user_id',
+      to_jsonb(attendance)->>'userId',
+      to_jsonb(attendance)->>'employee_id'
+    )`;
+    const legacyDate = sql`NULLIF(COALESCE(
+      to_jsonb(attendance)->>'work_date',
+      to_jsonb(attendance)->>'created_at',
+      to_jsonb(attendance)->>'timestamp'
+    ), '')::date`;
+    const legacyConditions = [];
+    if (!canViewAll) legacyConditions.push(sql`${legacyUserId} = ${principal.id}`);
+    else if (principal.systemRole !== "SUPER_ADMIN" && principal.branchScope !== "ALL") {
+      legacyConditions.push(branchIds.length
+        ? sql`COALESCE(
+            to_jsonb(attendance)->>'branch_id',
+            (SELECT primary_branch_id::text FROM users WHERE id::text = ${legacyUserId})
+          ) = ANY(${branchIds}::text[])`
+        : sql`FALSE`);
+    }
+    if (canViewAll && requestedUserId && requestedUserId !== "ALL") {
+      legacyConditions.push(sql`${legacyUserId} = ${requestedUserId}`);
+    }
+    if (canViewAll && requestedCode) {
+      legacyConditions.push(sql`EXISTS (
+        SELECT 1 FROM users
+        WHERE users.id::text = ${legacyUserId}
+          AND COALESCE(users.employee_number, users.employee_code, '') = ${requestedCode}
+      )`);
+    }
+    if (canViewAll && requestedPhone) {
+      legacyConditions.push(sql`EXISTS (
+        SELECT 1 FROM users
+        WHERE users.id::text = ${legacyUserId}
+          AND users.phone = ${requestedPhone}
+      )`);
+    }
+    legacyConditions.push(sql`${legacyDate} >= COALESCE(NULLIF(${fromDate ?? ""}, '')::date, ${legacyDate})`);
+    legacyConditions.push(sql`${legacyDate} <= COALESCE(NULLIF(${toDate ?? ""}, '')::date, ${legacyDate})`);
     const [rawLogs, employeeRows, branchRows] = await Promise.all([
-      db.execute(sql`SELECT * FROM attendance ORDER BY id DESC;`),
+      db.execute(sql`SELECT attendance.* FROM attendance AS attendance WHERE ${sql.join(legacyConditions, sql` AND `)} ORDER BY id DESC LIMIT 500;`),
       db.select({
         id: users.id,
         fullNameAr: users.fullNameAr,
@@ -365,22 +448,22 @@ export async function getAttendanceRecords(
         salary: users.monthlySalary,
         workingHoursPerDay: users.workingHoursPerDay,
         primaryBranchId: users.primaryBranchId,
-      }).from(users),
-      db.select({ id: branches.id, nameAr: branches.nameAr }).from(branches),
+      }).from(users).limit(500),
+      db.select({ id: branches.id, nameAr: branches.nameAr }).from(branches).limit(500),
     ]);
     const employeeById = new Map(employeeRows.map((employee) => [String(employee.id), employee]));
     const branchNameById = new Map(branchRows.map((branch) => [String(branch.id), branch.nameAr]));
 
     legacyRecords = resultRows<Record<string, unknown>>(rawLogs).flatMap((log) => {
       const id = Number(log.id);
-      const userId = Number(log.user_id ?? log.userId ?? log.employee_id);
-      if (!Number.isSafeInteger(id) || id < 1 || !Number.isSafeInteger(userId) || userId < 1) {
+      const userId = String(log.user_id ?? log.userId ?? log.employee_id ?? "");
+      if (!Number.isSafeInteger(id) || id < 1 || !userId) {
         return [];
       }
 
-      const employee = employeeById.get(String(userId));
+      const employee = employeeById.get(userId);
       const rawBranchId = log.branch_id ?? log.branchId ?? employee?.primaryBranchId ?? null;
-      const branchId = rawBranchId == null ? null : Number(rawBranchId);
+      const branchId = rawBranchId == null ? null : String(rawBranchId);
       const branchName = branchId === null ? null : branchNameById.get(String(branchId));
       const rawCheckIn = log.check_in_time ?? log.checkInTime ?? log.timestamp ?? log.created_at;
       const rawCheckOut = log.check_out_time ?? log.checkOutTime;
@@ -394,7 +477,7 @@ export async function getAttendanceRecords(
         id,
         userId,
         userName: employee?.fullNameAr || String(log.user_name ?? log.userName ?? "موظف"),
-        employeeCode: employee?.employeeNumber || employee?.employeeCode || String(userId).padStart(3, "0"),
+        employeeCode: employee?.employeeNumber || employee?.employeeCode || userId,
         userPhone: employee?.phone || "",
         branchName: branchName || String(log.branch_name ?? log.branchName ?? "الفرع الرئيسي"),
         branchId,
@@ -419,17 +502,6 @@ export async function getAttendanceRecords(
   });
 
   return [...uniqueRecords.values()]
-    .filter((record) => {
-      if (!canViewAll && record.userId !== principal.id) return false;
-      if (canViewAll && !canAccessBranch(principal, record.branchId)) return false;
-      if (canViewAll && requestedUserId && requestedUserId !== "ALL"
-        && String(record.userId) !== requestedUserId) return false;
-      if (canViewAll && requestedCode && requestedCode !== record.employeeCode) return false;
-      if (canViewAll && requestedPhone && requestedPhone !== record.userPhone) return false;
-      if (fromDate && record.workDate < fromDate) return false;
-      if (toDate && record.workDate > toDate) return false;
-      return true;
-    })
     .sort((left, right) =>
       new Date(right.checkInTime || right.workDate).getTime()
       - new Date(left.checkInTime || left.workDate).getTime()

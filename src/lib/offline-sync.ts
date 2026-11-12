@@ -5,12 +5,14 @@ const STORE_NAME = "pending_attendance";
 
 export interface PendingAttendance {
   id?: number;
-  userId: number;
-  branchId: number;
+  userId: string;
+  branchId: string;
   type: "CHECK_IN" | "CHECK_OUT";
   latitude: string;
   longitude: string;
-  timestamp: string; // وقت التسجيل الفعلي المحفوظ لحظة الضغط
+  timestamp: string;
+  recordedAt?: string;
+  deviceTimestamp?: string;
   photoBase64?: string;
   mode: string;
 }
@@ -86,7 +88,7 @@ export async function syncOfflineAttendance(): Promise<{ syncedCount: number }> 
       formData.append("type", item.type);
       formData.append("latitude", item.latitude);
       formData.append("longitude", item.longitude);
-      formData.append("timestamp", item.timestamp);
+      formData.append("recordedAt", item.recordedAt || item.deviceTimestamp || item.timestamp);
       formData.append("mode", item.mode);
       formData.append("isOfflineSync", "true");
 

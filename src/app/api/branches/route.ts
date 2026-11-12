@@ -6,6 +6,18 @@ import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (typeof result === 'object' && result !== null && 'rows' in result && Array.isArray(result.rows)) {
+    return result.rows as T[];
+  }
+  return [];
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function GET() {
   try {
     const authorization = await authorizeApi([
@@ -16,10 +28,6 @@ export async function GET() {
       'attendance.view',
     ]);
     if ('response' in authorization) return authorization.response;
-
-    try {
-      await db.execute(sql`SELECT 1`);
-    } catch {}
 
     const raw = await db.execute(sql`
       SELECT 
@@ -48,14 +56,15 @@ export async function GET() {
       ORDER BY b.id ASC;
     `);
 
-    const branches = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    const visibleBranches = branches.filter((branch: any) =>
-      authorization.principal.systemRole === 'SUPER_ADMIN' || canAccessBranch(authorization.principal, branch.id)
+    const branches = resultRows<Record<string, unknown>>(raw);
+    const visibleBranches = branches.filter((branch) =>
+      authorization.principal.systemRole === 'SUPER_ADMIN'
+      || canAccessBranch(authorization.principal, String(branch.id))
     );
     return NextResponse.json(visibleBranches, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Branches GET error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ message: 'تعذر تحميل بيانات الفروع.' }, { status: 500 });
   }
 }
 
@@ -89,22 +98,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'اسم الفرع بالعربية مطلوب' }, { status: 400 });
     }
 
-    if (id && !canAccessBranch(authorization.principal, Number(id))) {
+    if (id && !canAccessBranch(authorization.principal, String(id))) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
     if (!id && authorization.principal.branchScope !== 'ALL') {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
 
-    try {
-      await db.execute(sql`SELECT 1`);
-    } catch {}
-
     const enName = nameEn || name || 'Branch';
     const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
     const lng = longitude !== undefined && longitude !== null ? parseFloat(longitude) : 30.6475;
-    const radius = geofenceRadius ? parseInt(geofenceRadius, 10) : 100;
-    const mgrId = managerId ? parseInt(managerId, 10) : null;
+    const radius = Math.max(100, Number.parseInt(geofenceRadius, 10) || 100);
+    const mgrId = managerId ? String(managerId) : null;
     const s1Start = shift1Start || '09:00';
     const s1End = shift1End || '17:00';
     const s2Start = shift2Start || '13:00';
@@ -113,7 +118,7 @@ export async function POST(request: NextRequest) {
     const s3End = shift3End || '01:00';
     const grace = gracePeriodMinutes !== undefined ? parseInt(gracePeriodMinutes, 10) : 15;
 
-    if (id && Number(id) > 0) {
+    if (id) {
       await db.execute(sql`
         UPDATE branches
         SET 
@@ -133,7 +138,7 @@ export async function POST(request: NextRequest) {
           shift3_start = ${s3Start},
           shift3_end = ${s3End},
           grace_period_minutes = ${grace}
-        WHERE id = ${parseInt(id, 10)};
+        WHERE id::text = ${String(id)};
       `);
       return NextResponse.json({ success: true, message: 'تم تحديث بيانات الفرع بنجاح' });
     } else {
@@ -152,9 +157,9 @@ export async function POST(request: NextRequest) {
       `);
       return NextResponse.json({ success: true, message: 'تمت إضافة الفرع الجديد بنجاح' });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Branches POST error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل حفظ الفرع' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage(error, 'فشل حفظ الفرع') }, { status: 500 });
   }
 }
 
@@ -170,10 +175,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'معرف الفرع مطلوب' }, { status: 400 });
     }
 
-    const branchId = Number(id);
-    if (!Number.isSafeInteger(branchId) || branchId < 1) {
-      return NextResponse.json({ message: 'معرف الفرع غير صالح' }, { status: 400 });
-    }
+    const branchId = id.trim();
     if (!canAccessBranch(authorization.principal, branchId)) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
@@ -184,11 +186,11 @@ export async function DELETE(request: NextRequest) {
       await db.execute(sql`UPDATE attendance_logs SET branch_id = NULL WHERE branch_id = ${branchId};`);
     } catch {}
 
-    await db.execute(sql`DELETE FROM branches WHERE id = ${branchId};`);
+    await db.execute(sql`DELETE FROM branches WHERE id::text = ${branchId};`);
 
     return NextResponse.json({ success: true, message: 'تم حذف الفرع بنجاح' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Branches DELETE error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل حذف الفرع' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage(error, 'فشل حذف الفرع') }, { status: 500 });
   }
 }

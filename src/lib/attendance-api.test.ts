@@ -15,19 +15,46 @@ describe("parseAttendanceInput", () => {
       action: "CHECK_IN",
       latitude: 30.0444,
       longitude: 31.2357,
-      userId: 8,
-      branchId: 3,
+      userId: "user-8",
+      branchId: "branch-3",
       timestamp: "2026-11-09T08:00:00.000Z",
+      accuracy: 18.5,
     }));
 
     expect(input).toMatchObject({
       action: "CHECK_IN",
       latitude: 30.0444,
       longitude: 31.2357,
-      userId: 8,
-      branchId: 3,
+      userId: "user-8",
+      branchId: "branch-3",
+      accuracy: 18.5,
     });
     expect(input.timestamp.toISOString()).toBe("2026-11-09T08:00:00.000Z");
+  });
+
+  it("rejects invalid GPS accuracy while accepting valid indoor readings", async () => {
+    const valid = await parseAttendanceInput(request({
+      action: "CHECK_IN",
+      latitude: -33.8688,
+      longitude: 151.2093,
+      accuracy: 45,
+      recordedAt: "2026-11-09T08:00:00.000Z",
+    }));
+    expect(valid.accuracy).toBe(45);
+    expect(valid.timestamp.toISOString()).toBe("2026-11-09T08:00:00.000Z");
+
+    await expect(parseAttendanceInput(request({
+      action: "CHECK_IN",
+      latitude: 30,
+      longitude: 31,
+      accuracy: 0,
+    }))).rejects.toThrow("دقة إشارة GPS غير صالحة.");
+    await expect(parseAttendanceInput(request({
+      action: "CHECK_IN",
+      latitude: 30,
+      longitude: 31,
+      accuracy: "not-a-number",
+    }))).rejects.toThrow("دقة إشارة GPS غير صالحة.");
   });
 
   it("rejects requests with missing coordinates instead of treating them as zero", async () => {

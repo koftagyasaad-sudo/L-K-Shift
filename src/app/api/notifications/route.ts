@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       SELECT 
         id,
         user_id as "userId",
-        COALESCE(sender_id, 0) as "senderId",
+        sender_id as "senderId",
         title,
         message,
         COALESCE(type, 'GENERAL') as "type",
@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
     await db.execute(sql`
       INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
       VALUES (
-        ${parseInt(userId, 10)},
-        ${senderId ? parseInt(senderId, 10) : null},
+        ${String(userId)},
+        ${senderId ? String(senderId) : null},
         ${title},
         ${message},
         ${type || 'GENERAL'},

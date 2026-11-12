@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { canAccessBranch, hasApiPermission, requireApiPrincipal } from '@/lib/api-auth';
 import type { ApiPrincipal } from '@/lib/api-auth';
 
-async function assertEmployeeBranchAccess(principal: ApiPrincipal, employeeId: number) {
+async function assertEmployeeBranchAccess(principal: ApiPrincipal, employeeId: string) {
   const [employee] = await db
     .select({ branchId: users.primaryBranchId })
     .from(users)
@@ -19,7 +19,7 @@ async function assertEmployeeBranchAccess(principal: ApiPrincipal, employeeId: n
 }
 
 export interface EmployeeData {
-  id: number;
+  id: string;
   name: string;
   fullName?: string;
   fullNameAr?: string;
@@ -30,7 +30,7 @@ export interface EmployeeData {
   systemRole?: string;
   employeeCode?: string | null;
   employeeNumber?: string | null;
-  branchId?: number | null;
+  branchId?: string | null;
   branchName?: string | null;
   basicSalary?: number;
   monthlySalary?: number | string | null;
@@ -115,8 +115,8 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
   const canViewPayroll = hasApiPermission(principal, 'payroll.view')
     || hasApiPermission(principal, 'reports.view');
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-    if (!Number.isSafeInteger(numericId) || numericId < 1) return null;
+    const employeeId = String(id).trim();
+    if (!employeeId) return null;
 
     const result = await db
       .select({
@@ -142,13 +142,13 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
       })
       .from(users)
       .leftJoin(branches, eq(users.primaryBranchId, branches.id))
-      .where(eq(users.id, numericId))
+      .where(eq(users.id, employeeId))
       .limit(1);
 
     if (!result || result.length === 0) return null;
     const u = result[0];
     if (
-      numericId !== principal.id &&
+      employeeId !== principal.id &&
       !hasApiPermission(principal, 'employees.view') &&
       !hasApiPermission(principal, 'employees.manage')
     ) {
@@ -172,8 +172,8 @@ export async function getEmployeeByIdAction(id: string | number): Promise<Employ
       employeeNumber: u.employeeNumber,
       branchId: u.primaryBranchId,
       branchName: u.branchName || 'الفرع الرئيسي',
-      basicSalary: numericId === principal.id || canViewPayroll ? Number(u.monthlySalary) || 0 : 0,
-      monthlySalary: numericId === principal.id || canViewPayroll ? u.monthlySalary : null,
+      basicSalary: employeeId === principal.id || canViewPayroll ? Number(u.monthlySalary) || 0 : 0,
+      monthlySalary: employeeId === principal.id || canViewPayroll ? u.monthlySalary : null,
       workingHoursPerDay: u.workingHoursPerDay || 8,
       annualLeaveDays: 21,
       nationalId: u.nationalId,
@@ -195,14 +195,13 @@ export async function updateEmployeeAction(
   data: Partial<EmployeeData>
 ): Promise<{ success: boolean; message?: string }> {
   const principal = await requireApiPrincipal('employees.manage');
-  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+  const employeeId = String(id).trim();
+  if (!employeeId) {
     return { success: false, message: 'معرف الموظف غير صالح' };
   }
-  await assertEmployeeBranchAccess(principal, numericId);
+  await assertEmployeeBranchAccess(principal, employeeId);
   if (data.branchId !== undefined && data.branchId !== null) {
-    const targetBranchId = Number(data.branchId);
-    if (!Number.isSafeInteger(targetBranchId) || !canAccessBranch(principal, targetBranchId)) {
+    if (!canAccessBranch(principal, data.branchId)) {
       throw new Error('ممنوع تعيين الموظف إلى هذا الفرع');
     }
   }
@@ -226,7 +225,7 @@ export async function updateEmployeeAction(
         ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
         updatedAt: new Date(),
       })
-      .where(eq(users.id, numericId));
+      .where(eq(users.id, employeeId));
 
     revalidatePath('/[locale]/admin/employees', 'page');
     return { success: true };
@@ -238,13 +237,13 @@ export async function updateEmployeeAction(
 
 export async function deleteEmployeeAction(id: string | number): Promise<{ success: boolean; message?: string }> {
   const principal = await requireApiPrincipal('employees.manage');
-  const numericId = typeof id === 'string' ? parseInt(id, 10) : Number(id);
-  if (!Number.isSafeInteger(numericId) || numericId < 1) {
+  const employeeId = String(id).trim();
+  if (!employeeId) {
     return { success: false, message: 'معرف الموظف غير صالح' };
   }
-  await assertEmployeeBranchAccess(principal, numericId);
+  await assertEmployeeBranchAccess(principal, employeeId);
   try {
-    await db.delete(users).where(eq(users.id, numericId));
+    await db.delete(users).where(eq(users.id, employeeId));
     revalidatePath('/[locale]/admin/employees', 'page');
     return { success: true };
   } catch (error: any) {

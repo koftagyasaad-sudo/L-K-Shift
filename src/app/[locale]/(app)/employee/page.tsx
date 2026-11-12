@@ -37,7 +37,7 @@ export default async function EmployeeDashboardPage({ params }: PageProps) {
       role: users.jobRole,
     })
     .from(users)
-    .where(eq(users.id, Number(sessionUserId)))
+    .where(eq(users.id, String(sessionUserId)))
     .limit(1)
     .catch((err) => {
       console.error('Database query error in EmployeeDashboardPage:', err);
