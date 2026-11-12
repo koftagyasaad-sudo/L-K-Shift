@@ -180,7 +180,7 @@ export default function LoginPage() {
                   : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
-              {isRtl ? 'إنشاء حساب موظف' : 'New Account'}
+              {isRtl ? 'تسجيل بيانات موظف جديد' : 'New Account'}
             </button>
           </div>
 
@@ -200,8 +200,8 @@ export default function LoginPage() {
           {activeTab === 'LOGIN' ? (
             <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  {isRtl ? 'رقم التليفون (اسم المستخدم)' : 'Phone Number'}
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
+                  {isRtl ? 'رقم الهاتف المسجل' : 'Phone Number'}
                 </label>
                 <input
                   type="text"
@@ -209,7 +209,7 @@ export default function LoginPage() {
                   autoCapitalize="none"
                   required
                   autoComplete="off"
-                  name="login_phone_field_lk"
+                  name="phone"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={isRtl ? 'أدخل رقم الهاتف المسجل' : '01xxxxxxxxx'}
@@ -219,13 +219,13 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
                   {isRtl ? 'كلمة المرور' : 'Password'}
                 </label>
                 <PasswordInput
                   required
-                  autoComplete="new-password"
-                  name="login_pwd_field_lk"
+                  autoComplete="current-password"
+                  name="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -263,7 +263,7 @@ export default function LoginPage() {
           ) : (
             <form onSubmit={handleRegister} className="space-y-4" autoComplete="off">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
                   {isRtl ? 'الاسم رباعي' : 'Full Name'} <span className="text-orange-500">*</span>
                 </label>
                 <input
@@ -278,7 +278,7 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
                   {isRtl ? 'رقم الهاتف (اسم المستخدم)' : 'Phone Number'} <span className="text-orange-500">*</span>
                 </label>
                 <input
@@ -296,12 +296,12 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
                   {isRtl ? 'كلمة المرور' : 'Password'} <span className="text-orange-500">*</span>
                 </label>
                 <PasswordInput
                   required
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   placeholder="6 أحرف أو أرقام على الأقل"
@@ -313,12 +313,12 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-200 font-semibold mb-1.5">
                   {isRtl ? 'تأكيد كلمة المرور' : 'Confirm Password'} <span className="text-orange-500">*</span>
                 </label>
                 <PasswordInput
                   required
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
                   placeholder="••••••••"
@@ -339,7 +339,7 @@ export default function LoginPage() {
                 ) : (
                   <>
                     <UserPlus className="w-4 h-4" />
-                    {isRtl ? 'إنشاء حساب موظف جديد' : 'Register Account'}
+                    {isRtl ? 'تسجيل بيانات موظف جديد جديد' : 'Register Account'}
                   </>
                 )}
               </button>
@@ -349,7 +349,7 @@ export default function LoginPage() {
           {'\n'}
           <div className="mt-6 flex flex-col items-center gap-1 border-t border-slate-200/90 pt-4 text-center text-[11px] text-slate-600 dark:border-white/[0.08] dark:text-zinc-400">
             <span>© {new Date().getFullYear()} L-K Shift Core. {isRtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}</span>
-            <span className="font-medium">Developed by Omar Abd Elhalim</span>
+            <span className="font-medium">Developed by Omar Abd Elhaleam</span>
           </div>
         </div>
       </div>

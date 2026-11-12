@@ -1,1 +1,1 @@
-const CACHE_NAME = 'lk-shift-v2026-formal-font-v18
+const CACHE_NAME = 'lk-shift-v2026-audit-clean-v19

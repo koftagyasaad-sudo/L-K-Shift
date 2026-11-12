@@ -148,7 +148,6 @@ h1, h2, h3, th {
 }
 
 /* === BUILD STYLE.CSS EXACT DESIGN SYSTEM === */
-@import url('https://fonts.googleapis.com/css?family=Montserrat:300,400,500,600,700,800&display=swap');
 
 :root {
   /* Exact palette from Build RealEstate style.css */
@@ -291,9 +290,7 @@ header.sticky > div {
 }
 
 /* 3. Cards & Boxes (.properties-single, .blog-inner, .single-team-member from style.css) */
-.app-main .rounded-3xl,
-.app-main .rounded-2xl,
-.app-main .rounded-xl {
+.rounded-3xl, .rounded-2xl, .rounded-xl {
   border-radius: 2px !important;
 }
 
@@ -469,7 +466,6 @@ html.dark .app-main .text-slate-400 {
 }
 
 /* === GLOBAL FORMAL ARABIC TYPOGRAPHY (IBM PLEX SANS ARABIC) === */
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
 
 :root {
   --font-formal-arabic: var(--font-ibm-plex-arabic), 'IBM Plex Sans Arabic', sans-serif;

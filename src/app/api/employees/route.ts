@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
           employee_number = COALESCE(${cleanCode}, employee_number),
           employee_code = COALESCE(${cleanCode}, employee_code),
           primary_branch_id = ${requestedBranchId},
-          job_role = ${role || "موظف"},
+          job_role = ${(role && role !== "موظف (قيد المراجعة)") ? role : "موظف"},
           monthly_salary = ${salaryValue ? parseFloat(String(salaryValue)) : 5000},
           working_hours_per_day = ${workingHoursPerDay ? parseInt(String(workingHoursPerDay), 10) : 8},
           is_active = ${isActive !== false},

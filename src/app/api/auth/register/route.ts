@@ -1,133 +1,106 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'node:crypto';
-import { eq, ilike, or, sql } from 'drizzle-orm';
-import { db } from '@/db';
-import { notifications, users } from '@/db/schema';
-import { getSqlRows } from '@/lib/db';
-import { hashPassword } from '@/lib/passwords';
-import { validateStrongPassword } from '@/lib/password-policy';
-import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
+import { hashPassword } from "@/lib/passwords";
+import { validateStrongPassword } from "@/lib/password-policy";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { notifyRequestReviewers } from "@/lib/request-notifications";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function isUniqueConstraintError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  if ('code' in error && error.code === '23505') return true;
-  return 'cause' in error && isUniqueConstraintError(error.cause);
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (typeof result === "object" && result !== null && "rows" in result && Array.isArray(result.rows)) {
+    return result.rows as T[];
+  }
+  return [];
 }
 
 export async function POST(request: NextRequest) {
-  const rateLimit = checkRateLimit(`register:${getClientIp(request)}`, 5, 60_000);
-  if (!rateLimit.success) {
+  const ip = getClientIp(request);
+  const limit = checkRateLimit("self-register:" + ip, 5, 15 * 60 * 1000);
+  if (!limit.success) {
     return NextResponse.json(
-      { success: false, message: 'تم تجاوز عدد المحاولات. يرجى الانتظار قبل إعادة المحاولة.' },
-      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
-    );
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { success: false, message: 'بيانات التسجيل غير صالحة.' },
-      { status: 400 }
-    );
-  }
-
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return NextResponse.json(
-      { success: false, message: 'بيانات التسجيل غير صالحة.' },
-      { status: 400 }
-    );
-  }
-
-  const values = body as Record<string, unknown>;
-  const fullName = typeof values.fullName === 'string' ? values.fullName.trim() : '';
-  const phone = typeof values.phone === 'string' ? values.phone.trim() : '';
-  const password = typeof values.password === 'string' ? values.password : '';
-
-  if (fullName.length < 2 || fullName.length > 120 || phone.length < 6 || phone.length > 32
-    || !validateStrongPassword(password) || password.length > 128) {
-    return NextResponse.json(
-      { success: false, message: 'يرجى إدخال اسم ورقم هاتف صحيحين وكلمة مرور من 6 محارف على الأقل.' },
-      { status: 400 }
+      { message: "محاولات تسجيل كثيرة. يرجى الانتظار 15 دقيقة والمحاولة مرة أخرى." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
     );
   }
 
   try {
-    const [existing] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.phone, phone))
-      .limit(1);
-    if (existing) {
-      return NextResponse.json(
-        { success: false, message: 'رقم الهاتف مسجل بالفعل مسبقاً، يمكنك تسجيل الدخول مباشرة' },
-        { status: 409 }
+    const body = await request.json();
+    const fullName = String(body.fullNameAr || body.fullName || body.name || "").trim();
+    const phone = String(body.phone || "").trim();
+    const nationalId = body.nationalId ? String(body.nationalId).trim() : null;
+    const password = String(body.password || "");
+    const branchId = body.branchId ? String(body.branchId).trim() : null;
+
+    if (!fullName || fullName.length < 3) {
+      return NextResponse.json({ message: "يرجى إدخال الاسم بالكامل بشكل صحيح." }, { status: 400 });
+    }
+    if (!/^01[0125][0-9]{8}$/.test(phone)) {
+      return NextResponse.json({ message: "يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقماً." }, { status: 400 });
+    }
+    if (nationalId && !/^[23][0-9]{13}$/.test(nationalId)) {
+      return NextResponse.json({ message: "الرقم القومي يجب أن يتكون من 14 رقماً صحيحاً." }, { status: 400 });
+    }
+
+    const pwCheck = validateStrongPassword(password);
+    if (!pwCheck.valid) {
+      return NextResponse.json({ message: pwCheck.message }, { status: 400 });
+    }
+
+    const existing = await db.execute(sql`SELECT id, is_active FROM users WHERE phone = ${phone} LIMIT 1;`);
+    const existingRows = resultRows<{ id: string; is_active: boolean }>(existing);
+    if (existingRows.length > 0) {
+      const msg = existingRows[0].is_active
+        ? "رقم الهاتف مسجل ومفعّل بالفعل. يمكنك تسجيل الدخول مباشرة."
+        : "تم تسجيل بيانات هذا الرقم مسبقاً وهو قيد المراجعة والتفعيل من قِبل الإدارة.";
+      return NextResponse.json({ message: msg }, { status: 409 });
+    }
+
+    const countRes = await db.execute(sql`SELECT (COUNT(*)::int + 1) AS next_num FROM users;`);
+    const nextNum = resultRows<{ next_num: number }>(countRes)[0]?.next_num || 1;
+    const empCode = String(nextNum).padStart(3, "0");
+    const hashedPassword = await hashPassword(password);
+    const newId = randomUUID();
+
+    // Account is created with is_active = FALSE until approved by HR / System Admin
+    await db.execute(sql`
+      INSERT INTO users (
+        id, full_name_ar, phone, national_id, password_hash,
+        employee_number, employee_code, primary_branch_id,
+        job_role, system_role, monthly_salary, working_hours_per_day,
+        is_active, shift_start_time, shift_end_time, shift_name,
+        created_at, updated_at
+      ) VALUES (
+        ${newId}, ${fullName}, ${phone}, ${nationalId}, ${hashedPassword},
+        ${empCode}, ${empCode}, ${branchId},
+        'موظف (قيد المراجعة)', 'EMPLOYEE', 0, 8,
+        false, '10:00', '18:00', 'الشيفت الصباحي',
+        NOW(), NOW()
       );
-    }
+    `);
 
-    const insertedUsers = getSqlRows<{ id: string }>(await db.execute(sql`
-      INSERT INTO users (id, full_name_ar, name, phone, password_hash, system_role, job_role)
-      VALUES (
-        ${randomUUID()},
-        ${fullName},
-        COALESCE(NULLIF(${fullName}, ''), ${fullName}),
-        ${phone},
-        ${await hashPassword(password)},
-        'EMPLOYEE',
-        'موظف'
-      )
-      RETURNING id;
-    `));
-    const newUser = insertedUsers[0];
-    if (!newUser) throw new Error('Registration did not return a user record.');
-
-    let notificationStatus: 'sent' | 'not_required' | 'failed' = 'not_required';
     try {
-      const managers = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(or(
-          eq(users.systemRole, 'SUPER_ADMIN'),
-          ilike(users.jobRole, '%مدير النظام%'),
-          ilike(users.jobRole, '%HR%'),
-          ilike(users.jobRole, '%موارد بشرية%')
-        ));
-
-      if (managers.length > 0) {
-        await db.insert(notifications).values(managers.map((manager) => ({
-          userId: manager.id,
-          title: 'تسجيل موظف جديد',
-          message: `قام الموظف (${fullName}) برقم هاتف (${phone}) بإنشاء حساب جديد بالنظام.`,
-          link: '/admin/employees',
-        })));
-        notificationStatus = 'sent';
-      }
-    } catch (notifErr) {
-      notificationStatus = 'failed';
-      console.error('Registration succeeded but manager notifications could not be created:', notifErr);
-    }
+      await notifyRequestReviewers(
+        newId,
+        "تسجيل بيانات موظف جديد (بانتظار التفعيل)",
+        `قام (${fullName} - ${phone}) بتسجيل بياناته. يرجى مراجعة الحساب وتحديد الفرع والصلاحيات وتفعيله.`,
+        "/admin/employees",
+        "STAFF_REQUEST",
+        branchId
+      );
+    } catch {}
 
     return NextResponse.json({
       success: true,
-      message: 'تم إنشاء حسابك بنجاح! يمكنك الآن تسجيل الدخول.',
-      notificationStatus,
+      pendingApproval: true,
+      message: "تم تسجيل بياناتك بنجاح! حسابك الآن قيد المراجعة لدى إدارة الموارد البشرية (HR) ومدير النظام لتحديد الصلاحيات وتفعيل الحساب.",
     }, { status: 201 });
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      return NextResponse.json(
-        { success: false, message: 'رقم الهاتف مسجل بالفعل مسبقاً، يمكنك تسجيل الدخول مباشرة' },
-        { status: 409 }
-      );
-    }
-
-    console.error('Registration API error:', error);
-    return NextResponse.json(
-      { success: false, message: 'حدث خطأ أثناء إنشاء الحساب.' },
-      { status: 500 }
-    );
+    console.error("Self-registration error:", error);
+    return NextResponse.json({ message: "حدث خطأ أثناء تسجيل البيانات." }, { status: 500 });
   }
 }

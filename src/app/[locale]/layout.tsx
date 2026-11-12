@@ -9,7 +9,7 @@ import englishMessages from '../../../messages/en.json';
 
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
   subsets: ['arabic', 'latin'],
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
   variable: '--font-ibm-plex-arabic',
 });
@@ -34,7 +34,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: 'cover',
-  themeColor: '#ea580c',
+  themeColor: '#3a4149',
 };
 
 export default async function RootLayout({
