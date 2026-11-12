@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 
 interface PageProps {
   params: Promise<{
@@ -34,6 +35,7 @@ export default function MyBranchStaffPage({ params }: PageProps) {
   const [branchInfo, setBranchInfo] = useState<BranchSummary | null>(null);
   const [colleagues, setColleagues] = useState<EmployeeBrief[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const colleaguesPage = usePaginatedItems(colleagues, `${branchInfo?.nameAr || ''}|${locale}`);
 
   useEffect(() => {
     const storedName = localStorage.getItem('userName') || 'عمر عبدالحليم';
@@ -124,7 +126,7 @@ export default function MyBranchStaffPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {colleagues.map((colleague) => (
+                {colleaguesPage.pageItems.map((colleague) => (
                   <tr key={colleague.id} className="transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02]">
                     <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
                       {colleague.name || colleague.fullName}
@@ -146,6 +148,13 @@ export default function MyBranchStaffPage({ params }: PageProps) {
                 ))}
               </tbody>
             </table>
+            <PaginationControls
+              page={colleaguesPage.page}
+              pageCount={colleaguesPage.pageCount}
+              itemCount={colleagues.length}
+              onPageChange={colleaguesPage.setPage}
+              isRtl={isRtl}
+            />
           </div>
         )}
       </div>

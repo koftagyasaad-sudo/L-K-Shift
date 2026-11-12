@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import GlobalHeader from '@/components/global-header';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import SplashScreen from '@/components/SplashScreen';
+import TopNavigationLoader from '@/components/layout/TopNavigationLoader';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -23,6 +24,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       className="min-h-screen bg-slate-50 text-slate-900 flex flex-row relative"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      <TopNavigationLoader />
       {/* 1. شاشة البداية الاحترافية والأنيميشن الدائري */}
       <SplashScreen />
 

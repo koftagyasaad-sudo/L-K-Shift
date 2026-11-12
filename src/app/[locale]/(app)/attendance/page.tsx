@@ -220,7 +220,12 @@ export default function AttendancePage() {
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 320 }, height: { ideal: 320 }, facingMode: 'user' },
+        video: {
+          facingMode: 'user',
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
+          aspectRatio: { ideal: 3 / 4 },
+        },
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -241,11 +246,20 @@ export default function AttendancePage() {
   const capturePhoto = () => {
     if (!videoRef.current) return '';
     const canvas = document.createElement('canvas');
-    canvas.width = 240;
-    canvas.height = 240;
+    canvas.width = 720;
+    canvas.height = 960;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, 240, 240);
+      const sourceWidth = videoRef.current.videoWidth;
+      const sourceHeight = videoRef.current.videoHeight;
+      const sourceAspect = sourceWidth / sourceHeight;
+      if (sourceAspect > 3 / 4) {
+        const cropWidth = sourceHeight * 3 / 4;
+        ctx.drawImage(videoRef.current, (sourceWidth - cropWidth) / 2, 0, cropWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+      } else {
+        const cropHeight = sourceWidth / (3 / 4);
+        ctx.drawImage(videoRef.current, 0, (sourceHeight - cropHeight) / 2, sourceWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      }
       const base64 = canvas.toDataURL('image/jpeg', 0.7);
       setSelfiePhoto(base64);
       return base64;
@@ -497,7 +511,7 @@ export default function AttendancePage() {
           <span className="text-[11px] text-slate-400 font-semibold">مطلوبة مع كل بصمة</span>
         </div>
 
-        <div className="relative aspect-video max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
+        <div className="relative aspect-[3/4] max-w-xs mx-auto rounded-2xl overflow-hidden bg-black border border-white/10 flex items-center justify-center">
           {selfiePhoto ? (
             <img src={selfiePhoto} alt="Captured Selfie" className="w-full h-full object-cover" />
           ) : (

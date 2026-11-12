@@ -100,7 +100,12 @@ export function CheckInOutWidget({
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        video: {
+          facingMode: "user",
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
+          aspectRatio: { ideal: 3 / 4 },
+        },
         audio: false,
       });
 
@@ -127,11 +132,20 @@ export function CheckInOutWidget({
   const takePhoto = () => {
     if (!videoRef.current) return;
     const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth || 640;
-    canvas.height = videoRef.current.videoHeight || 480;
+    canvas.width = 720;
+    canvas.height = 960;
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const sourceWidth = videoRef.current.videoWidth;
+      const sourceHeight = videoRef.current.videoHeight;
+      const sourceAspect = sourceWidth / sourceHeight;
+      if (sourceAspect > 3 / 4) {
+        const cropWidth = sourceHeight * 3 / 4;
+        ctx.drawImage(videoRef.current, (sourceWidth - cropWidth) / 2, 0, cropWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+      } else {
+        const cropHeight = sourceWidth / (3 / 4);
+        ctx.drawImage(videoRef.current, 0, (sourceHeight - cropHeight) / 2, sourceWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+      }
       canvas.toBlob((blob) => {
         if (blob) {
           setPhotoBlob(blob);
@@ -246,7 +260,7 @@ export function CheckInOutWidget({
       </div>
 
       {/* معاينة الكاميرا */}
-      <div className="relative bg-black rounded-2xl overflow-hidden h-56 flex items-center justify-center border border-gray-200 dark:border-slate-800">
+      <div className="relative bg-black rounded-2xl overflow-hidden aspect-[3/4] max-w-xs mx-auto flex items-center justify-center border border-gray-200 dark:border-slate-800">
         {photoPreview ? (
           <img src={photoPreview} alt="Live Selfie" className="w-full h-full object-cover" />
         ) : (

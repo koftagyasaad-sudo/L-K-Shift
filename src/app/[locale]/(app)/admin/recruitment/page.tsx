@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 import {
   Briefcase,
   Search,
@@ -91,6 +93,7 @@ export default function RecruitmentManagementPage() {
       (app.nationalId || '').includes(q);
     return matchRole && matchSearch;
   });
+  const applicationsPage = usePaginatedItems(filteredList, `${roleFilter}|${searchTerm}`);
 
   return (
     <div className="space-y-6 pb-16 text-white" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -113,15 +116,16 @@ export default function RecruitmentManagementPage() {
             إجمالي الاستمارات: {applications.length}
           </div>
 
-          <a
+          <Link
             href={`/${locale}/apply`}
+            prefetch
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-rose-600 hover:opacity-95 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-orange-500/20 transition cursor-pointer"
           >
             <ExternalLink size={14} />
             <span>فتح الاستمارة</span>
-          </a>
+          </Link>
 
           <button
             type="button"
@@ -191,7 +195,7 @@ export default function RecruitmentManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
-                {filteredList.map((app) => (
+                {applicationsPage.pageItems.map((app) => (
                   <tr key={app.id} className="hover:bg-white/5 transition">
                     <td className="p-4">
                       <div className="font-bold text-white text-sm">{app.fullName}</div>
@@ -232,6 +236,13 @@ export default function RecruitmentManagementPage() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={applicationsPage.page}
+            pageCount={applicationsPage.pageCount}
+            itemCount={filteredList.length}
+            onPageChange={applicationsPage.setPage}
+            isRtl={isRtl}
+          />
         </div>
       )}
     </div>

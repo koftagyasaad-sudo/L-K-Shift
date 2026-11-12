@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 import {
   Shield,
   Plus,
@@ -311,6 +312,7 @@ export default function RolesManagementPage() {
       (r.nameAr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (r.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const rolesPage = usePaginatedItems(filteredRoles, searchTerm);
 
   return (
     <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -380,7 +382,7 @@ export default function RolesManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredRoles.map((role) => {
+                {rolesPage.pageItems.map((role) => {
                   const perms = parsePermissions(role.permissions);
                   const hasAll = perms.includes('*');
                   const permCount = hasAll ? 1 : perms.length;
@@ -452,6 +454,13 @@ export default function RolesManagementPage() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={rolesPage.page}
+            pageCount={rolesPage.pageCount}
+            itemCount={filteredRoles.length}
+            onPageChange={rolesPage.setPage}
+            isRtl={isRtl}
+          />
         </div>
       )}
 

@@ -18,7 +18,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const authorization = await authorizeApi([
       'branches.view',
@@ -29,6 +29,7 @@ export async function GET() {
     ]);
     if ('response' in authorization) return authorization.response;
 
+    const branchId = new URL(request.url).searchParams.get('id')?.trim() || null;
     const raw = await db.execute(sql`
       SELECT 
         b.id::text as id,
@@ -38,8 +39,9 @@ export async function GET() {
         COALESCE(b.name_ar, b.name, 'فرع') as "nameAr",
         COALESCE(NULLIF(b.latitude::text, '')::double precision, 31.1308) as latitude,
         COALESCE(NULLIF(b.longitude::text, '')::double precision, 30.6475) as longitude,
-        GREATEST(COALESCE(b.geofence_radius, 100), 100) as geofence_radius,
-        GREATEST(COALESCE(b.geofence_radius, 100), 100) as "geofenceRadius",
+        COALESCE(b.geofence_radius, 100) as geofence_radius,
+        COALESCE(b.geofence_radius, 100) as "geofenceRadius",
+        COALESCE(b.geofence_radius, 100) as "radiusMeters",
         b.manager_id::text as "managerId",
         COALESCE(u.full_name_ar, u.name, '') as "managerName",
         COALESCE(b.phone, '') as phone,
@@ -53,6 +55,7 @@ export async function GET() {
         COALESCE(b.grace_period_minutes, 15) as "gracePeriodMinutes"
       FROM branches b
       LEFT JOIN users u ON b.manager_id::text = u.id::text
+      WHERE (${branchId ?? null}::text IS NULL OR b.id::text = ${branchId ?? null}::text)
       ORDER BY b.id ASC;
     `);
 
@@ -61,6 +64,11 @@ export async function GET() {
       authorization.principal.systemRole === 'SUPER_ADMIN'
       || canAccessBranch(authorization.principal, String(branch.id))
     );
+    if (branchId) {
+      return visibleBranches.length
+        ? NextResponse.json(visibleBranches[0], { status: 200 })
+        : NextResponse.json({ message: 'الفرع غير موجود' }, { status: 404 });
+    }
     return NextResponse.json(visibleBranches, { status: 200 });
   } catch (error) {
     console.error('Branches GET error:', error);
@@ -68,7 +76,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function saveBranch(request: NextRequest) {
   try {
     const authorization = await authorizeApi('branches.manage');
     if ('response' in authorization) return authorization.response;
@@ -82,6 +90,7 @@ export async function POST(request: NextRequest) {
       latitude,
       longitude,
       geofenceRadius,
+      radiusMeters,
       managerId,
       phone,
       address,
@@ -108,7 +117,14 @@ export async function POST(request: NextRequest) {
     const enName = nameEn || name || 'Branch';
     const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
     const lng = longitude !== undefined && longitude !== null ? parseFloat(longitude) : 30.6475;
-    const radius = Math.max(100, Number.parseInt(geofenceRadius, 10) || 100);
+    const requestedRadius = geofenceRadius ?? radiusMeters;
+    const radiusValue = requestedRadius == null || requestedRadius === ''
+      ? 100
+      : Number(requestedRadius);
+    if (!Number.isSafeInteger(radiusValue) || radiusValue < 1) {
+      return NextResponse.json({ message: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' }, { status: 400 });
+    }
+    const radius = radiusValue;
     const mgrId = managerId ? String(managerId) : null;
     const s1Start = shift1Start || '09:00';
     const s1End = shift1End || '17:00';
@@ -161,6 +177,14 @@ export async function POST(request: NextRequest) {
     console.error('Branches POST error:', error);
     return NextResponse.json({ message: errorMessage(error, 'فشل حفظ الفرع') }, { status: 500 });
   }
+}
+
+export async function POST(request: NextRequest) {
+  return saveBranch(request);
+}
+
+export async function PUT(request: NextRequest) {
+  return saveBranch(request);
 }
 
 export async function DELETE(request: NextRequest) {

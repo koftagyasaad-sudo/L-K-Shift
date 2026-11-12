@@ -163,8 +163,9 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
       localStorage.clear();
       router.push(`/${locale}/login`);
       router.refresh();
-    } catch {
-      window.location.href = `/${locale}/login`;
+    } catch (error) {
+      console.error('Failed to clear local session data:', error);
+      router.push(`/${locale}/login`);
     }
   };
 
@@ -211,6 +212,7 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
         <div className="flex flex-col border-b border-slate-100 p-4">
           <Link
             href={`/${locale}/profile`}
+            prefetch
             className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} group cursor-pointer`}
             title="البيانات الشخصية"
           >
@@ -249,6 +251,7 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
               <Link
                 key={item.href}
                 href={fullHref}
+                prefetch
                 onClick={() => setIsOpenMobile(false)}
                 title={collapsed ? (isRtl ? item.titleAr : item.titleEn) : undefined}
                 className={`flex items-center ${

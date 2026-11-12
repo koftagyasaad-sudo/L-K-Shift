@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 import {
   CheckCircle2,
   XCircle,
@@ -173,6 +174,7 @@ export default function LeaveApprovalsPage() {
       (r.reason || '').toLowerCase().includes(q);
     return matchType && matchStatus && matchSearch;
   });
+  const requestPage = usePaginatedItems(filteredRequests, `${typeFilter}|${statusFilter}|${searchTerm}`);
 
   const pendingCount = requests.filter((r) => r.status === 'PENDING').length;
   const approvedCount = requests.filter((r) => r.status === 'APPROVED').length;
@@ -309,7 +311,7 @@ export default function LeaveApprovalsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-300">
-                {filteredRequests.map((req) => {
+                {requestPage.pageItems.map((req) => {
                   const bType = getBadgeType(req.requestType);
                   const isProcessing = processingId === req.id;
 
@@ -424,6 +426,13 @@ export default function LeaveApprovalsPage() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={requestPage.page}
+            pageCount={requestPage.pageCount}
+            itemCount={filteredRequests.length}
+            onPageChange={requestPage.setPage}
+            isRtl={isRtl}
+          />
         </div>
       )}
 

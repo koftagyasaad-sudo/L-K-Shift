@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 
 interface RoleItem {
   id: string | number;
@@ -24,6 +25,7 @@ export default function AdminRolesPage({ params }: PageProps) {
   const isRtl = locale === 'ar';
 
   const [roles, setRoles] = useState<RoleItem[]>([]);
+  const rolesPage = usePaginatedItems(roles, `${locale}|roles`);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -165,7 +167,7 @@ export default function AdminRolesPage({ params }: PageProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {roles.map((role) => (
+              {rolesPage.pageItems.map((role) => (
                 <tr key={role.id} className="hover:bg-white/[0.02] transition">
                   <td className="px-6 py-4 font-bold text-white">{role.name}</td>
                   <td className="px-6 py-4 text-slate-400">{role.description || '—'}</td>
@@ -179,6 +181,15 @@ export default function AdminRolesPage({ params }: PageProps) {
             </tbody>
           </table>
         )}
+        {!isLoading && roles.length > 0 ? (
+          <PaginationControls
+            page={rolesPage.page}
+            pageCount={rolesPage.pageCount}
+            itemCount={roles.length}
+            onPageChange={rolesPage.setPage}
+            isRtl={isRtl}
+          />
+        ) : null}
       </div>
 
       {/* Modal نافذة إضافة الدور الجديد */}

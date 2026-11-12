@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Cairo } from 'next/font/google';
 import '../globals.css';
 import { NextIntlClientProvider } from 'next-intl';
@@ -14,16 +14,24 @@ export const metadata: Metadata = {
   title: 'L-K Shift - نظام إدارة الورديات والحضور',
   description: 'منظومة متكاملة لإدارة الحضور الذكي والورديات بالـ GPS',
   manifest: '/manifest.json',
-  themeColor: '#ea580c',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'L-K Shift',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   icons: {
     icon: '/Logo.png',
     apple: '/Logo.png',
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#ea580c',
 };
 
 export default async function RootLayout({
@@ -38,15 +46,6 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
-      <head>
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#ea580c" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="L-K Shift" />
-        <link rel="apple-touch-icon" href="/Logo.png" />
-      </head>
       <body className={`${cairo.variable} font-sans antialiased bg-[#080911] text-slate-100`}>
         <NextIntlClientProvider messages={messages}>
           {children}

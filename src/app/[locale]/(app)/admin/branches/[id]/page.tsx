@@ -64,7 +64,7 @@ export default function EditBranchPage({ params }: PageProps) {
         setAddress(branchData.address || '');
         setLatitude(branchData.latitude ? String(branchData.latitude) : '');
         setLongitude(branchData.longitude ? String(branchData.longitude) : '');
-        setRadiusMeters(String(branchData.radiusMeters || branchData.geofenceRadius || '100'));
+        setRadiusMeters(String(branchData.radiusMeters ?? branchData.geofenceRadius ?? '100'));
         setMorningStart(branchData.morningStart || '09:00');
         setMorningEnd(branchData.morningEnd || '17:00');
         setEveningStart(branchData.eveningStart || '17:00');
@@ -120,7 +120,7 @@ export default function EditBranchPage({ params }: PageProps) {
       address: address.trim(),
       latitude: latitude.trim(),
       longitude: longitude.trim(),
-      radiusMeters: Number(radiusMeters) || 100,
+      radiusMeters: Number(radiusMeters),
       morningStart,
       morningEnd,
       eveningStart,
@@ -365,8 +365,7 @@ export default function EditBranchPage({ params }: PageProps) {
               </label>
               <input
                 type="number"
-                min="10"
-                max="3000"
+                min="1"
                 required
                 value={radiusMeters}
                 onChange={(e) => setRadiusMeters(e.target.value)}

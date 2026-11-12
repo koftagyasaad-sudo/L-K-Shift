@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 import {
   Camera,
   CheckCircle2,
@@ -122,6 +123,14 @@ export default function AttendanceReviewPage() {
   });
 
   const totalMovements = filteredRecords.length;
+  const recordsPage = usePaginatedItems(filteredRecords, `${selectedEmployee}|${fromDate}|${toDate}|${searchTerm}`);
+  const payrollEmployees = uniqueEmployees.filter((employee) =>
+    filteredRecords.some((record) => String(record.userId) === String(employee.id))
+  );
+  const payrollPage = usePaginatedItems(
+    payrollEmployees,
+    `${selectedEmployee}|${fromDate}|${toDate}|${searchTerm}|PAYROLL`
+  );
 
   const formatTime = (ts: string | null) => {
     if (!ts) return '—';
@@ -324,7 +333,7 @@ export default function AttendanceReviewPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredRecords.map((r) => (
+                {recordsPage.pageItems.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50 transition">
                     <td className="p-4">
                       <div className="font-bold text-slate-900 text-sm">{r.userName}</div>
@@ -372,6 +381,13 @@ export default function AttendanceReviewPage() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={recordsPage.page}
+            pageCount={recordsPage.pageCount}
+            itemCount={filteredRecords.length}
+            onPageChange={recordsPage.setPage}
+            isRtl={isRtl}
+          />
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
@@ -389,7 +405,7 @@ export default function AttendanceReviewPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {uniqueEmployees.map((emp) => {
+                {payrollPage.pageItems.map((emp) => {
                   const empLogs = filteredRecords.filter((r) => r.userId === emp.id);
                   const first = empLogs[0];
                   const basic = Number(first?.basicSalary) || 5000;
@@ -419,6 +435,13 @@ export default function AttendanceReviewPage() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={payrollPage.page}
+            pageCount={payrollPage.pageCount}
+            itemCount={payrollEmployees.length}
+            onPageChange={payrollPage.setPage}
+            isRtl={isRtl}
+          />
         </div>
       )}
 

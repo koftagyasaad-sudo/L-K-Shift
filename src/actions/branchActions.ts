@@ -74,7 +74,7 @@ export async function getBranchesAction(): Promise<BranchData[]> {
         u.phone AS "managerPhone",
         NULLIF(b.latitude::text, '')::double precision AS latitude,
         NULLIF(b.longitude::text, '')::double precision AS longitude,
-        GREATEST(COALESCE(b.geofence_radius, 100), 100) AS "geofenceRadius",
+        COALESCE(b.geofence_radius, 100) AS "geofenceRadius",
         COALESCE(b.is_active, true) AS "isActive",
         b.created_at AS "createdAt",
         b.updated_at AS "updatedAt"
@@ -129,6 +129,11 @@ export async function createBranchAction(
   const principal = await requireApiPrincipal('branches.manage');
   if (principal.branchScope !== 'ALL') throw new Error('ممنوع إنشاء فرع خارج نطاقك');
   try {
+    const radiusValue = data.geofenceRadius ?? data.radiusMeters ?? 100;
+    const geofenceRadius = Number(radiusValue);
+    if (!Number.isSafeInteger(geofenceRadius) || geofenceRadius < 1) {
+      return { success: false, error: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' };
+    }
     const inserted = await db
       .insert(branches)
       .values({
@@ -137,7 +142,7 @@ export async function createBranchAction(
         address: data.address || '',
         latitude: Number(data.latitude) || 0,
         longitude: Number(data.longitude) || 0,
-        geofenceRadius: Math.max(100, Number(data.geofenceRadius || data.radiusMeters) || 100),
+        geofenceRadius,
         qrSecretKey: `lk-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         qrRefreshSec: 60,
         shiftSchedule: data.shiftSchedule || '',
@@ -173,6 +178,11 @@ export async function updateBranchAction(
   }
   await assertBranchAccess(principal, branchId);
   try {
+    const radiusValue = data.geofenceRadius ?? data.radiusMeters;
+    const geofenceRadius = radiusValue === undefined ? undefined : Number(radiusValue);
+    if (geofenceRadius !== undefined && (!Number.isSafeInteger(geofenceRadius) || geofenceRadius < 1)) {
+      return { success: false, message: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا', error: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' };
+    }
     await db
       .update(branches)
       .set({
@@ -181,8 +191,7 @@ export async function updateBranchAction(
         ...(data.address !== undefined && { address: data.address }),
         ...(data.latitude !== undefined && { latitude: Number(data.latitude) || 0 }),
         ...(data.longitude !== undefined && { longitude: Number(data.longitude) || 0 }),
-        ...(data.geofenceRadius !== undefined && { geofenceRadius: Math.max(100, Number(data.geofenceRadius) || 100) }),
-        ...(data.radiusMeters !== undefined && { geofenceRadius: Math.max(100, Number(data.radiusMeters) || 100) }),
+        ...(geofenceRadius !== undefined && { geofenceRadius }),
         ...(data.shiftSchedule !== undefined && { shiftSchedule: data.shiftSchedule }),
         ...(data.shiftStartTime !== undefined && { shiftStartTime: data.shiftStartTime }),
         ...(data.shiftEndTime !== undefined && { shiftEndTime: data.shiftEndTime }),

@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         COALESCE(b.name_ar, b.name, 'الفرع الرئيسي') as "branchName",
         NULLIF(b.latitude::text, '')::double precision as "branchLat",
         NULLIF(b.longitude::text, '')::double precision as "branchLng",
-        GREATEST(COALESCE(b.geofence_radius, 100), 100) as "branchRadius",
+        COALESCE(b.geofence_radius, 100) as "branchRadius",
         TO_CHAR(u.created_at, 'YYYY-MM-DD') as "hireDate",
         COALESCE(u.shift_name, 'الشيفت الصباحي') as "shiftName",
         COALESCE(u.shift_start_time, '10:00') as "shiftStartTime",

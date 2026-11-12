@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { BranchData } from "@/actions/branchActions";
+import { PaginationControls, usePaginatedItems } from "@/components/ui/PaginationControls";
 import {
   deleteBranchAction,
   toggleBranchStatusAction,
@@ -33,6 +34,8 @@ function getBranchDisplayName(branch: BranchData): string {
 
 export default function BranchesClient({ initialBranches }: Props) {
   const router = useRouter();
+  const params = useParams();
+  const locale = (params?.locale as string) || "ar";
   const [branches, setBranches] = useState<BranchData[]>(initialBranches || []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">(
@@ -69,6 +72,7 @@ export default function BranchesClient({ initialBranches }: Props) {
       return matchesSearch && matchesStatus;
     });
   }, [branches, search, statusFilter]);
+  const branchPage = usePaginatedItems(filteredBranches, `${search}|${statusFilter}`);
 
   const stats = useMemo(() => {
     const total = branches.length;
@@ -218,7 +222,8 @@ export default function BranchesClient({ initialBranches }: Props) {
           </button>
 
           <Link
-            href="branches/new"
+            href={`/${locale}/admin/branches/new`}
+            prefetch
             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             + إضافة فرع جديد
@@ -301,7 +306,7 @@ export default function BranchesClient({ initialBranches }: Props) {
                   </td>
                 </tr>
               ) : (
-                filteredBranches.map((branch) => {
+                branchPage.pageItems.map((branch) => {
                   const isActive =
                     branch.isActive !== false && branch.isActive !== null;
                   const lat = branch.latitude;
@@ -387,7 +392,8 @@ export default function BranchesClient({ initialBranches }: Props) {
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Link
-                            href={`branches/${branch.id}`}
+                            href={`/${locale}/admin/branches/${branch.id}`}
+                            prefetch
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                           >
                             تعديل
@@ -419,6 +425,13 @@ export default function BranchesClient({ initialBranches }: Props) {
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={branchPage.page}
+          pageCount={branchPage.pageCount}
+          itemCount={filteredBranches.length}
+          onPageChange={branchPage.setPage}
+          isRtl
+        />
       </div>
 
       {isPending ? (

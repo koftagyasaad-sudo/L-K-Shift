@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 import {
   Users,
   Search,
@@ -306,6 +307,8 @@ export default function EmployeesManagementPage() {
       emp.employeeCode.includes(q);
     return matchBranch && matchSearch;
   });
+  const employeePage = usePaginatedItems(filteredEmployees, `${branchFilter}|${searchTerm}`);
+  const zkPage = usePaginatedItems(zkRecords, selectedZkEmployee?.id || '');
 
   return (
     <div className="space-y-6 pb-16 text-slate-800" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -390,7 +393,7 @@ export default function EmployeesManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredEmployees.map((emp) => (
+                {employeePage.pageItems.map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-50 transition">
                     <td className="p-4">
                       <div className="font-bold text-slate-900 text-sm">{emp.fullNameAr}</div>
@@ -452,6 +455,13 @@ export default function EmployeesManagementPage() {
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={employeePage.page}
+            pageCount={employeePage.pageCount}
+            itemCount={filteredEmployees.length}
+            onPageChange={employeePage.setPage}
+            isRtl={isRtl}
+          />
         </div>
       )}
 
@@ -723,7 +733,7 @@ export default function EmployeesManagementPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
-                    {zkRecords.map((r, idx) => (
+                    {zkPage.pageItems.map((r, idx) => (
                       <tr key={r.id || idx} className="hover:bg-slate-50">
                         <td className="p-3 border-l border-slate-200 text-center font-mono font-bold text-slate-500">
                           {idx + 1}
@@ -760,6 +770,13 @@ export default function EmployeesManagementPage() {
                     ))}
                   </tbody>
                 </table>
+                <PaginationControls
+                  page={zkPage.page}
+                  pageCount={zkPage.pageCount}
+                  itemCount={zkRecords.length}
+                  onPageChange={zkPage.setPage}
+                  isRtl
+                />
               </div>
             )}
 
