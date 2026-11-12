@@ -185,6 +185,8 @@ export default function EditEmployeePage({ params }: PageProps) {
               </label>
               <input
                 type="tel"
+                inputMode="tel"
+                autoCapitalize="none"
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}

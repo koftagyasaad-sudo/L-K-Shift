@@ -13,6 +13,69 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+interface NotificationColumn extends Record<string, unknown> {
+  columnName: string;
+  isNullable: 'YES' | 'NO';
+  columnDefault: string | null;
+}
+
+async function insertPasswordResetNotice(employeeId: string) {
+  const rawColumns = await db.execute(sql`
+    SELECT
+      column_name AS "columnName",
+      is_nullable AS "isNullable",
+      column_default AS "columnDefault"
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'notifications';
+  `);
+  const columns = getSqlRows<NotificationColumn>(rawColumns);
+  const available = new Set(columns.map((column) => column.columnName));
+
+  if (!available.size) {
+    console.warn('Password reset completed without a notification: notifications table is unavailable.');
+    return;
+  }
+  if (!['user_id', 'title', 'message'].every((column) => available.has(column))) {
+    console.warn('Password reset completed without a notification: notifications table is missing required columns.');
+    return;
+  }
+
+  const fields = [
+    { name: 'user_id', value: sql`${employeeId}` },
+    { name: 'title', value: sql`'إعادة تعيين كلمة المرور'` },
+    {
+      name: 'message',
+      value: sql`'قام مسؤول النظام بإعادة تعيين كلمة المرور الخاصة بحسابك. إذا لم تكن تتوقع ذلك، تواصل مع الإدارة.'`,
+    },
+  ];
+  if (available.has('is_read')) {
+    fields.push({ name: 'is_read', value: sql`false` });
+  }
+  if (
+    available.has('created_at')
+    && columns.some((column) => column.columnName === 'created_at' && column.isNullable === 'NO' && !column.columnDefault)
+  ) {
+    fields.push({ name: 'created_at', value: sql`CURRENT_TIMESTAMP` });
+  }
+
+  const insertable = new Set(fields.map((field) => field.name));
+  const unsupportedRequired = columns.some((column) =>
+    column.isNullable === 'NO'
+    && !column.columnDefault
+    && !insertable.has(column.columnName)
+  );
+  if (unsupportedRequired) {
+    console.warn('Password reset completed without a notification: notifications table has unsupported required columns.');
+    return;
+  }
+
+  await db.execute(sql`
+    INSERT INTO notifications (${sql.join(fields.map((field) => sql.identifier(field.name)), sql`, `)})
+    VALUES (${sql.join(fields.map((field) => field.value), sql`, `)});
+  `);
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const authorization = await authorizeApi('employees.manage');
@@ -42,9 +105,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ message: 'كلمة المرور يجب أن تكون بين 6 و128 محرفًا' }, { status: 400 });
     }
 
+    const newPasswordHash = await hashPassword(newPassword);
     const raw = await db.execute(sql`
       UPDATE users
-      SET password_hash = ${await hashPassword(newPassword)}, updated_at = NOW()
+      SET password_hash = ${newPasswordHash}, updated_at = NOW()
       WHERE id::text = ${employeeId}::text
       RETURNING id::text AS id;
     `);
@@ -53,7 +117,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ message: 'الموظف غير موجود' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: 'تم إعادة تعيين كلمة مرور الموظف بنجاح' });
+    let notificationWarning: string | undefined;
+    try {
+      await insertPasswordResetNotice(updated[0].id);
+    } catch (notificationError) {
+      console.error('Password was reset, but the notification audit insert failed:', notificationError);
+      notificationWarning = 'تم تغيير كلمة المرور، لكن تعذر حفظ إشعار التدقيق.';
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'تم إعادة تعيين كلمة مرور الموظف بنجاح',
+      ...(notificationWarning ? { notificationWarning } : {}),
+    });
   } catch (error) {
     console.error('Employee password reset error:', error);
     return NextResponse.json({ message: 'تعذر إعادة تعيين كلمة المرور الآن' }, { status: 500 });

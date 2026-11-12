@@ -246,6 +246,8 @@ export default function ForgotPasswordPage() {
               <div className="relative">
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoCapitalize="none"
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}

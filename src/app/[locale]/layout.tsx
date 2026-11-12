@@ -2,8 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import { Cairo } from 'next/font/google';
 import '../globals.css';
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
 import PwaInstallPrompt from '@/components/PwaInstallPrompt';
+import arabicMessages from '../../../messages/ar.json';
+import englishMessages from '../../../messages/en.json';
 
 const cairo = Cairo({
   subsets: ['arabic', 'latin'],
@@ -18,9 +19,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'L-K Shift',
-  },
-  other: {
-    'mobile-web-app-capable': 'yes',
   },
   icons: {
     icon: '/Logo.png',
@@ -44,12 +42,20 @@ export default async function RootLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const messages = await getMessages();
+  const messages = locale === 'en' ? englishMessages : arabicMessages;
+  const publicMessages = {
+    app: messages.app,
+    auth: messages.auth,
+    common: messages.common,
+    header: Object.fromEntries(
+      Object.entries(messages.header).filter(([key]) => key !== 'adminRoles')
+    ),
+  };
 
   return (
     <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
       <body className={`${cairo.variable} font-sans antialiased bg-[#080911] text-slate-100`}>
-        <NextIntlClientProvider messages={messages}>
+        <NextIntlClientProvider messages={publicMessages}>
           {children}
           {/* رسالة طلب التثبيت التلقائية للموبايل */}
           <PwaInstallPrompt />

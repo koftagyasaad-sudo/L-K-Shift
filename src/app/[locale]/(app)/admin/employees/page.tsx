@@ -320,7 +320,12 @@ export default function EmployeesManagementPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'تعذر إعادة تعيين كلمة المرور');
-      setResetPasswordStatus({ type: 'ok', text: 'تم تغيير كلمة المرور. أبلغ الموظف بها عبر قناة آمنة.' });
+      setResetPasswordStatus({
+        type: 'ok',
+        text: data.notificationWarning
+          ? `تم تغيير كلمة المرور. ${data.notificationWarning}`
+          : 'تم تغيير كلمة المرور. أبلغ الموظف بها عبر قناة آمنة.',
+      });
       setResetPassword('');
     } catch (error: unknown) {
       setResetPasswordStatus({
@@ -577,6 +582,8 @@ export default function EmployeesManagementPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف (اسم الدخول) *</label>
                   <input
                     type="tel"
+                    inputMode="tel"
+                    autoCapitalize="none"
                     required
                     value={editingEmp.phone || ''}
                     onChange={(e) => setEditingEmp({ ...editingEmp, phone: e.target.value })}

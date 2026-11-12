@@ -277,6 +277,8 @@ export default function JobApplicationPublicPage() {
                 </label>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoCapitalize="none"
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}

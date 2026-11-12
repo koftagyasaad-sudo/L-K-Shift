@@ -72,10 +72,11 @@ export default function LoginPage() {
         user.role === 'مدير فرع';
 
       if (isAdmin || perms.includes('dashboard.view')) {
-        router.push(`/${locale}/admin/dashboard`);
+        router.replace(`/${locale}/admin/dashboard`);
       } else {
-        router.push(`/${locale}/attendance`);
+        router.replace(`/${locale}/attendance`);
       }
+      router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
     } finally {
@@ -131,8 +132,8 @@ export default function LoginPage() {
       className="min-h-screen bg-[#111111] flex flex-col items-center justify-center p-4 relative overflow-hidden"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
         <div className="mb-6 flex flex-col items-center text-center">
@@ -201,6 +202,8 @@ export default function LoginPage() {
                 </label>
                 <input
                   type="text"
+                  inputMode="tel"
+                  autoCapitalize="none"
                   required
                   autoComplete="off"
                   name="login_phone_field_lk"
@@ -277,6 +280,8 @@ export default function LoginPage() {
                 </label>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoCapitalize="none"
                   required
                   autoComplete="off"
                   value={regPhone}

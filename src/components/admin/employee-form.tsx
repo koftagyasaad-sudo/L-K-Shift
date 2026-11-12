@@ -178,6 +178,8 @@ export default function EmployeeFormComponent({
           </label>
           <input
             type="tel"
+            inputMode="tel"
+            autoCapitalize="none"
             required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}

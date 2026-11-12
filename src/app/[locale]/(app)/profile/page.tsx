@@ -522,6 +522,8 @@ export default function PersonalProfilePage() {
               </label>
               <input
                 type="tel"
+                inputMode="tel"
+                autoCapitalize="none"
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -535,6 +537,8 @@ export default function PersonalProfilePage() {
               <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم تليفون إضافي / واتساب</label>
               <input
                 type="tel"
+                inputMode="tel"
+                autoCapitalize="none"
                 value={phoneAlt}
                 onChange={(e) => setPhoneAlt(e.target.value)}
                 placeholder="01xxxxxxxxx"
@@ -580,6 +584,8 @@ export default function PersonalProfilePage() {
               <label className="block text-xs font-bold text-slate-700 mb-1.5">هاتف الطوارئ</label>
               <input
                 type="tel"
+                inputMode="tel"
+                autoCapitalize="none"
                 value={emergencyPhone}
                 onChange={(e) => setEmergencyPhone(e.target.value)}
                 placeholder="01xxxxxxxxx"

@@ -47,6 +47,9 @@ export function SignInForm() {
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-200">{t("phone")}</span>
         <input
+          type="tel"
+          inputMode="tel"
+          autoCapitalize="none"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-950 outline-none transition focus:border-[#D8261C] focus:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white"

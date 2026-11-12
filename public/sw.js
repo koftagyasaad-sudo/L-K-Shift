@@ -1,10 +1,10 @@
-const CACHE_NAME = 'lk-shift-v2026-offline-layout-password-v3';
+const CACHE_NAME = 'lk-shift-v2026-prod-final-v4';
 
 // الملفات الأساسية المحفوظة مسبقاً لفتح التطبيق أوفلاين فوري
 const STATIC_ASSETS = [
   '/',
-  '/ar/attendance',
-  '/ar/profile',
+  '/ar/login',
+  '/ar/forgot-password',
   '/Logo.png',
   '/manifest.json',
   '/favicon.ico',
@@ -24,43 +24,76 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
+      return Promise.all(keys
+        .filter((key) => key !== CACHE_NAME)
+        .map((key) => caches.delete(key)));
     }).then(() => self.clients.claim())
   );
 });
 
-// استراتيجية التشغيل الأوفلاين: جلب من المخبأ فوراً إذا انقطع النت
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // استبعاد مسارات الـ API الحساسة من التخزين الثابت
-  if (url.pathname.startsWith('/api/')) return;
+  const isSensitivePath =
+    url.pathname === '/api' ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname === '/_next/data' ||
+    url.pathname.startsWith('/_next/data/') ||
+    /^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(?:admin|profile|attendance|requests|leave-requests|payroll|employee|roles)(?:\/|$)/i.test(url.pathname);
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
+  if (isSensitivePath) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then(async (networkResponse) => {
+          if (networkResponse.ok) {
+            try {
+              const cache = await caches.open(CACHE_NAME);
+              await cache.put(event.request, networkResponse.clone());
+            } catch (error) {
+              console.warn('Navigation cache write failed:', error);
+            }
           }
           return networkResponse;
         })
-        .catch(() => {
-          // إذا انقطع النت، يتم تسليم الصفحة المخبأة فوراً
-          return cachedResponse;
-        });
+        .catch(async () => {
+          const cachedPage = await caches.match(event.request);
+          if (cachedPage) return cachedPage;
+          const offlineFallback = await caches.match('/');
+          if (offlineFallback) return offlineFallback;
+          return Response.error();
+        })
+    );
+    return;
+  }
 
-      return cachedResponse || fetchPromise;
+  if (event.request.method !== 'GET') return;
+
+  const isStaticAsset = ['font', 'image', 'script', 'style'].includes(event.request.destination);
+  if (!isStaticAsset) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then((cachedAsset) => {
+      if (cachedAsset) return cachedAsset;
+      return fetch(event.request, { cache: 'no-store' }).then(async (networkResponse) => {
+        if (networkResponse.ok) {
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, networkResponse.clone());
+          } catch (error) {
+            console.warn('Static asset cache write failed:', error);
+          }
+        }
+        return networkResponse;
+      });
     })
   );
 });
