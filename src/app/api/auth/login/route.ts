@@ -40,9 +40,9 @@ export async function POST(req: Request) {
     const result = await db.execute(sql`
       SELECT 
         id, 
-        COALESCE(name, '') as name,
+        COALESCE(full_name_ar, '') as name,
         phone, 
-        COALESCE(password_hash, password, '') as "passwordHash",
+        COALESCE(password_hash, '') as "passwordHash",
         is_active as "isActive"
       FROM users 
       WHERE phone = ${phone}
@@ -91,21 +91,7 @@ export async function POST(req: Request) {
     }
 
     // 5. حفظ الجلسة الرسمية في الكوكيز
-    const cookieStore = await cookies();
-    cookieStore.set(
-      "auth_session",
-      JSON.stringify({
-        id: user.id,
-        phone: user.phone,
-        name: user.name,
-      }),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7, // أسبوع
-      }
-    );
+    // Unsigned cookie removed for security; NextAuth signed JWT is used.
     clearRateLimit(rateLimitKey);
 
     return NextResponse.json({

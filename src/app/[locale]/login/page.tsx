@@ -72,12 +72,10 @@ export default function LoginPage() {
         user.role === 'SUPER_ADMIN' ||
         user.role === 'مدير فرع';
 
-      if (isAdmin || perms.includes('dashboard.view')) {
-        router.replace(`/${locale}/admin/dashboard`);
-      } else {
-        router.replace(`/${locale}/attendance`);
-      }
-      router.refresh();
+      const targetUrl = (isAdmin || user.systemRole === 'SUPER_ADMIN' || perms.length > 0)
+        ? `/${locale}/admin/dashboard`
+        : `/${locale}/attendance`;
+      window.location.href = targetUrl;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
     } finally {
