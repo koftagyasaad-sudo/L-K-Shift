@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans_Arabic } from 'next/font/google';
+import { Cairo } from 'next/font/google';
 import '../globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { AppProviders } from '@/components/providers/app-providers';
@@ -7,9 +7,9 @@ import PwaInstallEventCapture from '@/components/PwaInstallEventCapture';
 import arabicMessages from '../../../messages/ar.json';
 import englishMessages from '../../../messages/en.json';
 
-const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
+const ibmPlexSansArabic = Cairo({
   subsets: ['arabic', 'latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ["400", "500", "600", "700", "800"],
   variable: '--font-ibm-plex-arabic',
 });
 

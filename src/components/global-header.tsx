@@ -203,10 +203,10 @@ export default function GlobalHeader() {
     <header className="sticky top-0 z-30 w-full border-b border-slate-200/90 bg-white/80 backdrop-blur-xl text-slate-900 backdrop-blur dark:border-white/[0.08] dark:bg-[#11131A]/80 backdrop-blur-xl dark:text-zinc-100">
       <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-3 px-3 sm:px-5 lg:px-8">
         <Link href={`/${locale}/attendance`} className="flex shrink-0 items-center gap-2" aria-label="L-K Shift">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold tracking-tight text-white dark:bg-zinc-100 dark:text-slate-900">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 via-orange-600 to-rose-600 text-xs font-extrabold tracking-tight text-white shadow-md shadow-orange-500/25">
             LK
           </span>
-          <span className="hidden text-sm font-semibold tracking-tight sm:inline">L-K Shift</span>
+          <span className="hidden bg-gradient-to-l from-slate-900 to-orange-700 bg-clip-text text-sm font-extrabold tracking-tight text-transparent dark:from-white dark:to-orange-400 sm:inline">L-K Shift</span>
         </Link>
 
         <DesktopNav locale={locale} />
