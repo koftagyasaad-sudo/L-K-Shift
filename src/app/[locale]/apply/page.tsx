@@ -5,14 +5,7 @@ import { useParams } from 'next/navigation';
 import {
   Briefcase,
   User,
-  Phone,
-  CreditCard,
-  MapPin,
-  Calendar,
   GraduationCap,
-  Shield,
-  DollarSign,
-  Clock,
   Send,
   CheckCircle2,
   AlertCircle,
@@ -94,8 +87,8 @@ export default function JobApplicationPublicPage() {
 
       setIsSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'حدث خطأ غير متوقع أثناء إرسال البيانات');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'حدث خطأ غير متوقع أثناء إرسال البيانات');
     } finally {
       setLoading(false);
     }

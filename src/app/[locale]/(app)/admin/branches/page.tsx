@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  Building2,
   Plus,
   Edit2,
   Trash2,
@@ -12,11 +11,9 @@ import {
   CheckCircle2,
   AlertCircle,
   MapPin,
-  Clock,
   Phone,
   UserCheck,
   Navigation,
-  ArrowRight,
 } from 'lucide-react';
 
 interface BranchItem {
@@ -41,7 +38,7 @@ interface BranchItem {
 }
 
 interface UserOption {
-  id: number;
+  id: string | number;
   name: string;
   role: string;
 }
@@ -53,7 +50,7 @@ export default function BranchesManagementPage() {
 
   const [branches, setBranches] = useState<BranchItem[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const [viewMode, setViewMode] = useState<'LIST' | 'EDIT'>('EDIT');
 
@@ -94,7 +91,13 @@ export default function BranchesManagementPage() {
       const resU = await fetch('/api/employees', { cache: 'no-store' });
       if (resU.ok) {
         const dataU = await resU.json();
-        const mappedUsers: UserOption[] = (Array.isArray(dataU) ? dataU : []).map((u: any) => ({
+        const mappedUsers: UserOption[] = (Array.isArray(dataU) ? dataU : []).map((u: {
+          id: string | number;
+          fullNameAr?: string;
+          name?: string;
+          fullName?: string;
+          role?: string;
+        }) => ({
           id: u.id,
           name: u.fullNameAr || u.name || u.fullName || 'موظف',
           role: u.role || 'موظف',
@@ -198,8 +201,8 @@ export default function BranchesManagementPage() {
 
       setStatusMsg({ type: 'ok', text: 'تم حفظ وتحديث بيانات الفرع والورديات بنجاح!' });
       await fetchBranchesData();
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ' });
     } finally {
       setSaving(false);
     }
@@ -219,8 +222,8 @@ export default function BranchesManagementPage() {
       if (editingBranch.id === id) {
         handleAddNewBranch();
       }
-    } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء الحذف');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء الحذف');
     }
   };
 

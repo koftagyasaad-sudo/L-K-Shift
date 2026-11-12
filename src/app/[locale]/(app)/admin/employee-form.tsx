@@ -25,6 +25,9 @@ interface EmployeeFormProps {
   onSuccess?: () => void;
 }
 
+type BranchOption = NonNullable<EmployeeFormProps['branches']>[number];
+type RoleOption = NonNullable<EmployeeFormProps['roles']>[number];
+
 export default function EmployeeForm({
   initialData,
   branches: initialBranches = [],
@@ -35,8 +38,8 @@ export default function EmployeeForm({
   const router = useRouter();
   const isRtl = locale === 'ar';
 
-  const [branchList, setBranchList] = useState<any[]>(initialBranches);
-  const [roleList, setRoleList] = useState<any[]>(initialRoles);
+  const [branchList, setBranchList] = useState<BranchOption[]>(initialBranches);
+  const [roleList, setRoleList] = useState<RoleOption[]>(initialRoles);
 
   const [name, setName] = useState(initialData?.name || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
@@ -133,8 +136,8 @@ export default function EmployeeForm({
         router.push(`/${locale}/admin/employees`);
         router.refresh();
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'حدث خطأ أثناء حفظ البيانات');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ البيانات');
     } finally {
       setIsSubmitting(false);
     }
@@ -230,7 +233,7 @@ export default function EmployeeForm({
             className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
             <option value="">-- اختر الدور الوظيفي --</option>
-            {roleList.map((r: any) => {
+            {roleList.map((r) => {
               const roleLabel = r.nameAr || r.name_ar || r.name;
               return (
                 <option key={r.id || roleLabel} value={roleLabel}>

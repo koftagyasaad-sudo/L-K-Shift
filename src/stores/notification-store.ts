@@ -13,7 +13,7 @@ export type NotificationItem = {
   isRead?: boolean;
   read?: boolean;
   createdAt?: string | Date;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export interface NotificationStore {
@@ -75,7 +75,7 @@ export function create<T extends object>(
   return useStore;
 }
 
-export const useNotificationStore = create<NotificationStore>((set, get) => ({
+export const useNotificationStore = create<NotificationStore>((set) => ({
   notifications: [],
   unreadCount: 0,
   isLoading: false,

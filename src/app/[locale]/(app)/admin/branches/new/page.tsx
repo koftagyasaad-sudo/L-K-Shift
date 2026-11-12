@@ -10,6 +10,13 @@ interface PageProps {
   }>;
 }
 
+interface ManagerOption {
+  id: string | number;
+  name?: string;
+  fullName?: string;
+  role?: string;
+}
+
 export default function NewBranchPage({ params }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
@@ -22,7 +29,7 @@ export default function NewBranchPage({ params }: PageProps) {
   const [managerId, setManagerId] = useState('');
   const [managerName, setManagerName] = useState('');
   const [address, setAddress] = useState('');
-  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [googleMapsUrl] = useState('');
   const [latitude, setLatitude] = useState('31.1218');
   const [longitude, setLongitude] = useState('30.6480');
   const [radiusMeters, setRadiusMeters] = useState('100');
@@ -36,7 +43,7 @@ export default function NewBranchPage({ params }: PageProps) {
   const [betweenEnd, setBetweenEnd] = useState('21:00');
   const [gracePeriod, setGracePeriod] = useState('15');
 
-  const [managersList, setManagersList] = useState<any[]>([]);
+  const [managersList, setManagersList] = useState<ManagerOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCapturingGps, setIsCapturingGps] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -52,7 +59,7 @@ export default function NewBranchPage({ params }: PageProps) {
     setManagerId(mId);
     const found = managersList.find((m) => String(m.id) === mId);
     if (found) {
-      setManagerName(found.name || found.fullName);
+      setManagerName(found.name || found.fullName || '');
     } else {
       setManagerName('');
     }
@@ -118,8 +125,8 @@ export default function NewBranchPage({ params }: PageProps) {
 
       router.push(`/${locale}/admin/branches`);
       router.refresh();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'حدث خطأ أثناء حفظ الفرع');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ الفرع');
     } finally {
       setIsSubmitting(false);
     }

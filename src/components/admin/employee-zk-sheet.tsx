@@ -2,8 +2,7 @@
 
 import React, { useRef } from 'react';
 import { 
-  Printer, Download, Camera, CheckCircle2, 
-  AlertTriangle, ShieldCheck, FileSpreadsheet 
+  Printer, Download, Camera, ShieldCheck,
 } from 'lucide-react';
 
 interface ZkSheetProps {

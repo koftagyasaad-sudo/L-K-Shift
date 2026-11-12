@@ -12,6 +12,37 @@ interface PageProps {
   }>;
 }
 
+interface ZkSheetData {
+  employee: {
+    name: string;
+    employeeCode: string;
+    phone: string;
+    role: string;
+    branchName: string;
+    basicSalary: number;
+    workingHoursPerDay: number;
+  };
+  monthName: string;
+  year: number;
+  approvedAdvancesTotal: number;
+  records: Array<{
+    date: string;
+    dayName: string;
+    shiftSchedule: string;
+    checkInTime: string | null;
+    checkOutTime: string | null;
+    gpsVerified: boolean;
+    gpsDistance: number;
+    photoUrl: string | null;
+    photoVerified: boolean;
+    workedMinutes: number;
+    lateMinutes: number;
+    overtimeMinutes: number;
+    status: 'PRESENT' | 'APPROVED_LEAVE' | 'ABSENT' | 'WEEKLY_OFF';
+    leaveReason?: string;
+  }>;
+}
+
 export default function EmployeeZkSheetPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const locale = resolvedParams?.locale || 'ar';
@@ -19,7 +50,7 @@ export default function EmployeeZkSheetPage({ params }: PageProps) {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ZkSheetData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,8 +70,8 @@ export default function EmployeeZkSheetPage({ params }: PageProps) {
 
         const json = await res.json();
         setData(json);
-      } catch (err: any) {
-        setError(err.message || 'حدث خطأ غير متوقع أثناء استخراج الشيت');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع أثناء استخراج الشيت');
       } finally {
         setLoading(false);
       }

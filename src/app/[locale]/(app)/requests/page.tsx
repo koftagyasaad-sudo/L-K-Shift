@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Timer,
   Users2,
-  Building2,
 } from 'lucide-react';
 
 export default function EmployeeRequestsPage() {
@@ -22,7 +21,7 @@ export default function EmployeeRequestsPage() {
   const isRtl = locale === 'ar';
 
   const [userId, setUserId] = useState('');
-  const [userRole, setUserRole] = useState('موظف');
+  const [, setUserRole] = useState('موظف');
   const [isManager, setIsManager] = useState(false);
 
   // أنواع الطلبات
@@ -32,7 +31,7 @@ export default function EmployeeRequestsPage() {
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [durationDays, setDurationDays] = useState('1');
+  const [durationDays] = useState('1');
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [reason, setReason] = useState('');
 
@@ -121,8 +120,8 @@ export default function EmployeeRequestsPage() {
 
       setReason('');
       setAdvanceAmount('');
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الإرسال' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الإرسال' });
     } finally {
       setLoading(false);
     }
@@ -168,7 +167,7 @@ export default function EmployeeRequestsPage() {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setRequestType(t.id as any)}
+                    onClick={() => setRequestType(t.id as 'LEAVE' | 'PERMISSION' | 'ADVANCE' | 'COMPLAINT' | 'STAFF_REQUEST')}
                     className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
                       requestType === t.id
                         ? 'bg-gradient-to-r from-orange-500 to-rose-600 text-white border-orange-500 shadow-md'

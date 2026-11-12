@@ -1,13 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { 
-  Building2, Calendar, DollarSign, Download, Filter, 
-  MapPin, CheckCircle2, XCircle, Clock, AlertCircle, RefreshCw 
-} from 'lucide-react';
+import React from 'react';
 
-interface EmployeeSalaryRow {
-  userId: number | string;
+interface AttendanceReviewRow {
+  id: string | number;
   name: string;
   role: string;
   branchName: string;
@@ -21,12 +17,9 @@ interface EmployeeSalaryRow {
   advanceDeductions: number;
 }
 
-export function AttendanceReviewList({ initialData = [] }: { initialData?: any[] }) {
-  const [selectedMonth, setSelectedMonth] = useState('2026-11');
-  const [loading, setLoading] = useState(false);
-
+export function AttendanceReviewList({ initialData = [] }: { initialData?: AttendanceReviewRow[] }) {
   // حساب الأجر وصافي الراتب الدقيق لكل موظف
-  const calculateRow = (emp: any) => {
+  const calculateRow = (emp: AttendanceReviewRow) => {
     const basic = Number(emp.basicSalary) || 0;
     const hoursPerDay = Number(emp.workingHoursPerDay) || 8;
     const scheduledMonthlyHours = hoursPerDay * 26; // 26 يوم عمل شهرياً
@@ -81,7 +74,7 @@ export function AttendanceReviewList({ initialData = [] }: { initialData?: any[]
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800 text-slate-300">
-            {initialData.map((emp: any, idx: number) => {
+            {initialData.map((emp, idx) => {
               const calc = calculateRow(emp);
               return (
                 <tr key={idx} className="hover:bg-slate-800/40 transition">

@@ -15,7 +15,7 @@ export interface NotificationItem {
   read?: boolean;
   createdAt?: Date | string | null;
   link?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function NotificationBell({

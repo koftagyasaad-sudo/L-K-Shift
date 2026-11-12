@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, use } from 'react';
-import Link from 'next/link';
 
 interface PageProps {
   params: Promise<{
@@ -83,8 +82,8 @@ export default function CustomBrandedCareersPage({ params }: PageProps) {
       if (!res.ok) throw new Error(resData.message || 'فشل إرسال الطلب');
 
       setIsSuccess(true);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'حدث خطأ أثناء إرسال استمارة التقديم');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'حدث خطأ أثناء إرسال استمارة التقديم');
     } finally {
       setIsSubmitting(false);
     }

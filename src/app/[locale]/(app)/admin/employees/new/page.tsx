@@ -2,6 +2,7 @@ import React from 'react';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import EmployeeForm from '../../employee-form';
+import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -17,8 +18,8 @@ export default async function NewEmployeePage({ params }: PageProps) {
   const locale = resolvedParams?.locale || 'ar';
   const isRtl = locale === 'ar';
 
-  let branchesList: any[] = [];
-  let rolesList: any[] = [];
+  let branchesList: Array<{ id: string; nameAr: string; nameEn: string; name: string }> = [];
+  let rolesList: Array<{ id: number; name: string; nameAr: string }> = [];
 
   // 1. جلب الفروع المسجلة مباشرة من قاعدة البيانات
   try {
@@ -28,7 +29,7 @@ export default async function NewEmployeePage({ params }: PageProps) {
       WHERE is_active = true
       ORDER BY id ASC;
     `);
-    branchesList = Array.isArray(bRaw) ? bRaw : (bRaw as any)?.rows || [];
+    branchesList = getSqlRows<typeof branchesList[number]>(bRaw);
   } catch (error) {
     console.error('Failed to load branches for new employee page:', error);
   }
@@ -40,7 +41,7 @@ export default async function NewEmployeePage({ params }: PageProps) {
       FROM custom_roles
       ORDER BY id ASC;
     `);
-    rolesList = Array.isArray(rRaw) ? rRaw : (rRaw as any)?.rows || [];
+    rolesList = getSqlRows<typeof rolesList[number]>(rRaw);
   } catch (error) {
     console.error('Failed to load roles for new employee page:', error);
   }

@@ -8,14 +8,10 @@ import {
   AlertCircle,
   Clock,
   Calendar,
-  DollarSign,
-  MessageSquare,
   Search,
-  Filter,
   RefreshCw,
   Loader2,
   Building2,
-  User,
   Timer,
   X,
   Send,
@@ -98,8 +94,8 @@ export default function LeaveApprovalsPage() {
       setRequests((prev) =>
         prev.map((r) => (r.id === req.id ? { ...r, status: 'APPROVED' } : r))
       );
-    } catch (err: any) {
-      setStatusAlert({ type: 'err', text: err.message || 'حدث خطأ أثناء الاعتماد' });
+    } catch (err: unknown) {
+      setStatusAlert({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الاعتماد' });
     } finally {
       setProcessingId(null);
     }
@@ -142,8 +138,8 @@ export default function LeaveApprovalsPage() {
         )
       );
       setRejectModalReq(null);
-    } catch (err: any) {
-      setStatusAlert({ type: 'err', text: err.message || 'حدث خطأ أثناء رفض الطلب' });
+    } catch (err: unknown) {
+      setStatusAlert({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء رفض الطلب' });
     } finally {
       setProcessingId(null);
     }

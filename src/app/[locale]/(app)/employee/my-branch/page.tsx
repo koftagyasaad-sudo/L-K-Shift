@@ -8,13 +8,31 @@ interface PageProps {
   }>;
 }
 
+interface EmployeeBrief {
+  id: string;
+  name?: string;
+  fullName?: string;
+  role?: string;
+  phone?: string;
+  branchId?: string | number | null;
+}
+
+interface BranchSummary {
+  nameAr?: string;
+  name?: string;
+  address?: string;
+  phone?: string;
+  managerName?: string;
+  radiusMeters?: number;
+}
+
 export default function MyBranchStaffPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const locale = resolvedParams?.locale || 'ar';
   const isRtl = locale === 'ar';
 
-  const [branchInfo, setBranchInfo] = useState<any>(null);
-  const [colleagues, setColleagues] = useState<any[]>([]);
+  const [branchInfo, setBranchInfo] = useState<BranchSummary | null>(null);
+  const [colleagues, setColleagues] = useState<EmployeeBrief[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -26,9 +44,10 @@ export default function MyBranchStaffPage({ params }: PageProps) {
         // 1. معرفة فرع الموظف الحالي
         const empRes = await fetch('/api/employees', { cache: 'no-store' });
         if (!empRes.ok) throw new Error('فشل قراءة البيانات');
-        const empList = await empRes.json();
+        const responseData = await empRes.json();
+        const empList: EmployeeBrief[] = Array.isArray(responseData) ? responseData : [];
         const me = Array.isArray(empList)
-          ? empList.find((u: any) => u.name === storedName || u.fullName === storedName) || empList[0]
+          ? empList.find((u) => u.name === storedName || u.fullName === storedName) || empList[0]
           : null;
 
         if (me && me.branchId) {
@@ -40,7 +59,7 @@ export default function MyBranchStaffPage({ params }: PageProps) {
           }
 
           // 3. تصفية زملاء العمل في نفس الفرع فقط للقراءة
-          const branchStaff = empList.filter((u: any) => String(u.branchId) === String(me.branchId));
+          const branchStaff = empList.filter((u) => String(u.branchId) === String(me.branchId));
           setColleagues(branchStaff);
         }
       } catch (err) {

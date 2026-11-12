@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  MapPin,
   Camera,
   CheckCircle2,
   AlertCircle,
@@ -59,7 +58,7 @@ export default function AttendancePage() {
 
   // الكاميرا والسيلفي
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [cameraActive, setCameraActive] = useState(false);
+  const [, setCameraActive] = useState(false);
   const [selfiePhoto, setSelfiePhoto] = useState<string>('');
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -83,11 +82,18 @@ export default function AttendancePage() {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: BranchItem[] = data.map((b: any) => ({
+          const mapped: BranchItem[] = data.map((b: {
+            id: number;
+            name_ar?: string;
+            name?: string;
+            latitude: string | number;
+            longitude: string | number;
+            geofence_radius?: number;
+          }) => ({
             id: b.id,
             name: b.name_ar || b.name || 'فرع',
-            lat: parseFloat(b.latitude),
-            lng: parseFloat(b.longitude),
+            lat: parseFloat(String(b.latitude)),
+            lng: parseFloat(String(b.longitude)),
             radius: Number(b.geofence_radius) || 150,
           }));
           setBranches(mapped);
@@ -319,7 +325,7 @@ export default function AttendancePage() {
         type: 'ok',
         text: data.message || `تم تسجيل ${action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'} بنجاح!`,
       });
-    } catch (err: any) {
+    } catch {
       await saveOfflineAttendance({
         userId,
         userName,

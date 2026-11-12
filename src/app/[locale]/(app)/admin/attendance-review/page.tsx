@@ -3,20 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  ClipboardCheck,
   Camera,
   CheckCircle2,
-  Clock,
   DollarSign,
   Download,
-  Filter,
   RefreshCw,
   Search,
-  User,
-  AlertCircle,
   Loader2,
-  MapPin,
-  Calendar,
   X,
   Maximize2,
 } from 'lucide-react';

@@ -39,7 +39,7 @@ export interface EmployeeData {
   nationalId?: string | null;
   address?: string | null;
   emergencyContact?: string | null;
-  verificationMode?: string;
+  verificationMode?: 'QR_GPS' | 'GPS_ONLY' | 'GPS_WIFI' | 'MANUAL';
   isActive: boolean;
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -221,7 +221,7 @@ export async function updateEmployeeAction(
         ...(data.address !== undefined && { address: data.address }),
         ...(data.emergencyContact !== undefined && { emergencyContact: data.emergencyContact }),
         ...(data.employeeCode !== undefined && { employeeCode: data.employeeCode }),
-        ...(data.verificationMode !== undefined && { verificationMode: data.verificationMode as any }),
+        ...(data.verificationMode !== undefined && { verificationMode: data.verificationMode }),
         ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
         updatedAt: new Date(),
       })
@@ -229,9 +229,9 @@ export async function updateEmployeeAction(
 
     revalidatePath('/[locale]/admin/employees', 'page');
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating employee:', error);
-    return { success: false, message: error?.message || 'فشل تحديث بيانات الموظف' };
+    return { success: false, message: error instanceof Error ? error.message : 'فشل تحديث بيانات الموظف' };
   }
 }
 
@@ -246,8 +246,8 @@ export async function deleteEmployeeAction(id: string | number): Promise<{ succe
     await db.delete(users).where(eq(users.id, employeeId));
     revalidatePath('/[locale]/admin/employees', 'page');
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting employee:', error);
-    return { success: false, message: error?.message || 'فشل حذف الموظف' };
+    return { success: false, message: error instanceof Error ? error.message : 'فشل حذف الموظف' };
   }
 }

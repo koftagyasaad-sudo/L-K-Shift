@@ -140,7 +140,7 @@ export default function BranchesClient({ initialBranches }: Props) {
     startTransition(async () => {
       try {
         const currentStatus = branch.isActive !== false && branch.isActive !== null;
-        const result: any = await toggleBranchStatusAction(branch.id, currentStatus);
+        const result = await toggleBranchStatusAction(branch.id, currentStatus);
 
         if (result && result.success === false) {
           setError(result.error || "تعذر تغيير حالة الفرع");
@@ -164,8 +164,8 @@ export default function BranchesClient({ initialBranches }: Props) {
             : `تم إيقاف الفرع: ${getBranchDisplayName(branch)}`
         );
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message || "حدث خطأ أثناء تغيير الحالة");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "حدث خطأ أثناء تغيير الحالة");
       }
     });
   }
@@ -181,7 +181,7 @@ export default function BranchesClient({ initialBranches }: Props) {
 
     startTransition(async () => {
       try {
-        const result: any = await deleteBranchAction(branch.id);
+        const result = await deleteBranchAction(branch.id);
 
         if (result && result.success === false) {
           setError(result.error || "تعذر حذف الفرع");
@@ -191,8 +191,8 @@ export default function BranchesClient({ initialBranches }: Props) {
         setBranches((prev) => prev.filter((b) => b.id !== branch.id));
         setMessage(`تم حذف الفرع: ${getBranchDisplayName(branch)}`);
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message || "حدث خطأ أثناء حذف الفرع");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "حدث خطأ أثناء حذف الفرع");
       }
     });
   }

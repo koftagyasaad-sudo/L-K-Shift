@@ -12,7 +12,7 @@ export type SidebarState = {
   setCollapsed: (collapsed: boolean) => void;
   collapse: () => void;
   expand: () => void;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 const STORAGE_KEY = "lk_sidebar_state_v1";
@@ -59,11 +59,13 @@ export function create<T extends object>(
       if (typeof window !== "undefined") {
         try {
           const toSave = {
-            isOpen: (state as any).isOpen,
-            isCollapsed: (state as any).isCollapsed,
+            isOpen: "isOpen" in state && typeof state.isOpen === "boolean" ? state.isOpen : true,
+            isCollapsed: "isCollapsed" in state && typeof state.isCollapsed === "boolean"
+              ? state.isCollapsed
+              : false,
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-        } catch (e) {
+        } catch {
           // ignore storage errors
         }
       }

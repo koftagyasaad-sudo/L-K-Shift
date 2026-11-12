@@ -1,4 +1,4 @@
-import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
+import type { DefaultSession, DefaultUser } from "next-auth";
 import { JWT as DefaultJWT } from "next-auth/jwt";
 
 export type SystemRoleType = "SUPER_ADMIN" | "EMPLOYEE" | "ADMIN" | "MANAGER" | string;

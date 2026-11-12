@@ -102,7 +102,7 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
       } else {
         showToast(res.message || "حدث خطأ أثناء حفظ البيانات", "error");
       }
-    } catch (err) {
+    } catch {
       showToast("حدث خطأ غير متوقع", "error");
     } finally {
       setLoading(false);
@@ -120,7 +120,7 @@ export function RoleManager({ initialRoles = [] }: RoleManagerProps) {
       } else {
         showToast(res.message || "فشل الحذف", "error");
       }
-    } catch (err) {
+    } catch {
       showToast("حدث خطأ أثناء الحذف", "error");
     }
   };

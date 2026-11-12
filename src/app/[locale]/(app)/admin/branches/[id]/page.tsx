@@ -11,6 +11,13 @@ interface PageProps {
   }>;
 }
 
+interface ManagerOption {
+  id: string | number;
+  name?: string;
+  fullName?: string;
+  role?: string;
+}
+
 export default function EditBranchPage({ params }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
@@ -37,7 +44,7 @@ export default function EditBranchPage({ params }: PageProps) {
   const [betweenEnd, setBetweenEnd] = useState('21:00');
   const [gracePeriod, setGracePeriod] = useState('15');
 
-  const [managersList, setManagersList] = useState<any[]>([]);
+  const [managersList, setManagersList] = useState<ManagerOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCapturingGps, setIsCapturingGps] = useState(false);
@@ -74,7 +81,7 @@ export default function EditBranchPage({ params }: PageProps) {
     setManagerId(mId);
     const found = managersList.find((m) => String(m.id) === mId);
     if (found) {
-      setManagerName(found.name || found.fullName);
+      setManagerName(found.name || found.fullName || '');
     } else {
       setManagerName('');
     }
@@ -136,8 +143,8 @@ export default function EditBranchPage({ params }: PageProps) {
       alert('تم تحديث كافة بيانات الفرع ونطاق البصمة والورديات بنجاح!');
       router.push(`/${locale}/admin/branches`);
       router.refresh();
-    } catch (err: any) {
-      alert(err.message || 'حدث خطأ أثناء حفظ التعديلات');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ التعديلات');
     } finally {
       setIsSubmitting(false);
     }

@@ -7,7 +7,6 @@ import {
   Phone,
   Lock,
   CreditCard,
-  MapPin,
   CheckCircle2,
   AlertCircle,
   Save,
@@ -236,8 +235,8 @@ export default function PersonalProfilePage() {
       setConfirmPassword('');
       localStorage.setItem('userName', fullName.trim());
       localStorage.setItem('userPhone', phone.trim());
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء حفظ البيانات' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ البيانات' });
     } finally {
       setSaving(false);
     }
@@ -388,7 +387,7 @@ export default function PersonalProfilePage() {
               <label className="block text-xs font-bold text-slate-700 mb-1.5">النوع / الجنس</label>
               <select
                 value={gender}
-                onChange={(e) => setGender(e.target.value as any)}
+                onChange={(e) => setGender(e.target.value as 'MALE' | 'FEMALE')}
                 className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-orange-500 font-semibold"
               >
                 <option value="MALE">ذكر</option>
@@ -587,7 +586,7 @@ export default function PersonalProfilePage() {
               <label className="block text-xs font-bold text-slate-700 mb-1.5">طريقة التحويل المفضلة</label>
               <select
                 value={payoutMethod}
-                onChange={(e) => setPayoutMethod(e.target.value as any)}
+                onChange={(e) => setPayoutMethod(e.target.value as 'INSTAPAY' | 'WALLET' | 'BANK' | 'CASH')}
                 className="w-full bg-white border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-emerald-500 font-bold"
               >
                 <option value="INSTAPAY">إنستاباي (InstaPay)</option>

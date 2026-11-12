@@ -1,6 +1,4 @@
 import { getRequestConfig } from 'next-intl/server';
-import { notFound } from 'next/navigation';
-
 // قائمة اللغات المدعومة في التطبيق
 const locales = ['ar', 'en'];
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Printer, ShieldCheck, MapPin, Camera, KeyRound, 
+  Printer, ShieldCheck, KeyRound,
   User, Phone, CreditCard, Building2, Save, ArrowRight, Loader2, CheckCircle2 
 } from 'lucide-react';
 
@@ -14,14 +14,28 @@ interface PageProps {
   }>;
 }
 
+interface EmployeeDossier {
+  id: string | number;
+  employeeCode?: string;
+  fullName?: string;
+  name?: string;
+  branchName?: string;
+  phone?: string;
+  nationalId?: string;
+  role?: string;
+  workingHoursPerDay?: number;
+  basicSalary?: number;
+  verificationMode?: string;
+  verification_mode?: string;
+}
+
 export default function EmployeeDossierPage({ params }: PageProps) {
   const resolvedParams = use(params);
-  const locale = resolvedParams?.locale || 'ar';
   const employeeId = resolvedParams?.id;
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [employee, setEmployee] = useState<any>(null);
+  const [employee, setEmployee] = useState<EmployeeDossier | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [verificationMode, setVerificationMode] = useState('QR_GPS');
   const [saving, setSaving] = useState(false);
@@ -34,7 +48,9 @@ export default function EmployeeDossierPage({ params }: PageProps) {
         const res = await fetch(`/api/employees?id=${employeeId}`, { cache: 'no-store' });
         if (res.ok) {
           const list = await res.json();
-          const target = Array.isArray(list) ? list.find((e: any) => String(e.id) === employeeId) : list;
+          const target = Array.isArray(list)
+            ? list.find((e: EmployeeDossier) => String(e.id) === employeeId)
+            : list as EmployeeDossier | null;
           if (target) {
             setEmployee(target);
             setVerificationMode(target.verificationMode || target.verification_mode || 'QR_GPS');
@@ -54,7 +70,7 @@ export default function EmployeeDossierPage({ params }: PageProps) {
     setSaving(true);
     setMsg(null);
     try {
-      const payload: any = {
+      const payload: { verificationMode: string; password?: string } = {
         verificationMode,
       };
       if (newPassword.trim()) {

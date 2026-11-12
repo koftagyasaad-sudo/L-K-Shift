@@ -121,7 +121,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
       } else {
         showToast(res.error || "حدث خطأ أثناء الحفظ", "error");
       }
-    } catch (err) {
+    } catch {
       showToast("حدث خطأ غير متوقع", "error");
     } finally {
       setLoading(false);
@@ -139,7 +139,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
       } else {
         showToast(res.error || "فشل الحذف", "error");
       }
-    } catch (err) {
+    } catch {
       showToast("حدث خطأ أثناء الحذف", "error");
     }
   };
@@ -154,7 +154,7 @@ export function BranchEmployeeManager({ initialBranches = [] }: Props) {
         );
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       showToast("فشل تغيير الحالة", "error");
     }
   };

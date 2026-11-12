@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 
-export async function GET(req: NextRequest) {
-  const diagnosis: Record<string, any> = {
+export async function GET() {
+  const diagnosis: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     status: "ok",
   };
@@ -30,12 +30,12 @@ export async function GET(req: NextRequest) {
       success: true,
       diagnosis,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Debug auth error:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Internal Server Error",
+        error: error instanceof Error ? error.message : "Internal Server Error",
         diagnosis,
       },
       { status: 500 }
@@ -43,6 +43,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
-  return GET(req);
+export async function POST() {
+  return GET();
 }

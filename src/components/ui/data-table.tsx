@@ -8,7 +8,7 @@ export type TableColumn<T> = {
   key: string;
   header: string | ReactNode;
   cell?: (row: T, index: number) => ReactNode;
-  accessor?: (row: T) => any;
+  accessor?: (row: T) => unknown;
   sortable?: boolean;
 };
 
@@ -24,7 +24,7 @@ export interface DataTableProps<T> {
   headerExtra?: ReactNode;
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends Record<string, unknown>>({
   data = [],
   columns = [],
   searchableKeys = [],
@@ -105,7 +105,7 @@ export function DataTable<T extends Record<string, any>>({
       URL.revokeObjectURL(url);
 
       toast.success("تم تصدير البيانات بنجاح");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Export error:", error);
       toast.error("حدث خطأ أثناء تصدير البيانات");
     }
@@ -169,8 +169,9 @@ export function DataTable<T extends Record<string, any>>({
               ) : (
                 paginatedData.map((row, idx) => {
                   const rowIndex = (currentPage - 1) * pageSize + idx + 1;
+                  const rowKey = typeof row.id === "string" || typeof row.id === "number" ? row.id : idx;
                   return (
-                    <tr key={row.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={rowKey} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3 text-center text-gray-400 text-xs font-mono">
                         {rowIndex}
                       </td>

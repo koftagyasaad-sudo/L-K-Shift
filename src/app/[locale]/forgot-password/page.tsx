@@ -71,8 +71,8 @@ export default function ForgotPasswordPage() {
       setStatusMsg({ type: 'ok', text: data.message });
       setStep(2);
       setResendCooldown(60);
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء إرسال الكود' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء إرسال الكود' });
     } finally {
       setLoading(false);
     }
@@ -102,8 +102,8 @@ export default function ForgotPasswordPage() {
       setResetToken(data.resetToken);
       setStatusMsg({ type: 'ok', text: 'تم التحقق بنجاح! يمكنك الآن تعيين كلمة مرور قوية جديدة.' });
       setStep(3);
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'كود التحقق غير صحيح' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'كود التحقق غير صحيح' });
     } finally {
       setLoading(false);
     }
@@ -147,8 +147,8 @@ export default function ForgotPasswordPage() {
       setTimeout(() => {
         router.push(`/${locale}/login`);
       }, 1500);
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ' });
     } finally {
       setLoading(false);
     }

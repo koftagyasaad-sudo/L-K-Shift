@@ -20,7 +20,6 @@ interface CheckInOutProps {
 }
 
 export function CheckInOutWidget({
-  userId,
   branch,
   locale = "ar",
   initialType = null,
@@ -32,7 +31,7 @@ export function CheckInOutWidget({
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -111,8 +110,8 @@ export function CheckInOutWidget({
         await videoRef.current.play();
       }
       setCameraActive(true);
-    } catch (err: any) {
-      setErrorMessage(err.message || (isAr ? "تعذر فتح الكاميرا" : "Camera access failed"));
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : (isAr ? "تعذر فتح الكاميرا" : "Camera access failed"));
       setCameraActive(false);
     }
   };
@@ -197,8 +196,8 @@ export function CheckInOutWidget({
         if (onSuccess) onSuccess();
         if (onClose) onClose();
       }, 1200);
-    } catch (err: any) {
-      setErrorMessage(err.message || (isAr ? "حدث خطأ غير متوقع" : "Unexpected error occurred"));
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : (isAr ? "حدث خطأ غير متوقع" : "Unexpected error occurred"));
     } finally {
       setLoading(false);
     }

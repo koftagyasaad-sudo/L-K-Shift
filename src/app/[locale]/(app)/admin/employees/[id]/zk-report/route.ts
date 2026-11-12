@@ -4,6 +4,34 @@ import { sql } from 'drizzle-orm';
 import { eq } from 'drizzle-orm';
 import { users } from '@/db/schema';
 import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
+import { getSqlRows } from '@/lib/db';
+
+type EmployeeRow = Record<string, unknown> & {
+  employeeCode: string | null;
+  phone: string | null;
+  workingHoursPerDay: number | string | null;
+};
+
+type AttendanceRow = Record<string, unknown> & {
+  id: string | number;
+  workDate: string | null;
+  check_in_time: string | Date | null;
+  check_out_time: string | Date | null;
+  gpsDistance: number | string | null;
+  photoUrl: string | null;
+  workedMinutes: number | string | null;
+  lateMinutes: number | string | null;
+  overtimeMinutes: number | string | null;
+};
+
+type LeaveRow = Record<string, unknown> & {
+  requestType: string;
+  startDate: string | null;
+  endDate: string | null;
+  durationDays: number | string | null;
+  advanceAmount: number | string | null;
+  final_status: string | null;
+};
 
 export async function GET(
   request: NextRequest,
@@ -64,13 +92,11 @@ export async function GET(
       LIMIT 1;
     `);
 
-    const empRows = Array.isArray(empRaw) ? empRaw : (empRaw as any)?.rows || [];
+    const empRows = getSqlRows<EmployeeRow>(empRaw);
     if (!empRows.length) {
       return NextResponse.json({ message: 'الموظف غير موجود بالنظام' }, { status: 404 });
     }
     const employee = empRows[0];
-    const empCode = String(employee.employeeCode || '').trim();
-    const empPhone = String(employee.phone || '').trim();
     const workHours = Number(employee.workingHoursPerDay) || 8;
 
     // 2. استرجاع سجلات الحضور والانصراف بجميع المعرفات
@@ -91,7 +117,7 @@ export async function GET(
       WHERE user_id = ${employeeId}
       ORDER BY id ASC;
     `);
-    const allLogs = Array.isArray(logsRaw) ? logsRaw : (logsRaw as any)?.rows || [];
+    const allLogs = getSqlRows<AttendanceRow>(logsRaw);
 
     // 3. الإجازات والسلف
     const leavesRaw = await db.execute(sql`
@@ -106,14 +132,14 @@ export async function GET(
       WHERE user_id = ${employeeId}
         AND (final_status = 'APPROVED' OR status::text = 'APPROVED');
     `);
-    const allLeaves = Array.isArray(leavesRaw) ? leavesRaw : (leavesRaw as any)?.rows || [];
+    const allLeaves = getSqlRows<LeaveRow>(leavesRaw);
 
-    const approvedAdvancesTotal = allLeaves.reduce((sum: number, item: any) => {
-      return sum + (parseFloat(item.advanceAmount) || 0);
+    const approvedAdvancesTotal = allLeaves.reduce((sum: number, item) => {
+      return sum + (parseFloat(String(item.advanceAmount)) || 0);
     }, 0);
 
     // استخراج تاريخ السجل بدقة بتوقيت مصر
-    const extractLogDate = (log: any): string | null => {
+    const extractLogDate = (log: AttendanceRow): string | null => {
       if (log.workDate) {
         const str = String(log.workDate).trim();
         const match = str.match(/\d{4}-\d{2}-\d{2}/);
@@ -142,7 +168,7 @@ export async function GET(
       const dObj = new Date(year, month - 1, day);
       const dayName = dayNamesAr[dObj.getDay()];
 
-      const dayLog = allLogs.find((l: any) => extractLogDate(l) === dateStr);
+      const dayLog = allLogs.find((l) => extractLogDate(l) === dateStr);
 
       const checkInRaw = dayLog?.check_in_time || null;
       const checkOutRaw = dayLog?.check_out_time || null;
@@ -162,7 +188,7 @@ export async function GET(
         }
       }
 
-      const isLeave = allLeaves.some((lv: any) => {
+      const isLeave = allLeaves.some((lv) => {
         const start = String(lv.startDate || '').slice(0, 10);
         const end = String(lv.endDate || start).slice(0, 10);
         return dateStr >= start && dateStr <= end && lv.requestType !== 'ADVANCE';
@@ -177,7 +203,7 @@ export async function GET(
         status = 'WEEKLY_OFF';
       }
 
-      const formatTime = (ts: string | null) => {
+      const formatTime = (ts: string | Date | null) => {
         if (!ts) return null;
         try {
           const d = new Date(ts);
@@ -219,7 +245,7 @@ export async function GET(
           phone: employee.phone,
           role: employee.role,
           branchName: employee.branchName,
-          basicSalary: parseFloat(employee.basicSalary) || 0,
+          basicSalary: parseFloat(String(employee.basicSalary)) || 0,
           workingHoursPerDay: workHours,
         },
         monthName: monthNamesAr[month],
@@ -229,8 +255,11 @@ export async function GET(
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('ZK Report API Error:', error);
-    return NextResponse.json({ message: 'فشل استخراج تقرير ZK', error: error?.message }, { status: 500 });
+    return NextResponse.json({
+      message: 'فشل استخراج تقرير ZK',
+      error: error instanceof Error ? error.message : undefined,
+    }, { status: 500 });
   }
 }

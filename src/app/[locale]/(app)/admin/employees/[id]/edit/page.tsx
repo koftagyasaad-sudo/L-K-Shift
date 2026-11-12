@@ -11,6 +11,13 @@ interface PageProps {
   }>;
 }
 
+interface BranchOption {
+  id: string | number;
+  name?: string;
+  nameAr?: string;
+  name_ar?: string;
+}
+
 export default function EditEmployeePage({ params }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
@@ -28,7 +35,7 @@ export default function EditEmployeePage({ params }: PageProps) {
   const [annualLeaveDays, setAnnualLeaveDays] = useState('21');
   const [isActive, setIsActive] = useState(true);
 
-  const [branchList, setBranchList] = useState<any[]>([]);
+  const [branchList, setBranchList] = useState<BranchOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,8 +67,8 @@ export default function EditEmployeePage({ params }: PageProps) {
         setBasicSalary(String(empData.basicSalary || 0));
         setAnnualLeaveDays(String(empData.annualLeaveDays || 21));
         setIsActive(empData.isActive ?? true);
-      } catch (err: any) {
-        setErrorMessage(err?.message || 'حدث خطأ أثناء تحميل البيانات');
+      } catch (err: unknown) {
+        setErrorMessage(err instanceof Error ? err.message : 'حدث خطأ أثناء تحميل البيانات');
       } finally {
         setIsLoading(false);
       }
@@ -108,8 +115,8 @@ export default function EditEmployeePage({ params }: PageProps) {
         router.push(`/${locale}/admin/employees`);
         router.refresh();
       }, 1000);
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'حدث خطأ أثناء حفظ التعديلات');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'حدث خطأ أثناء حفظ التعديلات');
     } finally {
       setIsSubmitting(false);
     }

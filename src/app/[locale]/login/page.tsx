@@ -75,8 +75,8 @@ export default function LoginPage() {
       } else {
         router.push(`/${locale}/attendance`);
       }
-    } catch (err: any) {
-      setError(err.message || (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
     } finally {
       setLoading(false);
     }
@@ -118,8 +118,8 @@ export default function LoginPage() {
       setTimeout(() => {
         setActiveTab('LOGIN');
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || (isRtl ? 'فشل إنشاء الحساب' : 'Registration failed'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (isRtl ? 'فشل إنشاء الحساب' : 'Registration failed'));
     } finally {
       setLoading(false);
     }

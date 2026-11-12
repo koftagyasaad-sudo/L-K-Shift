@@ -34,6 +34,8 @@ interface BranchItem {
   nameAr: string;
 }
 
+type BranchScope = 'ALL' | 'OWN_BRANCH' | 'CUSTOM';
+
 const SYSTEM_PERMISSIONS = [
   { id: 'dashboard.view', label: 'لوحة التحكم والتقارير العامة', group: 'عام' },
   { id: 'dashboard.analytics', label: 'التحليلات المالية والتشغيلية المتقدمة', group: 'عام' },
@@ -53,22 +55,20 @@ const SYSTEM_PERMISSIONS = [
   { id: 'staff_requests.manage', label: 'تقديم واعتماد طلبات احتياج العمالة', group: 'الطلبات' },
 ];
 
-function parsePermissions(perms: any): string[] {
+function parsePermissions(perms: unknown): string[] {
   if (!perms) return [];
-  if (Array.isArray(perms)) return perms;
+  if (Array.isArray(perms)) return perms.filter((permission): permission is string => typeof permission === 'string');
   if (typeof perms === 'string') {
     try {
-      const parsed = JSON.parse(perms);
-      if (Array.isArray(parsed)) return parsed;
-      if (typeof parsed === 'object' && parsed !== null) {
-        return Object.keys(parsed).filter((k) => (parsed as any)[k]);
-      }
+      return parsePermissions(JSON.parse(perms) as unknown);
     } catch {
-      return perms ? [perms] : [];
+      return [perms];
     }
   }
   if (typeof perms === 'object' && perms !== null) {
-    return Object.keys(perms).filter((k) => (perms as any)[k]);
+    return Object.entries(perms)
+      .filter(([, enabled]) => Boolean(enabled))
+      .map(([permission]) => permission);
   }
   return [];
 }
@@ -149,7 +149,18 @@ export default function RolesManagementPage() {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          const sanitized: CustomRole[] = data.map((r: any) => ({
+          const sanitized: CustomRole[] = data.map((r: {
+            id: number;
+            name?: string;
+            nameAr?: string;
+            name_ar?: string;
+            permissions?: unknown;
+            branchScope?: CustomRole['branchScope'];
+            branch_scope?: CustomRole['branchScope'];
+            allowedBranchIds?: unknown;
+            isSystem?: boolean;
+            is_system?: boolean;
+          }) => ({
             id: Number(r.id) || Math.random(),
             name: String(r.name || ''),
             nameAr: String(r.nameAr || r.name_ar || r.name || ''),
@@ -169,7 +180,12 @@ export default function RolesManagementPage() {
       const resB = await fetch('/api/branches', { cache: 'no-store' });
       if (resB.ok) {
         const dataB = await resB.json();
-        const mappedB: BranchItem[] = (Array.isArray(dataB) ? dataB : []).map((b: any) => ({
+        const mappedB: BranchItem[] = (Array.isArray(dataB) ? dataB : []).map((b: {
+          id: number;
+          nameAr?: string;
+          name_ar?: string;
+          name?: string;
+        }) => ({
           id: b.id,
           nameAr: b.nameAr || b.name_ar || b.name || 'فرع',
         }));
@@ -271,8 +287,8 @@ export default function RolesManagementPage() {
 
       setIsModalOpen(false);
       fetchRolesData();
-    } catch (err: any) {
-      setStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
+    } catch (err: unknown) {
+      setStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ' });
     } finally {
       setSaving(false);
     }
@@ -534,7 +550,7 @@ export default function RolesManagementPage() {
                     <button
                       key={scope.id}
                       type="button"
-                      onClick={() => setBranchScope(scope.id as any)}
+                      onClick={() => setBranchScope(scope.id as BranchScope)}
                       className={`p-3 rounded-xl border text-right transition cursor-pointer flex flex-col justify-between ${
                         branchScope === scope.id
                           ? 'bg-orange-50 border-orange-500 text-slate-900 shadow-xs'

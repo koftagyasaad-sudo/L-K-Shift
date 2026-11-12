@@ -5,19 +5,11 @@ import { useParams } from 'next/navigation';
 import {
   Users,
   Search,
-  Building2,
   FileText,
   UserCheck,
   Edit2,
   Printer,
   X,
-  Phone,
-  CreditCard,
-  MapPin,
-  Calendar,
-  DollarSign,
-  Clock,
-  ShieldCheck,
   Loader2,
   Plus,
   Save,
@@ -73,8 +65,20 @@ interface BranchOption {
   nameAr: string;
 }
 
+interface ZkAttendanceRecord {
+  id: string | number;
+  workDate: string;
+  checkInTime: string | Date | null;
+  checkOutTime: string | Date | null;
+  gpsDistance: number;
+  workedMinutes: number;
+  lateMinutes: number;
+  overtimeMinutes: number;
+  status: string;
+}
+
 // دالة ذكية تقرأ أي صيغة وقت صادرة من قاعدة البيانات أو ماكينة البصمة وتمنع ظهور الشرطة
-function formatTimeArabic(val: any): string {
+function formatTimeArabic(val: string | number | Date | null | undefined): string {
   if (!val) return '—';
 
   if (typeof val === 'string') {
@@ -143,7 +147,7 @@ export default function EmployeesManagementPage() {
 
   const [selectedHrEmployee, setSelectedHrEmployee] = useState<EmployeeItem | null>(null);
   const [selectedZkEmployee, setSelectedZkEmployee] = useState<EmployeeItem | null>(null);
-  const [zkRecords, setZkRecords] = useState<any[]>([]);
+  const [zkRecords, setZkRecords] = useState<ZkAttendanceRecord[]>([]);
   const [zkLoading, setZkLoading] = useState(false);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -163,7 +167,12 @@ export default function EmployeesManagementPage() {
       const resB = await fetch('/api/branches', { cache: 'no-store' });
       if (resB.ok) {
         const dataB = await resB.json();
-        const mappedB: BranchOption[] = (Array.isArray(dataB) ? dataB : []).map((b: any) => ({
+        const mappedB: BranchOption[] = (Array.isArray(dataB) ? dataB : []).map((b: {
+          id: number;
+          name?: string;
+          nameAr?: string;
+          name_ar?: string;
+        }) => ({
           id: b.id,
           name: b.name || 'Branch',
           nameAr: b.nameAr || b.name_ar || b.name || 'فرع',
@@ -175,7 +184,9 @@ export default function EmployeesManagementPage() {
       if (resR.ok) {
         const dataR = await resR.json();
         if (Array.isArray(dataR) && dataR.length > 0) {
-          const names = dataR.map((r: any) => r.nameAr || r.name).filter(Boolean);
+          const names = dataR
+            .map((r: { nameAr?: string; name?: string }) => r.nameAr || r.name)
+            .filter((name: string | undefined): name is string => Boolean(name));
           setSystemRoles((prev) => Array.from(new Set([...prev, ...names])));
         }
       }
@@ -265,8 +276,8 @@ export default function EmployeesManagementPage() {
         setIsEditModalOpen(false);
         fetchEmployeesData();
       }, 700);
-    } catch (err: any) {
-      setModalStatusMsg({ type: 'err', text: err.message || 'حدث خطأ أثناء الحفظ' });
+    } catch (err: unknown) {
+      setModalStatusMsg({ type: 'err', text: err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ' });
     } finally {
       setSavingEmp(false);
     }

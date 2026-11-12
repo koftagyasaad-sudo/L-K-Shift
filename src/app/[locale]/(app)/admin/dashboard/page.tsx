@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
+import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -19,16 +20,32 @@ export default async function AdminDashboardPage({ params }: PageProps) {
 
   let totalUsers = 0;
   let totalBranches = 0;
-  let branchesList: any[] = [];
+  let branchesList: Array<{
+    id: string;
+    nameAr: string | null;
+    nameEn: string | null;
+    name_ar?: string | null;
+    name_en?: string | null;
+    name?: string | null;
+    address: string | null;
+    latitude: string | null;
+    longitude: string | null;
+    radiusMeters: number;
+    geofenceRadius: number;
+    geofence_radius?: number;
+    isActive: boolean;
+    is_active?: boolean;
+    createdAt: Date;
+  }> = [];
 
   // 1. حساب الإحصائيات المركزية
   try {
     const userRes = await db.execute(sql`SELECT count(*)::int as count FROM users;`);
-    const uRows = Array.isArray(userRes) ? userRes : (userRes as any)?.rows || [];
+    const uRows = getSqlRows<{ count: number | string }>(userRes);
     totalUsers = Number(uRows[0]?.count || 0);
 
     const branchRes = await db.execute(sql`SELECT count(*)::int as count FROM branches;`);
-    const bRows = Array.isArray(branchRes) ? branchRes : (branchRes as any)?.rows || [];
+    const bRows = getSqlRows<{ count: number | string }>(branchRes);
     totalBranches = Number(bRows[0]?.count || 0);
   } catch (error) {
     console.error('Failed to load dashboard metrics:', error);
@@ -53,7 +70,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
       FROM branches 
       ORDER BY id ASC;
     `);
-    branchesList = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    branchesList = getSqlRows<typeof branchesList[number]>(raw);
   } catch (err) {
     console.error('Failed to fetch branches list for dashboard:', err);
   }
@@ -207,7 +224,7 @@ export default async function AdminDashboardPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {branchesList.map((branch: any) => {
+                {branchesList.map((branch) => {
                   const branchName = branch.nameAr || branch.name_ar || branch.name || 'فرع بدون اسم';
                   const branchEn = branch.nameEn || branch.name_en || '';
                   return (

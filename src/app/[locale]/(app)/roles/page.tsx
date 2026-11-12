@@ -9,7 +9,7 @@ interface RoleItem {
   nameEn?: string;
   description?: string;
   permissions?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface PageProps {
@@ -50,7 +50,7 @@ export default function AdminRolesPage({ params }: PageProps) {
       }
 
       const data = await res.json();
-      const list: any[] = Array.isArray(data) ? data : data?.roles || data?.data || [];
+      const list: RoleItem[] = Array.isArray(data) ? data : data?.roles || data?.data || [];
 
       // تحويل آمن يتوافق مع كلا شكلي قاعدة البيانات (name أو name_ar)
       const formatted: RoleItem[] = list.map((r) => ({

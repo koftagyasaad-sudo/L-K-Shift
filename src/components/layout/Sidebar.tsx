@@ -114,7 +114,7 @@ export default function Sidebar({ locale: propLocale, collapsed = false }: Sideb
   const locale = propLocale || (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
 
-  const [userName, setUserName] = useState('');
+  const [, setUserName] = useState('');
   const [userRole, setUserRole] = useState('موظف');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isOpenMobile, setIsOpenMobile] = useState(false);

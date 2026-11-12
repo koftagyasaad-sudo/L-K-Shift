@@ -94,8 +94,8 @@ export default function EditBranchPage() {
         } else {
           setError("لم يتم العثور على الفرع المطلوب");
         }
-      } catch (e: any) {
-        if (isMounted) setError(e?.message || "حدث خطأ أثناء تحميل بيانات الفرع");
+      } catch (e: unknown) {
+        if (isMounted) setError(e instanceof Error ? e.message : "حدث خطأ أثناء تحميل بيانات الفرع");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -155,8 +155,8 @@ export default function EditBranchPage() {
           router.push("/admin/branches");
           router.refresh();
         }, 1000);
-      } catch (err: any) {
-        setError(err?.message || "حدث خطأ أثناء حفظ التعديلات");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "حدث خطأ أثناء حفظ التعديلات");
       }
     });
   }

@@ -6,15 +6,11 @@ import {
   Briefcase,
   Search,
   Filter,
-  CheckCircle2,
   Clock,
   Printer,
   Copy,
   ExternalLink,
   Loader2,
-  AlertCircle,
-  Eye,
-  RefreshCw,
 } from 'lucide-react';
 
 interface ApplicationItem {

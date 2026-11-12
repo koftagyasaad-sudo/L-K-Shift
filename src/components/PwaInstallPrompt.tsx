@@ -2,8 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 export default function PwaInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isIos, setIsIos] = useState(false);
 
@@ -18,7 +23,7 @@ export default function PwaInstallPrompt() {
     // 2. التحقق إن كان التطبيق مفتوحاً بالفعل كتطبيق مستقل (Standalone)
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone ||
       document.referrer.includes('android-app://');
 
     if (isStandalone) {
@@ -33,7 +38,7 @@ export default function PwaInstallPrompt() {
     // 4. استلام إشعار المتصفح لإتاحة التثبيت (لأجهزة Android والكمبيوتر)
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       // إظهار البانر بعد ثانيتين من فتح الموقع
       setTimeout(() => setShowPrompt(true), 2000);
     };
