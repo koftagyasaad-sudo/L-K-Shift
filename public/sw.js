@@ -1,1 +1,1 @@
-const CACHE_NAME = 'lk-shift-v2026-audit-clean-v19
+const CACHE_NAME = 'lk-shift-v2026-prod-hardened-v20

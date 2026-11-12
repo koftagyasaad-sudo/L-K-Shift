@@ -63,7 +63,7 @@ async function loadAuthUser(id: string | null, phone: string | null): Promise<Au
 }
 
 export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET || "lk-shift-super-secret-jwt-key-prod-2026",
+  secret: process.env.NEXTAUTH_SECRET || (process.env.NODE_ENV !== "production" ? "lk-shift-local-dev-secret" : undefined),
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 يوماً

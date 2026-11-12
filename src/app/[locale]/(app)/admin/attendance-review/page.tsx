@@ -151,6 +151,77 @@ export default function AttendanceReviewPage() {
   };
 
   const handleExportCSV = () => {
+    if (activeTab === 'PAYROLL') {
+      const headers = [
+        'الكود',
+        'الموظف',
+        'الفرع',
+        'أيام العمل',
+        'ساعات العمل',
+        'الراتب الأساسي',
+        'قيمة الإضافي',
+        'دقائق التأخير',
+        'خصم التأخير',
+        'السلف المعتمدة',
+        'الجزاءات والخصومات',
+        'صافي القبض',
+      ];
+      const rows = payrollEmployees.map((emp) => {
+        const empLogs = filteredRecords.filter((r) => r.userId === emp.id);
+        const first = empLogs[0];
+        const basic = Number(first?.basicSalary) || 5000;
+        const dailyRate = basic / 30;
+        const hourlyRate = basic / (30 * 8);
+        const totalWorkedMins = empLogs.reduce((acc, r) => acc + r.workedMinutes, 0);
+        const totalLateMins = empLogs.reduce((acc, r) => acc + r.lateMinutes, 0);
+        const totalOvertimeMins = empLogs.reduce((acc, r) => acc + (r.overtimeMinutes || 0), 0);
+        const overtimePay = (totalOvertimeMins / 60) * hourlyRate * 1.5;
+        const lateDeduction = (totalLateMins / 60) * hourlyRate;
+        const empApproved = approvedFinanceItems.filter(
+          (item) =>
+            String(item.userId) === String(emp.id) &&
+            item.status === 'APPROVED' &&
+            (!fromDate || item.startDate >= fromDate) &&
+            (!toDate || item.startDate <= toDate)
+        );
+        const advancesTotal = empApproved
+          .filter((i) => i.requestType === 'ADVANCE')
+          .reduce((s, i) => s + Number(i.advanceAmount || 0), 0);
+        const penaltiesTotal = empApproved
+          .filter((i) => i.requestType === 'PENALTY')
+          .reduce((s, i) => s + Number(i.deductionAmount || i.advanceAmount || 0), 0);
+        const earnedBase = (totalWorkedMins / (8 * 60)) * dailyRate;
+        const netPay = Math.max(0, earnedBase + overtimePay - lateDeduction - advancesTotal - penaltiesTotal);
+
+        return [
+          first?.employeeCode || '',
+          emp.name,
+          first?.branchName || '',
+          empLogs.length,
+          (totalWorkedMins / 60).toFixed(1),
+          basic.toFixed(2),
+          overtimePay.toFixed(2),
+          totalLateMins,
+          lateDeduction.toFixed(2),
+          advancesTotal.toFixed(2),
+          penaltiesTotal.toFixed(2),
+          netPay.toFixed(2),
+        ];
+      });
+      const csvContent =
+        '\uFEFF' +
+        ['"شيت مسير الرواتب الشامل"', '', headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `شيت_الرواتب_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
     const headers = [
       'الكود',
       'الموظف',
@@ -162,7 +233,6 @@ export default function AttendanceReviewPage() {
       'التأخير (د)',
       'الراتب الأساسي',
     ];
-
     const rows = filteredRecords.map((r) => [
       r.employeeCode,
       r.userName,
@@ -174,11 +244,9 @@ export default function AttendanceReviewPage() {
       r.lateMinutes,
       r.basicSalary,
     ]);
-
     const csvContent =
       '\uFEFF' +
-      ['"تقرير مسير الرواتب وحركات الحضور"', '', headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
-
+      ['"تقرير حركات الحضور والانصراف"', '', headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

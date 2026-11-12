@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PaginationControls, usePaginatedItems } from '@/components/ui/PaginationControls';
 import PasswordInput from '@/components/ui/PasswordInput';
+import { validateStrongPassword } from '@/lib/password-policy';
 import {
   Users,
   Search,
@@ -252,7 +253,7 @@ export default function EmployeesManagementPage() {
         branchId: emp.branchId || allBranches[0]?.id || '',
         monthlySalary: emp.monthlySalary || 5000,
         workingHoursPerDay: emp.workingHoursPerDay || 8,
-        isActive: emp.isActive !== false,
+        isActive: true,
         shiftName: emp.shiftName || 'الشيفت الصباحي',
         shiftStartTime: emp.shiftStartTime || '10:00',
         shiftEndTime: emp.shiftEndTime || '18:00',
@@ -305,8 +306,9 @@ export default function EmployeesManagementPage() {
 
   const handleResetEmployeePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!passwordResetEmployee || resetPassword.length < 6 || resetPassword.length > 128) {
-      setResetPasswordStatus({ type: 'err', text: 'كلمة المرور يجب أن تكون بين 6 و128 محرفًا' });
+    const pwValidation = validateStrongPassword(resetPassword);
+    if (!passwordResetEmployee || !pwValidation.valid) {
+      setResetPasswordStatus({ type: 'err', text: pwValidation.message });
       return;
     }
 

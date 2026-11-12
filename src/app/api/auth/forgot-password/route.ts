@@ -156,6 +156,14 @@ export async function POST(request: NextRequest) {
 
     // 2. إجراء مطابقة وتأكيد كود الـ OTP
     if (action === 'VERIFY_OTP') {
+      const phoneLimit = checkRateLimit(`otp-verify-phone:${phone}`, 5, 10 * 60_000);
+      if (!phoneLimit.success) {
+        await db.update(users).set({ resetOtp: null, resetOtpExpiresAt: null }).where(eq(users.phone, phone));
+        return NextResponse.json(
+          { message: 'تم إلغاء كود التحقق لتجاوز الحد الأقصى للمحاولات الخاطئة. يرجى طلب كود جديد.' },
+          { status: 429 }
+        );
+      }
       if (!/^\d{6}$/.test(otp)) {
         return NextResponse.json({ message: 'يرجى إدخال كود التحقق المكون من 6 أرقام' }, { status: 400 });
       }
