@@ -32,10 +32,10 @@ export async function POST(
       success: true,
       message: "Notification marked as read",
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error marking notification as read:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Internal Server Error" },
+      { success: false, error: error instanceof Error ? error.message : "Internal Server Error" },
       { status: 500 }
     );
   }

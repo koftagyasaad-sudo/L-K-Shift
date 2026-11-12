@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { branches, users } from "@/db/schema";
 import { hashPassword } from "@/lib/passwords";
 import { meetsPasswordMinimum } from "@/lib/password-policy";
+import { getSqlRows } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   const setupToken = process.env.SETUP_ADMIN_TOKEN;
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     // [SECURITY LOCK] منع استدعاء التهيئة إذا وجد مدير عام مسجل مسبقاً
     try {
       const existingSuperAdmin = await db.execute(sql`SELECT id FROM users WHERE system_role = 'SUPER_ADMIN' LIMIT 1;`);
-      const rows = Array.isArray(existingSuperAdmin) ? existingSuperAdmin : (existingSuperAdmin as any)?.rows || [];
+      const rows = getSqlRows<{ id: string }>(existingSuperAdmin);
       if (rows.length > 0) {
         return NextResponse.json(
           { message: "تم قفل مسار التهيئة أمنياً؛ النظام يحتوي على مدير عام مسبقاً." /* admin_lock_activated */ },

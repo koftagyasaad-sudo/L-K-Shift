@@ -15,7 +15,7 @@ export async function requireSession(locale: string) {
 export async function requireSuperAdmin(locale: string) {
   const session = await requireSession(locale);
 
-  const userRole = (session.user as any)?.systemRole || (session.user as any)?.role;
+  const userRole = session.user.systemRole || session.user.role;
 
   if (userRole !== "SUPER_ADMIN" && userRole !== "ADMIN") {
     redirect(`/${locale}`);

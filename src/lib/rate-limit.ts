@@ -14,6 +14,13 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
+export function getClientIp(request: Request): string {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const forwardedIp = forwardedFor?.split(",")[0]?.trim();
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  return (forwardedIp || realIp || "unknown").slice(0, 128);
+}
+
 export function checkRateLimit(key: string, limit = 5, windowMs = 60000): RateLimitResult {
   const now = Date.now();
   const record = attemptsMap.get(key);

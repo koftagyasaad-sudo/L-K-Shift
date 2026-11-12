@@ -7,6 +7,20 @@ import { eq } from "drizzle-orm";
 import type { AttendanceRecordInput, AttendanceRecord, AttendanceFilterOptions } from "@/types";
 import { canAccessBranch, hasApiPermission, requireApiPrincipal } from "@/lib/api-auth";
 
+type AttendanceQueryRow = Record<string, unknown> & {
+  id: string | number;
+  employee_id: string;
+  branch_id: string | null;
+  action_type: string;
+  face_verified: boolean | null;
+  latitude: number | string | null;
+  longitude: number | string | null;
+  created_at: string | Date | null;
+  employee_name?: string | null;
+  employee_code?: string | null;
+  branch_name?: string | null;
+};
+
 export async function recordAttendanceAction(
   input: AttendanceRecordInput
 ): Promise<{ success: boolean; log?: AttendanceRecord; data?: AttendanceRecord; error?: string }> {
@@ -51,7 +65,7 @@ export async function recordAttendanceAction(
       return { success: false, error: "معرف الموظف مطلوب" };
     }
 
-    const result = await query(
+    const result = await query<AttendanceQueryRow>(
       `INSERT INTO attendance_logs (employee_id, branch_id, action_type, face_verified, latitude, longitude)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, employee_id, branch_id, action_type, face_verified, latitude, longitude, created_at`,
@@ -60,7 +74,7 @@ export async function recordAttendanceAction(
 
     const row = result.rows[0];
     const log: AttendanceRecord = {
-      id: row.id,
+      id: String(row.id),
       employee_id: row.employee_id,
       action_type: row.action_type,
       face_verified: Boolean(row.face_verified),
@@ -150,12 +164,12 @@ export async function getAttendanceLogsAction(
 
     sql += ` ORDER BY a.created_at DESC LIMIT 100`;
 
-    const result = await query(sql, params);
+    const result = await query<AttendanceQueryRow>(sql, params);
 
     const logs: AttendanceRecord[] = result.rows
       .filter((row) => canAccessBranch(principal, row.branch_id == null ? null : String(row.branch_id)))
       .map((row) => ({
-      id: row.id,
+      id: String(row.id),
       employee_id: row.employee_id,
       employee_name: row.employee_name || "",
       employee_code: row.employee_code || "",

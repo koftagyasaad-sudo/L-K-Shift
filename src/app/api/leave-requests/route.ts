@@ -6,6 +6,18 @@ import { authorizeApi, canAccessBranch, hasApiPermission } from '@/lib/api-auth'
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+function resultRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (typeof result === 'object' && result !== null && 'rows' in result && Array.isArray(result.rows)) {
+    return result.rows as T[];
+  }
+  return [];
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const authorization = await authorizeApi();
@@ -25,15 +37,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
     }
 
-    const branchFilter = isSelf || authorization.principal.branchScope === 'ALL'
+    const branchFilter = isSelf
+      || authorization.principal.systemRole === 'SUPER_ADMIN'
+      || authorization.principal.branchScope === 'ALL'
       ? sql`1=1`
-      : authorization.principal.branchScope === 'CUSTOM'
+      : !canView
+        ? sql`1=1`
+        : authorization.principal.branchScope === 'CUSTOM'
         ? authorization.principal.allowedBranchIds.length
           ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text) = ANY(${authorization.principal.allowedBranchIds}::text[])`
           : sql`1=0`
         : authorization.principal.primaryBranchId
-          ? sql`COALESCE(u.primary_branch_id, u.branch_id) = ${authorization.principal.primaryBranchId}`
+          ? sql`COALESCE(u.primary_branch_id::text, u.branch_id::text) = ${authorization.principal.primaryBranchId}`
           : sql`1=0`;
+    const userFilter = requestedId !== null
+      ? sql`r.user_id::text = ${requestedId}`
+      : canView
+        ? sql`1=1`
+        : sql`r.user_id::text = ${authorization.principal.id}`;
 
     const raw = await db.execute(sql`
       SELECT 
@@ -54,16 +75,17 @@ export async function GET(request: NextRequest) {
       FROM leave_requests r
       LEFT JOIN users u ON r.user_id = u.id
       LEFT JOIN branches b ON COALESCE(u.primary_branch_id, u.branch_id) = b.id
-      WHERE ${requestedId !== null ? sql`r.user_id = ${requestedId}` : sql`1=1`}
+      WHERE ${userFilter}
         AND ${branchFilter}
-      ORDER BY r.id DESC;
+      ORDER BY r.id DESC
+      LIMIT 500;
     `);
 
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    const rows = resultRows<Record<string, unknown>>(raw);
     return NextResponse.json(rows, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Leave-requests GET Error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ message: 'تعذر تحميل طلبات الإجازات.' }, { status: 500 });
   }
 }
 
@@ -114,9 +136,9 @@ export async function POST(request: NextRequest) {
     `);
 
     return NextResponse.json({ success: true, message: 'تم إرسال الطلب بنجاح' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Leave-requests POST Error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل إرسال الطلب' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage(error, 'فشل إرسال الطلب') }, { status: 500 });
   }
 }
 
@@ -136,7 +158,7 @@ export async function PATCH(request: NextRequest) {
     if (!Number.isSafeInteger(reqNumericId) || reqNumericId < 1) {
       return NextResponse.json({ message: 'معرف الطلب غير صالح' }, { status: 400 });
     }
-    const adminNumericId = authorization.principal.id;
+    const adminUserId = authorization.principal.id;
 
     const targetReq = await db.execute(sql`
       SELECT r.user_id, r.request_type, r.leave_type,
@@ -145,7 +167,12 @@ export async function PATCH(request: NextRequest) {
       LEFT JOIN users u ON u.id = r.user_id
       WHERE r.id = ${reqNumericId} LIMIT 1;
     `);
-    const reqRows = Array.isArray(targetReq) ? targetReq : (targetReq as any)?.rows || [];
+    const reqRows = resultRows<{
+      user_id: string;
+      request_type: string | null;
+      leave_type: string | null;
+      branch_id: string | null;
+    }>(targetReq);
     if (!reqRows.length) {
       return NextResponse.json({ message: 'الطلب غير موجود' }, { status: 404 });
     }
@@ -168,7 +195,7 @@ export async function PATCH(request: NextRequest) {
         UPDATE leave_requests
         SET 
           status = ${newStatus}::leave_status,
-          approved_by = ${adminNumericId},
+          approved_by = ${adminUserId},
           rejection_reason = ${rejectionReason || null}
         WHERE id = ${reqNumericId};
       `);
@@ -177,7 +204,7 @@ export async function PATCH(request: NextRequest) {
         UPDATE leave_requests
         SET 
           status = ${newStatus},
-          approved_by = ${adminNumericId},
+          approved_by = ${adminUserId},
           rejection_reason = ${rejectionReason || null}
         WHERE id = ${reqNumericId};
       `);
@@ -194,7 +221,7 @@ export async function PATCH(request: NextRequest) {
         INSERT INTO notifications (user_id, sender_id, title, message, type, link, is_read, created_at)
         VALUES (
           ${employeeUserId},
-          ${adminNumericId},
+          ${adminUserId},
           ${notifTitle},
           ${notifMsg},
           'REQUEST',
@@ -206,8 +233,8 @@ export async function PATCH(request: NextRequest) {
     } catch {}
 
     return NextResponse.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Leave-requests PATCH Error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل التحديث' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage(error, 'فشل التحديث') }, { status: 500 });
   }
 }

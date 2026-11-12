@@ -1,13 +1,25 @@
 
 declare global {
-  var globalNeonPool: any | undefined;
+  var globalNeonPool: unknown | undefined;
 }
 import { neon } from "@neondatabase/serverless";
 
-export async function query(
+export function getSqlRows<T extends Record<string, unknown>>(result: unknown): T[] {
+  if (Array.isArray(result)) return result.filter(isRecord) as T[];
+  if (isRecord(result) && Array.isArray(result.rows)) {
+    return result.rows.filter(isRecord) as T[];
+  }
+  return [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export async function query<T extends Record<string, unknown> = Record<string, unknown>>(
   text: string,
-  params: any[] = []
-): Promise<{ rows: any[]; rowCount: number }> {
+  params: unknown[] = []
+): Promise<{ rows: T[]; rowCount: number }> {
   const connectionString =
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
@@ -20,11 +32,11 @@ export async function query(
 
   try {
     const sql = neon(connectionString);
-    const result = (await sql(text, params)) as any[];
-    const rows = Array.isArray(result) ? result : [];
+    const result: unknown = await sql(text, params);
+    const rows = getSqlRows<T>(result);
     return { rows, rowCount: rows.length };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Database Query Error:", error);
-    throw new Error(error.message || "فشل تنفيذ الاستعلام في قاعدة البيانات");
+    throw new Error(error instanceof Error ? error.message : "فشل تنفيذ الاستعلام في قاعدة البيانات");
   }
 }

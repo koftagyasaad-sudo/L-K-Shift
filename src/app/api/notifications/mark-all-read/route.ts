@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { authorizeApi } from "@/lib/api-auth";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const authorization = await authorizeApi();
     if ("response" in authorization) return authorization.response;
@@ -24,10 +24,10 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "All notifications marked as read",
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error marking all notifications as read:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Internal Server Error" },
+      { success: false, error: error instanceof Error ? error.message : "Internal Server Error" },
       { status: 500 }
     );
   }

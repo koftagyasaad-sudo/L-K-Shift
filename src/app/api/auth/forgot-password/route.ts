@@ -3,6 +3,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 import crypto from 'crypto';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -62,6 +63,14 @@ async function sendSmsOtp(phone: string, otpCode: string): Promise<boolean> {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(`forgot-password:${getClientIp(request)}`, 5, 60_000);
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { message: 'تم تجاوز عدد المحاولات. يرجى الانتظار قبل إعادة المحاولة.' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const body: unknown = await request.json();
     if (!body || typeof body !== 'object' || Array.isArray(body)) {

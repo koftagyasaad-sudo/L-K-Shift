@@ -74,7 +74,7 @@ export async function authorizeApi(
   requiredPermissions?: string | string[]
 ): Promise<ApiAuthorization> {
   const session = await getServerSession(authOptions);
-  const sessionUser = session?.user as any;
+  const sessionUser = session?.user;
   const sessionPhone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
   const validId = typeof sessionUser?.id === "string" && sessionUser.id.trim()
     ? sessionUser.id.trim()

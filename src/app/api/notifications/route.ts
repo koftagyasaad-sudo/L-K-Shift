@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import { authorizeApi } from '@/lib/api-auth';
+import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const authorization = await authorizeApi();
     if ('response' in authorization) return authorization.response;
@@ -29,11 +30,11 @@ export async function GET(request: NextRequest) {
       LIMIT 30;
     `);
 
-    const notifications = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    const notifications = getSqlRows<Record<string, unknown>>(raw);
     return NextResponse.json(notifications, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Notifications GET Error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ message: 'تعذر تحميل الإشعارات.' }, { status: 500 });
   }
 }
 
@@ -64,9 +65,11 @@ export async function POST(request: NextRequest) {
     `);
 
     return NextResponse.json({ success: true, message: 'تم إرسال الإشعار بنجاح' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Notifications POST Error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل إرسال الإشعار' }, { status: 500 });
+    return NextResponse.json({
+      message: error instanceof Error ? error.message : 'فشل إرسال الإشعار',
+    }, { status: 500 });
   }
 }
 
@@ -98,8 +101,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ message: 'طلب غير محدد' }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Notifications PATCH Error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل التحديث' }, { status: 500 });
+    return NextResponse.json({
+      message: error instanceof Error ? error.message : 'فشل التحديث',
+    }, { status: 500 });
   }
 }

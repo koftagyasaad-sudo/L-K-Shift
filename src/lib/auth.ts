@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
+import type { SystemRoleType } from "@/types/next-auth";
 
 export type AppUser = {
   id: string;
@@ -12,14 +13,14 @@ export type AppUser = {
   email?: string | null;
   phone: string;
   role: string;
-  systemRole: any;
+  systemRole: SystemRoleType;
   fullNameAr?: string | null;
   fullNameEn?: string | null;
   branchId?: string | null;
   primaryBranchId?: string | null;
 };
 
-function toNullableString(val: any): string | null {
+function toNullableString(val: unknown): string | null {
   if (val === undefined || val === null || val === "") return null;
   return String(val);
 }
@@ -40,18 +41,19 @@ export const authOptions: NextAuthOptions = {
       name: "Credentials",
       credentials: {
         phone: { label: "Phone", type: "text" },
+        username: { label: "Phone", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials): Promise<AppUser | null> {
         try {
-          const rawPhone = (credentials as any)?.phone || (credentials as any)?.username;
+          const rawPhone = credentials?.phone || credentials?.username;
           if (!rawPhone || !credentials?.password) {
             console.warn("[AUTH] Missing credentials payload");
             return null;
           }
 
-          const phone = String(rawPhone).trim();
-          const password = String(credentials.password);
+          const phone = rawPhone.trim();
+          const password = credentials.password;
 
           const found = await db
             .select()
@@ -65,13 +67,13 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          const isActive = (user as any).isActive !== false && (user as any).active !== false;
+          const isActive = user.isActive;
           if (!isActive) {
             console.warn(`[AUTH] User account is inactive: ${phone}`);
             return null;
           }
 
-          const passwordHash = user.passwordHash || (user as any).password;
+          const passwordHash = user.passwordHash;
           if (!passwordHash) {
             console.warn(`[AUTH] No password hash found for user: ${phone}`);
             return null;
@@ -94,12 +96,12 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          const role = (user as any).jobRole || (user as any).roleId || "SUPER_ADMIN";
-          const systemRoleVal = (user as any).systemRole || "SUPER_ADMIN";
-          const branchId = toNullableString((user as any).primaryBranchId || (user as any).branchId);
-          const fullNameAr = toNullableString((user as any).fullNameAr || (user as any).name);
-          const fullNameEn = toNullableString((user as any).fullNameEn);
-          const displayName = fullNameAr || fullNameEn || (user as any).name || phone;
+          const role = user.jobRole || "SUPER_ADMIN";
+          const systemRoleVal = user.systemRole || "SUPER_ADMIN";
+          const branchId = toNullableString(user.primaryBranchId);
+          const fullNameAr = toNullableString(user.fullNameAr);
+          const fullNameEn = toNullableString(user.fullNameEn);
+          const displayName = fullNameAr || fullNameEn || phone;
 
           const result: AppUser = {
             id: String(user.id),
@@ -107,7 +109,7 @@ export const authOptions: NextAuthOptions = {
             email: null,
             phone: user.phone || phone,
             role,
-            systemRole: systemRoleVal as any,
+            systemRole: systemRoleVal,
             fullNameAr,
             fullNameEn,
             branchId,
@@ -115,7 +117,7 @@ export const authOptions: NextAuthOptions = {
           };
 
           return result;
-        } catch (error: any) {
+        } catch (error) {
           console.error("[AUTH_CRITICAL_EXCEPTION]:", error);
           return null;
         }
@@ -129,7 +131,7 @@ export const authOptions: NextAuthOptions = {
         token.id = String(u.id);
         token.phone = String(u.phone || "");
         token.role = String(u.role || "SUPER_ADMIN");
-        token.systemRole = (u.systemRole ?? u.role ?? "SUPER_ADMIN") as any;
+        token.systemRole = u.systemRole ?? u.role ?? "SUPER_ADMIN";
         token.fullNameAr = u.fullNameAr ?? null;
         token.fullNameEn = u.fullNameEn ?? null;
         token.branchId = toNullableString(u.branchId);
@@ -143,7 +145,7 @@ export const authOptions: NextAuthOptions = {
         sUser.id = String(token.id || sUser.id || "");
         sUser.phone = String(token.phone || sUser.phone || "");
         sUser.role = String(token.role || "SUPER_ADMIN");
-        sUser.systemRole = (token.systemRole as any) || "SUPER_ADMIN";
+        sUser.systemRole = token.systemRole || "SUPER_ADMIN";
         sUser.fullNameAr = toNullableString(token.fullNameAr);
         sUser.fullNameEn = toNullableString(token.fullNameEn);
         sUser.branchId = toNullableString(token.branchId);

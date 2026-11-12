@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { authorizeApi } from '@/lib/api-auth';
 import { meetsPasswordMinimum } from '@/lib/password-policy';
+import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       LIMIT 1;
     `);
 
-    const users = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    const users = getSqlRows<{ passwordHash?: string | null } & Record<string, unknown>>(raw);
     if (!users.length) {
       return NextResponse.json({ message: 'المستخدم غير موجود' }, { status: 404 });
     }
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
       mustChangePassword: isWeak,
       passwordHash: undefined, // عدم تصدير الهاش للواجهة
     }, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Profile GET error:', error);
     return NextResponse.json({ message: 'حدث خطأ أثناء جلب الملف الشخصي' }, { status: 500 });
   }
@@ -133,7 +134,10 @@ export async function POST(request: NextRequest) {
     const currentQuery = await db.execute(sql`
       SELECT id, password_hash, password FROM users WHERE id::text = ${userId} LIMIT 1;
     `);
-    const currentRows = Array.isArray(currentQuery) ? currentQuery : (currentQuery as any)?.rows || [];
+    const currentRows = getSqlRows<{
+      password_hash?: string | null;
+      password?: string | null;
+    } & Record<string, unknown>>(currentQuery);
     if (!currentRows.length) {
       return NextResponse.json({ message: 'المستخدم غير مسجل' }, { status: 404 });
     }
@@ -206,10 +210,10 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'تم تحديث الملف الشخصي وكلمة المرور بنجاح!',
     }, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Profile POST error:', error);
     return NextResponse.json({
-      message: error?.message || 'حدث خطأ غير متوقع أثناء حفظ البيانات',
+      message: error instanceof Error ? error.message : 'حدث خطأ غير متوقع أثناء حفظ البيانات',
     }, { status: 500 });
   }
 }

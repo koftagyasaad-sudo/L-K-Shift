@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { notifications, users } from '@/db/schema';
 import { hashPassword } from '@/lib/passwords';
 import { meetsPasswordMinimum } from '@/lib/password-policy';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,6 +16,14 @@ function isUniqueConstraintError(error: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(`register:${getClientIp(request)}`, 5, 60_000);
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { success: false, message: 'تم تجاوز عدد المحاولات. يرجى الانتظار قبل إعادة المحاولة.' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

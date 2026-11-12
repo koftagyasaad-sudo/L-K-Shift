@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
+import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -133,22 +134,20 @@ const INITIAL_ROLES = [
   },
 ];
 
-function sanitizePermissions(perms: any): string[] {
+function sanitizePermissions(perms: unknown): string[] {
   if (!perms) return [];
   if (Array.isArray(perms)) return perms.filter((permission): permission is string => typeof permission === 'string');
   if (typeof perms === 'string') {
     try {
-      const parsed = JSON.parse(perms);
-      if (Array.isArray(parsed)) return parsed;
-      if (typeof parsed === 'object' && parsed !== null) {
-        return Object.keys(parsed).filter((k) => (parsed as any)[k]);
-      }
+      return sanitizePermissions(JSON.parse(perms) as unknown);
     } catch {
-      return perms ? [perms] : [];
+      return [perms];
     }
   }
   if (typeof perms === 'object' && perms !== null) {
-    return Object.keys(perms).filter((k) => (perms as any)[k]);
+    return Object.entries(perms)
+      .filter(([, enabled]) => enabled === true)
+      .map(([permission]) => permission);
   }
   return [];
 }
@@ -196,7 +195,7 @@ export async function GET() {
     await db.execute(sql`SELECT 1`);
 
     const existing = await db.execute(sql`SELECT COUNT(*)::int as count FROM custom_roles;`);
-    const count = (existing as any)?.rows?.[0]?.count ?? (existing as any)?.[0]?.count ?? 0;
+    const count = getSqlRows<{ count: number | string }>(existing)[0]?.count ?? 0;
 
     if (count === 0) {
       for (const r of INITIAL_ROLES) {
@@ -229,19 +228,19 @@ export async function GET() {
       ORDER BY id ASC;
     `);
 
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
-    const formatted = rows.map((r: any) => ({
+    const rows = getSqlRows<Record<string, unknown>>(raw);
+    const formatted = rows.map((r) => ({
       id: r.id,
       name: r.name,
-      nameAr: r.nameAr || r.name_ar || r.name,
+      nameAr: r.nameAr || r.name,
       permissions: sanitizePermissions(r.permissions),
-      branchScope: r.branchScope || r.branch_scope || 'ALL',
-      allowedBranchIds: sanitizeBranchIds(r.allowedBranchIds || r.allowed_branch_ids),
-      isSystem: Boolean(r.isSystem ?? r.is_system),
+      branchScope: r.branchScope || 'ALL',
+      allowedBranchIds: sanitizeBranchIds(r.allowedBranchIds),
+      isSystem: Boolean(r.isSystem),
     }));
 
     return NextResponse.json(formatted, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Roles GET error:', error);
     return NextResponse.json({ message: 'تعذر تحميل الأدوار.' }, { status: 500 });
   }
@@ -343,9 +342,11 @@ export async function POST(request: NextRequest) {
       `);
       return NextResponse.json({ success: true, message: 'تم إنشاء الدور الجديد بنجاح' });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Roles POST error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل حفظ الدور' }, { status: 500 });
+    return NextResponse.json({
+      message: error instanceof Error ? error.message : 'فشل حفظ الدور',
+    }, { status: 500 });
   }
 }
 
@@ -371,8 +372,10 @@ export async function DELETE(request: NextRequest) {
     `);
 
     return NextResponse.json({ success: true, message: 'تم حذف الدور بنجاح' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Roles DELETE error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل حذف الدور' }, { status: 500 });
+    return NextResponse.json({
+      message: error instanceof Error ? error.message : 'فشل حذف الدور',
+    }, { status: 500 });
   }
 }

@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { eq, or } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
@@ -7,7 +7,7 @@ import { users, branches } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     const sessionUser = session?.user as { phone?: string | null; id?: string | null; name?: string | null } | undefined;

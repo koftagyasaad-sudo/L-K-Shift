@@ -1,15 +1,33 @@
-import { checkRateLimit, clearRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, clearRateLimit, getClientIp } from "@/lib/rate-limit";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { getSqlRows } from "@/lib/db";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export async function POST(req: Request) {
+  const rateLimitKey = `login:${getClientIp(req)}`;
+  const rateLimit = checkRateLimit(rateLimitKey, 5, 60_000);
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { message: "تم تجاوز عدد محاولات تسجيل الدخول. يرجى الانتظار قبل إعادة المحاولة." },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   try {
-    const body = await req.json();
-    const phone = (body.phone || body.username || "").trim();
-    const password = body.password || "";
+    const body: unknown = await req.json();
+    if (!isRecord(body)) {
+      return NextResponse.json({ message: "بيانات الدخول غير صالحة" }, { status: 400 });
+    }
+    const phoneValue = typeof body.phone === "string" ? body.phone : body.username;
+    const phone = typeof phoneValue === "string" ? phoneValue.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
     if (!phone || !password) {
       return NextResponse.json(
@@ -19,7 +37,7 @@ export async function POST(req: Request) {
     }
 
     // استعلام SQL مباشر يتجاوز مشاكل تطابق Drizzle Schema ويقرأ من Neon مباشرة
-    const result: any = await db.execute(sql`
+    const result = await db.execute(sql`
       SELECT 
         id, 
         COALESCE(name, '') as name,
@@ -31,8 +49,13 @@ export async function POST(req: Request) {
       LIMIT 1;
     `);
 
-    const rows = Array.isArray(result) ? result : result?.rows || [];
-    const user = rows[0];
+    const [user] = getSqlRows<{
+      id: string;
+      name: string;
+      phone: string;
+      passwordHash: string;
+      isActive: boolean | null;
+    }>(result);
 
     // 1. التحقق من وجود المستخدم
     if (!user) {
@@ -83,6 +106,7 @@ export async function POST(req: Request) {
         maxAge: 60 * 60 * 24 * 7, // أسبوع
       }
     );
+    clearRateLimit(rateLimitKey);
 
     return NextResponse.json({
       success: true,
@@ -92,10 +116,10 @@ export async function POST(req: Request) {
         phone: user.phone,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Login System Error:", error);
     return NextResponse.json(
-      { message: "حدث خطأ في الخادم", error: error.message },
+      { message: "حدث خطأ في الخادم" },
       { status: 500 }
     );
   }

@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
 import { authorizeApi } from '@/lib/api-auth';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { getSqlRows } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const authorization = await authorizeApi('recruitment.view');
   if ('response' in authorization) return authorization.response;
 
@@ -31,15 +33,23 @@ export async function GET(request: NextRequest) {
       ORDER BY id DESC;
     `);
 
-    const rows = Array.isArray(raw) ? raw : (raw as any)?.rows || [];
+    const rows = getSqlRows<Record<string, unknown>>(raw);
     return NextResponse.json(rows, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Recruitment GET error:', error);
     return NextResponse.json({ message: 'تعذر تحميل طلبات التوظيف.' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(`recruitment:${getClientIp(request)}`, 5, 60_000);
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { message: 'تم تجاوز عدد المحاولات. يرجى الانتظار قبل إعادة المحاولة.' },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds) } }
+    );
+  }
+
   try {
     const body = await request.json();
     const {
@@ -88,7 +98,7 @@ export async function POST(request: NextRequest) {
         notes, status, created_at
       ) VALUES (
         ${fullName}, ${phone}, ${nationalId || null},
-        ${birthDate ? sql`${birthDate}::date` : null},
+        NULLIF(${birthDate || ''}, '')::date,
         ${appliedRole || 'أخرى'}, ${education || null},
         ${militaryStatus || null}, ${address || null},
         ${expectedSalary || null}, ${experienceYears || null},
@@ -97,8 +107,10 @@ export async function POST(request: NextRequest) {
     `);
 
     return NextResponse.json({ success: true, message: 'تم إرسال طلب التوظيف بنجاح' });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Recruitment POST error:', error);
-    return NextResponse.json({ message: error?.message || 'فشل إرسال الطلب' }, { status: 500 });
+    return NextResponse.json({
+      message: error instanceof Error ? error.message : 'فشل إرسال الطلب',
+    }, { status: 500 });
   }
 }

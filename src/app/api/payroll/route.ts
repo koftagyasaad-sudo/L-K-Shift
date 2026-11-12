@@ -1,13 +1,40 @@
-import { and, eq, gte, lt } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendanceLogs, branches, leaveRequests, users } from "@/db/schema";
-import { authorizeApi, canAccessBranch } from "@/lib/api-auth";
+import { authorizeApi, hasApiPermission } from "@/lib/api-auth";
 import { calculatePayroll } from "@/lib/payroll";
 
 export async function GET(request: NextRequest) {
   const authorization = await authorizeApi(["payroll.view", "reports.view"]);
   if ("response" in authorization) return authorization.response;
+
+  const principal = authorization.principal;
+  const canViewBranchEmployees = principal.systemRole === "SUPER_ADMIN"
+    || principal.branchScope === "ALL"
+    || principal.branchScope === "CUSTOM"
+    || hasApiPermission(principal, "employees.view")
+    || hasApiPermission(principal, "employees.manage");
+  const selfOnly = principal.systemRole !== "SUPER_ADMIN"
+    && principal.branchScope !== "ALL"
+    && !canViewBranchEmployees;
+  const employeeScope = principal.systemRole === "SUPER_ADMIN" || principal.branchScope === "ALL"
+    ? sql`1=1`
+    : !canViewBranchEmployees
+      ? sql`users.id::text = ${principal.id}`
+      : principal.branchScope === "CUSTOM"
+        ? principal.allowedBranchIds.length
+          ? sql`COALESCE(users.primary_branch_id::text, users.branch_id::text) = ANY(${principal.allowedBranchIds}::text[])`
+          : sql`1=0`
+        : principal.primaryBranchId
+          ? sql`COALESCE(users.primary_branch_id::text, users.branch_id::text) = ${principal.primaryBranchId}`
+          : sql`1=0`;
+  const attendanceScope = selfOnly
+    ? sql`attendance_logs.user_id::text = ${principal.id}`
+    : employeeScope;
+  const leaveRequestScope = selfOnly
+    ? sql`leave_requests.user_id::text = ${principal.id}`
+    : employeeScope;
 
   const now = new Date();
   const month = Number(request.nextUrl.searchParams.get("month") ?? now.getMonth() + 1);
@@ -35,7 +62,8 @@ export async function GET(request: NextRequest) {
         })
         .from(users)
         .leftJoin(branches, eq(users.primaryBranchId, branches.id))
-        .where(eq(users.isActive, true)),
+        .where(and(eq(users.isActive, true), employeeScope))
+        .limit(500),
       db
         .select({
           userId: attendanceLogs.userId,
@@ -46,10 +74,13 @@ export async function GET(request: NextRequest) {
           overtimeMinutes: attendanceLogs.overtimeMinutes,
         })
         .from(attendanceLogs)
+        .innerJoin(users, eq(attendanceLogs.userId, users.id))
         .where(and(
           gte(attendanceLogs.workDate, monthStart),
-          lt(attendanceLogs.workDate, nextMonthStart)
-        )),
+          lt(attendanceLogs.workDate, nextMonthStart),
+          attendanceScope
+        ))
+        .limit(50_000),
       db
         .select({
           userId: leaveRequests.userId,
@@ -62,14 +93,16 @@ export async function GET(request: NextRequest) {
           advanceAmount: leaveRequests.advanceAmount,
         })
         .from(leaveRequests)
+        .innerJoin(users, eq(leaveRequests.userId, users.id))
         .where(and(
           gte(leaveRequests.startDate, monthStart),
-          lt(leaveRequests.startDate, nextMonthStart)
-        )),
+          lt(leaveRequests.startDate, nextMonthStart),
+          leaveRequestScope
+        ))
+        .limit(10_000),
     ]);
 
     const results = employees
-      .filter((employee) => canAccessBranch(authorization.principal, employee.branchId))
       .map((employee) =>
         calculatePayroll(
           {

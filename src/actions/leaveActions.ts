@@ -3,6 +3,19 @@
 import { query } from "@/lib/db";
 import type { LeaveRequestData } from "@/types";
 
+type LeaveQueryRow = Record<string, unknown> & {
+  id: string | number;
+  employee_id: string;
+  employee_name?: string | null;
+  recipient: string | null;
+  leave_type: string | null;
+  start_date: string | Date | null;
+  end_date: string | Date | null;
+  reason: string | null;
+  status: string | null;
+  created_at: string | Date | null;
+};
+
 export async function getLeaveRequestsAction(): Promise<{
   success: boolean;
   leaves?: LeaveRequestData[];
@@ -10,7 +23,7 @@ export async function getLeaveRequestsAction(): Promise<{
   error?: string;
 }> {
   try {
-    const result = await query(
+    const result = await query<LeaveQueryRow>(
       `SELECT l.id, l.employee_id, l.recipient, l.leave_type, l.start_date, l.end_date, l.reason, l.status, l.created_at,
               e.name as employee_name
        FROM leave_requests l
@@ -19,7 +32,7 @@ export async function getLeaveRequestsAction(): Promise<{
     );
 
     const leaves: LeaveRequestData[] = result.rows.map((row) => ({
-      id: row.id,
+      id: String(row.id),
       employee_id: row.employee_id,
       employee_name: row.employee_name || "",
       recipient: row.recipient || "",
@@ -32,9 +45,9 @@ export async function getLeaveRequestsAction(): Promise<{
     }));
 
     return { success: true, leaves, data: leaves };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error fetching leave requests:", err);
-    return { success: false, error: err.message || "فشل جلب طلبات الإجازة" };
+    return { success: false, error: err instanceof Error ? err.message : "فشل جلب طلبات الإجازة" };
   }
 }
 
@@ -48,7 +61,7 @@ export async function createLeaveRequestAction(
       return { success: false, error: "معرف الموظف مطلوب" };
     }
 
-    const result = await query(
+    const result = await query<LeaveQueryRow>(
       `INSERT INTO leave_requests (employee_id, recipient, leave_type, start_date, end_date, reason, status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING id, employee_id, recipient, leave_type, start_date, end_date, reason, status, created_at`,
@@ -57,21 +70,21 @@ export async function createLeaveRequestAction(
 
     const row = result.rows[0];
     const leave: LeaveRequestData = {
-      id: row.id,
-      employee_id: row.employee_id,
+      id: String(row.id),
+      employee_id: String(row.employee_id),
       recipient: row.recipient || "",
-      leave_type: row.leave_type,
-      start_date: row.start_date,
-      end_date: row.end_date,
+      leave_type: row.leave_type || "annual",
+      start_date: row.start_date ? new Date(row.start_date).toISOString().slice(0, 10) : "",
+      end_date: row.end_date ? new Date(row.end_date).toISOString().slice(0, 10) : "",
       reason: row.reason || "",
-      status: row.status,
+      status: row.status || "pending",
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
     return { success: true, leave, data: leave };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error creating leave request:", err);
-    return { success: false, error: err.message || "فشل تقديم طلب الإجازة" };
+    return { success: false, error: err instanceof Error ? err.message : "فشل تقديم طلب الإجازة" };
   }
 }
 
@@ -80,7 +93,7 @@ export async function updateLeaveStatusAction(
   status: string
 ): Promise<{ success: boolean; leave?: LeaveRequestData; data?: LeaveRequestData; error?: string }> {
   try {
-    const result = await query(
+    const result = await query<LeaveQueryRow>(
       `UPDATE leave_requests SET status = $1 WHERE id = $2 RETURNING id, employee_id, recipient, leave_type, start_date, end_date, reason, status, created_at`,
       [status, id]
     );
@@ -91,20 +104,20 @@ export async function updateLeaveStatusAction(
 
     const row = result.rows[0];
     const leave: LeaveRequestData = {
-      id: row.id,
-      employee_id: row.employee_id,
+      id: String(row.id),
+      employee_id: String(row.employee_id),
       recipient: row.recipient || "",
-      leave_type: row.leave_type,
-      start_date: row.start_date,
-      end_date: row.end_date,
+      leave_type: row.leave_type || "annual",
+      start_date: row.start_date ? new Date(row.start_date).toISOString().slice(0, 10) : "",
+      end_date: row.end_date ? new Date(row.end_date).toISOString().slice(0, 10) : "",
       reason: row.reason || "",
-      status: row.status,
+      status: row.status || "pending",
       created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
     };
 
     return { success: true, leave, data: leave };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Error updating leave status:", err);
-    return { success: false, error: err.message || "فشل تحديث حالة الإجازة" };
+    return { success: false, error: err instanceof Error ? err.message : "فشل تحديث حالة الإجازة" };
   }
 }
