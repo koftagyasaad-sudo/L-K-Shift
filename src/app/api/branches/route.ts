@@ -8,9 +8,9 @@ import { authorizeApi } from "@/lib/api-auth";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-let branchesSchemaHealed = false;
-async function ensureBranchesSchema() {
-  if (branchesSchemaHealed) return;
+let branchesReady = false;
+async function ensureBranchesReady() {
+  if (branchesReady) return;
   const stmts = [
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS name text`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS name_ar text`,
@@ -18,48 +18,48 @@ async function ensureBranchesSchema() {
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS address text`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS phone text`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS manager_id text`,
-    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS latitude double precision DEFAULT 31.122`,
-    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS longitude double precision DEFAULT 30.648`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS geofence_radius integer DEFAULT 10`,
-    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS radius_meters integer DEFAULT 10`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS grace_period_minutes integer DEFAULT 15`,
-    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift_start_time text DEFAULT '10:00'`,
-    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift_end_time text DEFAULT '18:00'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_start text DEFAULT '10:00'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_end text DEFAULT '18:00'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift2_start text DEFAULT '13:00'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift2_end text DEFAULT '21:00'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift3_start text DEFAULT '17:00'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift3_end text DEFAULT '01:00'`,
-    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_secret_key text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_secret_key text DEFAULT 'lk-secret'`,
     sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`,
+    sql`ALTER TABLE branches ALTER COLUMN qr_secret_key DROP NOT NULL`,
+    sql`ALTER TABLE branches ALTER COLUMN name_en DROP NOT NULL`,
   ];
   for (const s of stmts) {
     try { await db.execute(s); } catch {}
   }
-  branchesSchemaHealed = true;
+  branchesReady = true;
 }
 
 export async function GET() {
   try {
-    await ensureBranchesSchema();
+    await ensureBranchesReady();
     const rows = getSqlRows<Record<string, unknown>>(
       await db.execute(sql`
         SELECT
           id::text AS id,
-          COALESCE(name_ar, name, 'فرع') AS "nameAr",
-          COALESCE(name_ar, name, 'فرع') AS "name",
+          COALESCE(name_ar, 'فرع') AS "nameAr",
+          COALESCE(name_ar, 'فرع') AS "name_ar",
+          COALESCE(name_ar, 'فرع') AS "name",
           COALESCE(name_en, name_ar, 'Branch') AS "nameEn",
+          COALESCE(name_en, name_ar, 'Branch') AS "name_en",
           COALESCE(address, '') AS "address",
           COALESCE(phone, '') AS "phone",
           manager_id::text AS "managerId",
-          COALESCE(latitude:: float8, 31.12225) AS "latitude",
+          COALESCE(latitude::float8, 31.12225) AS "latitude",
           COALESCE(longitude::float8, 30.64821) AS "longitude",
           COALESCE(geofence_radius, 10) AS "geofenceRadius",
+          COALESCE(geofence_radius, 10) AS "geofence_radius",
           COALESCE(geofence_radius, 10) AS "radiusMeters",
           COALESCE(grace_period_minutes, 15) AS "gracePeriodMinutes",
-          COALESCE(shift1_start, shift_start_time, '10:00') AS "shift1Start",
-          COALESCE(shift1_end, shift_end_time, '18:00') AS "shift1End",
+          COALESCE(shift1_start, '10:00') AS "shift1Start",
+          COALESCE(shift1_end, '18:00') AS "shift1End",
           COALESCE(shift2_start, '13:00') AS "shift2Start",
           COALESCE(shift2_end, '21:00') AS "shift2End",
           COALESCE(shift3_start, '17:00') AS "shift3Start",
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await authorizeApi(["branches.manage", "branches.view"]);
     if ("response" in auth) return auth.response;
-    await ensureBranchesSchema();
+    await ensureBranchesReady();
 
     const body = await request.json();
     const id = body.id ? String(body.id).trim() : null;
@@ -91,14 +91,14 @@ export async function POST(request: NextRequest) {
     const managerId = body.managerId && String(body.managerId).trim() !== "" ? String(body.managerId).trim() : null;
     const latitude = Number(body.latitude);
     const longitude = Number(body.longitude);
-    const geofenceRadius = Math.max(1, parseInt(String(body.geofenceRadius ?? body.radiusMeters ?? 10), 10) || 10);
-    const gracePeriodMinutes = parseInt(String(body.gracePeriodMinutes ?? 15), 10) || 15;
-    const shift1Start = String(body.shift1Start || body.shiftStartTime || "10:00").trim();
-    const shift1End = String(body.shift1End || body.shiftEndTime || "18:00").trim();
-    const shift2Start = String(body.shift2Start || "13:00").trim();
-    const shift2End = String(body.shift2End || "21:00").trim();
-    const shift3Start = String(body.shift3Start || "17:00").trim();
-    const shift3End = String(body.shift3End || "01:00").trim();
+    const geofenceRadius = Math.max(1, parseInt(String(body.geofenceRadius ?? body.geofence_radius ?? body.radiusMeters ?? 10), 10) || 10);
+    const gracePeriodMinutes = parseInt(String(body.gracePeriodMinutes ?? body.grace_period_minutes ?? 15), 10) || 15;
+    const shift1Start = String(body.shift1Start || body.shift1_start || "10:00").trim();
+    const shift1End = String(body.shift1End || body.shift1_end || "18:00").trim();
+    const shift2Start = String(body.shift2Start || body.shift2_start || "13:00").trim();
+    const shift2End = String(body.shift2End || body.shift2_end || "21:00").trim();
+    const shift3Start = String(body.shift3Start || body.shift3_start || "17:00").trim();
+    const shift3End = String(body.shift3End || body.shift3_end || "01:00").trim();
 
     if (!nameAr || Number.isNaN(latitude) || Number.isNaN(longitude)) {
       return NextResponse.json({ message: "اسم الفرع وإحداثيات الموقع مطلوبة" }, { status: 400 });
@@ -116,7 +116,6 @@ export async function POST(request: NextRequest) {
           geofence_radius = ${geofenceRadius}
         WHERE id::text = ${id};
       `);
-      // Optional columns updated safely
       try {
         await db.execute(sql`
           UPDATE branches
@@ -134,45 +133,61 @@ export async function POST(request: NextRequest) {
           WHERE id::text = ${id};
         `);
       } catch {}
-
       return NextResponse.json({ success: true, id, message: "تم تحديث الفرع بنجاح" });
     } else {
-      const newId = randomUUID();
       const qrSecret = randomUUID().replace(/-/g, "");
-      await db.execute(sql`
-        INSERT INTO branches (
-          id, name_ar, name_en, address, latitude, longitude, geofence_radius, is_active, created_at
-        ) VALUES (
-          ${newId}, ${nameAr}, ${nameEn}, ${address}, ${latitude}, ${longitude}, ${geofenceRadius}, true, NOW()
-        );
-      `);
-      try {
-        await db.execute(sql`
-          UPDATE branches
-          SET
-            name = ${nameAr},
-            phone = ${phone},
-            manager_id = ${managerId},
-            grace_period_minutes = ${gracePeriodMinutes},
-            shift1_start = ${shift1Start},
-            shift1_end = ${shift1End},
-            shift2_start = ${shift2Start},
-            shift2_end = ${shift2End},
-            shift3_start = ${shift3Start},
-            shift3_end = ${shift3End},
-            qr_secret_key = ${qrSecret}
-          WHERE id::text = ${newId};
-        `);
-      } catch {}
+      let insertedId = "";
 
-      return NextResponse.json({ success: true, id: newId, message: "تم إضافة الفرع بنجاح" }, { status: 201 });
+      // Try inserting without explicit id first (works when id is SERIAL or has DEFAULT gen_random_uuid())
+      try {
+        const res = getSqlRows<{ id: string }>(
+          await db.execute(sql`
+            INSERT INTO branches (
+              name_ar, name_en, address, latitude, longitude, geofence_radius, qr_secret_key, is_active
+            ) VALUES (
+              ${nameAr}, ${nameEn}, ${address}, ${latitude}, ${longitude}, ${geofenceRadius}, ${qrSecret}, true
+            ) RETURNING id::text AS id;
+          `)
+        );
+        insertedId = res[0]?.id || "";
+      } catch {
+        // Fallback if id column has no default
+        const newUuid = randomUUID();
+        await db.execute(sql`
+          INSERT INTO branches (
+            id, name_ar, name_en, address, latitude, longitude, geofence_radius, qr_secret_key, is_active
+          ) VALUES (
+            ${newUuid}, ${nameAr}, ${nameEn}, ${address}, ${latitude}, ${longitude}, ${geofenceRadius}, ${qrSecret}, true
+          );
+        `);
+        insertedId = newUuid;
+      }
+
+      if (insertedId) {
+        try {
+          await db.execute(sql`
+            UPDATE branches
+            SET
+              name = ${nameAr},
+              phone = ${phone},
+              manager_id = ${managerId},
+              grace_period_minutes = ${gracePeriodMinutes},
+              shift1_start = ${shift1Start},
+              shift1_end = ${shift1End},
+              shift2_start = ${shift2Start},
+              shift2_end = ${shift2End},
+              shift3_start = ${shift3Start},
+              shift3_end = ${shift3End}
+            WHERE id::text = ${insertedId};
+          `);
+        } catch {}
+      }
+
+      return NextResponse.json({ success: true, id: insertedId, message: "تم إضافة الفرع بنجاح" }, { status: 201 });
     }
   } catch (error) {
     console.error("Branches POST error:", error);
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "تعذر حفظ بيانات الفرع" },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: "تعذر حفظ بيانات الفرع" }, { status: 500 });
   }
 }
 

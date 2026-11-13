@@ -16,12 +16,12 @@ export default function AppShell({ children }: AppShellProps) {
   const params = useParams();
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
-  const [compactMode, setCompactMode] = useState<boolean>(true);
+  const [compactMode, setCompactMode] = useState<boolean>(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('lk_compact_view');
-    if (saved !== null) {
-      setCompactMode(saved === 'true');
+    if (saved === 'true') {
+      setCompactMode(true);
     }
   }, []);
 
@@ -39,17 +39,17 @@ export default function AppShell({ children }: AppShellProps) {
       <TopNavigationLoader />
       <ServiceWorkerRegister />
       <GlobalHeader />
-      <div className="mx-auto flex w-full max-w-[1600px] items-center justify-end px-3 pt-2 sm:px-5 lg:px-8">
-        <button
-          type="button"
-          onClick={toggleCompact}
-          className="inline-flex items-center gap-1.5 rounded border border-[#57cef8]/50 bg-white px-2.5 py-1 text-[11px] font-bold text-[#3a4149] shadow-xs transition hover:bg-[#57cef8] hover:text-white dark:bg-[#232a32] dark:text-[#57cef8] dark:hover:bg-[#57cef8] dark:hover:text-[#181d23]"
-        >
-          {compactMode ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-          <span>{compactMode ? (isRtl ? 'إظهار كافة التفاصيل والصفوف' : 'Show all details') : (isRtl ? 'ضغط الصفحة في شاشة واحدة' : 'Compact one-page view')}</span>
-        </button>
-      </div>
-      <main className="app-main w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto px-3 pb-16 pt-2 sm:px-5 sm:pt-3 lg:px-7 lg:pb-8">
+      {/* Subtle icon-only toggle at top-left/right below header (z-10 so it NEVER covers any modal) */}
+      <button
+        type="button"
+        onClick={toggleCompact}
+        title={compactMode ? 'إظهار كافة التفاصيل' : 'ضغط الصفحة'}
+        aria-label={compactMode ? 'إظهار كافة التفاصيل' : 'ضغط الصفحة'}
+        className="fixed top-[3.75rem] end-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-[#57cef8]/50 bg-white/90 text-[#3a4149] shadow-xs transition hover:bg-[#57cef8] hover:text-white dark:bg-[#232a32]/90 dark:text-[#57cef8]"
+      >
+        {compactMode ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+      </button>
+      <main className="app-main w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto px-3 pb-16 pt-3 sm:px-5 sm:pt-4 lg:px-7 lg:pb-8">
         {children}
       </main>
       <MobileBottomNav locale={locale} />
