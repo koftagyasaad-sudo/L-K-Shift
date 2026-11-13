@@ -108,6 +108,7 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
   },
+  useSecureCookies: process.env.NODE_ENV === 'production',
   pages: {
     signIn: "/login",
     error: "/login",
