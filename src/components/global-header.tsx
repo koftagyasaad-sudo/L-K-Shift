@@ -8,8 +8,8 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { DesktopNav } from '@/components/layout/Sidebar';
 
 interface NotificationItem {
-  id: number;
-  userId: number;
+  id: string | number;
+  userId?: string | number;
   title: string;
   message: string;
   type: string;
@@ -40,9 +40,9 @@ function playLoudNotificationAlert() {
       const start = now + index * 0.22;
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
-      oscillator.type = 'square';
+      oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(frequency, start);
-      gain.gain.setValueAtTime(index ? 0.9 : 0.8, start);
+      gain.gain.setValueAtTime(index ? 0.55 : 0.45, start);
       gain.gain.exponentialRampToValueAtTime(0.01, start + (index ? 0.28 : 0.2));
       oscillator.connect(gain);
       gain.connect(ctx.destination);
@@ -61,14 +61,14 @@ function triggerSystemOSNotification(title: string, message: string) {
     navigator.serviceWorker.ready.then((registration) => {
       registration.showNotification(title, {
         body: message,
-        icon: '/Logo.png',
-        badge: '/Logo.png',
+        icon: '/Logo.png?v=25',
+        badge: '/Logo.png?v=25',
         tag: 'lk-shift-os-alert',
         requireInteraction: true,
       });
-    }).catch(() => new Notification(title, { body: message, icon: '/Logo.png' }));
+    }).catch(() => new Notification(title, { body: message, icon: '/Logo.png?v=25' }));
   } else {
-    new Notification(title, { body: message, icon: '/Logo.png' });
+    new Notification(title, { body: message, icon: '/Logo.png?v=25' });
   }
 }
 
@@ -83,6 +83,7 @@ export default function GlobalHeader() {
 
   const [userName, setUserName] = useState('');
   const [userRole, setUserRole] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -92,12 +93,35 @@ export default function GlobalHeader() {
   const prevUnreadCountRef = useRef(-1);
 
   useEffect(() => {
-    const storedName = localStorage.getItem('userName');
-    const storedRole = localStorage.getItem('userRole');
+    const storedName = localStorage.getItem('userName') || '';
+    const storedRole = localStorage.getItem('userRole') || '';
+    const storedAvatar = localStorage.getItem('userAvatar') || '';
     if (storedName) setUserName(storedName);
     if (storedRole) setUserRole(storedRole);
+    if (storedAvatar) setAvatarUrl(storedAvatar);
     setHasAudioUnlocked(Boolean(localStorage.getItem('audio_notifications_unlocked')));
-  }, []);
+
+    // Live sync of user name & profile photo from backend
+    async function syncHeaderProfile() {
+      try {
+        const res = await fetch('/api/profile/update', { cache: 'no-store', credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.fullName) {
+            setUserName(data.fullName);
+            localStorage.setItem('userName', data.fullName);
+          }
+          if (data?.avatarUrl) {
+            setAvatarUrl(data.avatarUrl);
+            localStorage.setItem('userAvatar', data.avatarUrl);
+          }
+        }
+      } catch {}
+    }
+    void syncHeaderProfile();
+  }, [pathname]);
+
+  const firstName = (userName || '').trim().split(/\s+/)[0] || (isRtl ? 'حسابي' : 'Account');
 
   const handleUnlockAudioAndPush = async () => {
     try {
@@ -109,7 +133,7 @@ export default function GlobalHeader() {
       if (typeof window !== 'undefined' && 'Notification' in window) {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
-          triggerSystemOSNotification('L-K Shift Core', 'تم تفعيل التنبيهات الصوتية وإشعارات الهاتف بنجاح!');
+          triggerSystemOSNotification('L-K Shift', 'تم تفعيل التنبيهات الصوتية وإشعارات الهاتف بنجاح!');
         }
       }
     } catch (error) {
@@ -118,13 +142,15 @@ export default function GlobalHeader() {
   };
 
   const fetchNotifications = async () => {
-    const currentUid = localStorage.getItem('userId');
-    if (!currentUid) return;
     try {
-      const response = await fetch(`/api/notifications?userId=${currentUid}`, { cache: 'no-store' });
+      const response = await fetch('/api/notifications', { cache: 'no-store', credentials: 'include' });
       if (!response.ok) return;
       const data = await response.json();
-      const items: NotificationItem[] = Array.isArray(data) ? data : [];
+      const items: NotificationItem[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.notifications)
+        ? data.notifications
+        : [];
       setNotifications(items);
       const unreadCount = items.filter((item) => !item.isRead).length;
       if (prevUnreadCountRef.current !== -1 && unreadCount > prevUnreadCountRef.current) {
@@ -159,26 +185,33 @@ export default function GlobalHeader() {
       await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationId: item.id }),
+        credentials: 'include',
+        body: JSON.stringify({ id: item.id, notificationId: item.id }),
       });
-      setNotifications((previous) => previous.map((notification) =>
-        notification.id === item.id ? { ...notification, isRead: true } : notification
-      ));
+      setNotifications((previous) =>
+        previous.map((notification) =>
+          String(notification.id) === String(item.id) ? { ...notification, isRead: true } : notification
+        )
+      );
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
     }
     setShowNotifications(false);
-    if (item.link) router.push(`/${locale}${item.link.startsWith('/') ? item.link : `/${item.link}`}`);
+    if (item.link) {
+      const cleanLink = item.link.startsWith(`/${locale}/`)
+        ? item.link
+        : `/${locale}${item.link.startsWith('/') ? item.link : `/${item.link}`}`;
+      router.push(cleanLink);
+    }
   };
 
   const handleMarkAllAsRead = async () => {
-    const currentUid = localStorage.getItem('userId');
-    if (!currentUid) return;
     try {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markAll: true, userId: currentUid }),
+        credentials: 'include',
+        body: JSON.stringify({ markAll: true }),
       });
       if (!response.ok) throw new Error('Failed to mark notifications as read.');
       setNotifications((previous) => previous.map((item) => ({ ...item, isRead: true })));
@@ -188,25 +221,31 @@ export default function GlobalHeader() {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
-    router.push(`/${locale}/login`);
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+      localStorage.clear();
+      window.location.href = `/${locale}/login`;
+    });
   };
 
   const unreadCount = notifications.filter((item) => !item.isRead).length;
   const getNotificationIcon = (type: string) => {
-    if (type === 'ATTENDANCE' || type === 'PERMISSION') return <Clock3 size={16} className="text-slate-500" />;
-    if (type === 'COMPLAINT') return <ShieldAlert size={16} className="text-slate-500" />;
-    return <CalendarDays size={16} className="text-slate-500" />;
+    if (type === 'ATTENDANCE' || type === 'ATTENDANCE_ALERT' || type === 'PERMISSION') {
+      return <Clock3 size={16} className="text-[#57cef8]" />;
+    }
+    if (type === 'COMPLAINT') return <ShieldAlert size={16} className="text-rose-500" />;
+    return <CalendarDays size={16} className="text-[#57cef8]" />;
   };
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-slate-200/90 bg-white/80 backdrop-blur-xl text-slate-900 backdrop-blur dark:border-white/[0.08] dark:bg-[#11131A]/80 backdrop-blur-xl dark:text-zinc-100">
-      <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-3 px-3 sm:px-5 lg:px-8">
+    <header className="sticky top-0 z-30 w-full border-b border-slate-200/90 bg-white/90 backdrop-blur-xl text-slate-900 dark:border-white/[0.08] dark:bg-[#181d23]/95 dark:text-zinc-100">
+      <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:px-8">
         <Link href={`/${locale}/attendance`} className="flex shrink-0 items-center gap-2" aria-label="L-K Shift">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 via-orange-600 to-rose-600 text-xs font-extrabold tracking-tight text-white shadow-md shadow-orange-500/25">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#57cef8] text-xs font-black tracking-tight text-[#181d23] shadow-xs">
             LK
           </span>
-          <span className="hidden bg-gradient-to-l from-slate-900 to-orange-700 bg-clip-text text-sm font-extrabold tracking-tight text-transparent dark:from-white dark:to-orange-400 sm:inline">L-K Shift</span>
+          <span className="hidden text-sm font-extrabold tracking-tight text-slate-900 dark:text-white sm:inline">
+            L-K Shift
+          </span>
         </Link>
 
         <DesktopNav locale={locale} />
@@ -215,7 +254,7 @@ export default function GlobalHeader() {
           <ThemeToggle />
           <Link
             href={localizedPath}
-            className="inline-flex h-9 min-w-10 items-center justify-center rounded-lg border border-slate-200 px-2 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+            className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 px-2 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#232a32]"
             aria-label={isRtl ? 'Switch to English' : 'التبديل إلى العربية'}
             title={isRtl ? 'English' : 'العربية'}
           >
@@ -225,44 +264,50 @@ export default function GlobalHeader() {
             <button
               type="button"
               onClick={handleUnlockAudioAndPush}
-              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#1c1e24] sm:flex"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#232a32]"
               title={isRtl ? 'تفعيل التنبيهات الصوتية' : 'Enable audio notifications'}
               aria-label={isRtl ? 'تفعيل التنبيهات الصوتية' : 'Enable audio notifications'}
             >
               <Volume2 size={16} />
             </button>
           )}
+
+          {/* زر وجرس الإشعارات التفاعلي */}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => {
                 if (!hasAudioUnlocked) void handleUnlockAudioAndPush();
                 setShowNotifications((open) => !open);
+                void fetchNotifications();
               }}
-              className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+              className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#232a32]"
               title={isRtl ? 'الإشعارات' : 'Notifications'}
               aria-label={isRtl ? 'الإشعارات' : 'Notifications'}
               aria-expanded={showNotifications}
             >
-              <Bell size={17} />
+              <Bell size={16} />
               {unreadCount > 0 && (
-                <span className="absolute end-1 top-1 h-2 w-2 rounded-full bg-orange-600 ring-2 ring-white dark:bg-orange-500 dark:ring-[#141519]" />
+                <span className="absolute -top-1 -end-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-extrabold text-white ring-2 ring-white dark:ring-[#181d23]">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
               )}
             </button>
+
             {showNotifications && (
               <div
                 dir={isRtl ? 'rtl' : 'ltr'}
-                className="absolute end-0 top-full z-50 mt-2 flex w-80 max-w-[calc(100vw-1.5rem)] flex-col rounded-xl border border-slate-200 bg-white p-3 text-slate-700 shadow-lg dark:border-white/[0.08] dark:bg-[#141519] dark:text-zinc-300 sm:w-96"
+                className="fixed inset-x-3 top-16 z-50 flex max-h-[75vh] flex-col rounded-xl border border-slate-200 bg-white p-3 text-slate-700 shadow-2xl dark:border-white/[0.12] dark:bg-[#1e242b] dark:text-zinc-200 sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-96"
               >
                 <div className="flex items-center justify-between border-b border-slate-200 px-1 pb-2.5 dark:border-white/[0.08]">
-                  <span className="text-sm font-semibold text-slate-900 dark:text-zinc-100">
-                    {isRtl ? 'الإشعارات' : 'Notifications'}
+                  <span className="text-xs font-extrabold text-slate-900 dark:text-white">
+                    {isRtl ? `الإشعارات (${unreadCount} غير مقروء)` : `Notifications (${unreadCount})`}
                   </span>
                   {unreadCount > 0 && (
                     <button
                       type="button"
                       onClick={() => void handleMarkAllAsRead()}
-                      className="flex items-center gap-1 text-[11px] font-medium text-orange-600 hover:text-orange-700 dark:text-orange-500"
+                      className="flex items-center gap-1 text-[11px] font-bold text-[#0099cc] hover:underline dark:text-[#57cef8]"
                     >
                       <CheckCheck size={13} />
                       {isRtl ? 'تحديد الكل كمقروء' : 'Mark all read'}
@@ -274,58 +319,98 @@ export default function GlobalHeader() {
                     <div className="py-8 text-center text-xs text-slate-500 dark:text-zinc-400">
                       {isRtl ? 'لا توجد إشعارات حالياً' : 'No notifications yet'}
                     </div>
-                  ) : notifications.map((item) => (
-                    <button
-                      type="button"
-                      key={item.id}
-                      onClick={() => void handleNotificationClick(item)}
-                      className={`flex w-full items-start gap-3 rounded-lg p-3 text-start transition hover:bg-slate-50 dark:hover:bg-[#1c1e24] ${item.isRead ? 'opacity-70' : ''}`}
-                    >
-                      <span className="mt-0.5 shrink-0">{getNotificationIcon(item.type)}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-xs font-semibold text-slate-900 dark:text-zinc-100">{item.title}</span>
-                          <span className="shrink-0 font-mono text-[10px] tabular-nums text-slate-500 dark:text-zinc-400">
-                            {new Date(item.createdAt).toLocaleTimeString(locale === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                  ) : (
+                    notifications.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => void handleNotificationClick(item)}
+                        className={`flex w-full items-start gap-2.5 rounded-lg p-2.5 text-start transition hover:bg-slate-50 dark:hover:bg-[#292f35] ${
+                          item.isRead ? 'opacity-65' : 'bg-[#57cef8]/5'
+                        }`}
+                      >
+                        <span className="mt-0.5 shrink-0">{getNotificationIcon(item.type)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-xs font-extrabold text-slate-900 dark:text-white">
+                              {item.title}
+                            </span>
+                            <span className="shrink-0 font-mono text-[10px] tabular-nums text-slate-500 dark:text-zinc-400">
+                              {item.createdAt
+                                ? new Date(item.createdAt).toLocaleTimeString(locale === 'ar' ? 'ar-EG' : 'en-US', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                                : ''}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block break-words text-[11px] leading-relaxed text-slate-600 dark:text-zinc-300">
+                            {item.message}
                           </span>
                         </span>
-                        <span className="mt-1 block break-words text-[11px] leading-relaxed text-slate-600 dark:text-zinc-400">{item.message}</span>
-                      </span>
-                    </button>
-                  ))}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
           </div>
+
+          {/* زر الحساب المدمج: صورة الموظف المصغرة + الاسم الأول فقط بنفس مقاس البار (h-9) */}
           <div className="relative" ref={userMenuRef}>
             <button
               type="button"
               onClick={() => setShowUserMenu((open) => !open)}
-              className="flex h-9 items-center gap-2 rounded-lg px-2 text-start transition hover:bg-slate-100 dark:hover:bg-[#1c1e24]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/70 px-2 text-start transition hover:bg-slate-100 dark:border-white/[0.08] dark:bg-[#232a32] dark:hover:bg-[#292f35]"
               aria-expanded={showUserMenu}
               aria-label={isRtl ? 'قائمة المستخدم' : 'User menu'}
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700 dark:bg-[#1c1e24] dark:text-zinc-200">
-                <UserRound size={15} />
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={firstName}
+                  className="h-6 w-6 shrink-0 rounded-full object-cover border border-[#57cef8]"
+                />
+              ) : (
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#57cef8]/20 text-[#0099cc] dark:text-[#57cef8]">
+                  <UserRound size={13} />
+                </span>
+              )}
+              <span className="max-w-[4.5rem] truncate text-[11px] font-extrabold text-slate-800 dark:text-zinc-100">
+                {firstName}
               </span>
-              <span className="hidden max-w-32 truncate text-xs font-medium text-slate-700 dark:text-zinc-300 xl:block">{userName || userRole || (isRtl ? 'الحساب' : 'Account')}</span>
             </button>
+
             {showUserMenu && (
-              <div className="absolute end-0 top-full z-50 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-white/[0.08] dark:bg-[#141519]">
+              <div
+                dir={isRtl ? 'rtl' : 'ltr'}
+                className="absolute end-0 top-full z-50 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-white/[0.12] dark:bg-[#1e242b]"
+              >
+                <div className="border-b border-slate-100 px-3 py-2 dark:border-white/[0.06]">
+                  <div className="truncate text-xs font-extrabold text-slate-900 dark:text-white">
+                    {userName || firstName}
+                  </div>
+                  {userRole && (
+                    <div className="truncate text-[10px] font-semibold text-[#0099cc] dark:text-[#57cef8]">
+                      {userRole}
+                    </div>
+                  )}
+                </div>
                 <Link
                   href={`/${locale}/profile`}
                   onClick={() => setShowUserMenu(false)}
-                  className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+                  className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:text-zinc-200 dark:hover:bg-[#292f35]"
                 >
-                  {isRtl ? 'ملفي الشخصي' : 'My profile'}
+                  <UserRound size={14} className="text-[#57cef8]" />
+                  <span>{isRtl ? 'ملفي الشخصي' : 'My profile'}</span>
                 </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-[#1c1e24]"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                 >
-                  <LogOut size={15} />
-                  {isRtl ? 'تسجيل الخروج' : 'Sign out'}
+                  <LogOut size={14} />
+                  <span>{isRtl ? 'تسجيل الخروج' : 'Sign out'}</span>
                 </button>
               </div>
             )}

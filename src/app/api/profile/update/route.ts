@@ -31,7 +31,45 @@ function isPasswordStrong(pass: string): boolean {
   return strongRegex.test(pass);
 }
 
+
+let profileColsReady = false;
+async function ensureProfileColumns() {
+  if (profileColsReady) return;
+  const cols = [
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_ar text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS name text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_en text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_alt text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS national_id text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS national_id_expiry date`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS social_insurance_no text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS driving_license text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date date`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS gender text DEFAULT 'MALE'`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS marital_status text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS military_status text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS address text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS emergency_name text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS emergency_relation text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS emergency_contact text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_method text DEFAULT 'INSTAPAY'`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_account text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS bank_name text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS education_level text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS education_field text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS graduation_year integer`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT NOW()`,
+  ];
+  for (const c of cols) {
+    try { await db.execute(c); } catch {}
+  }
+  profileColsReady = true;
+}
+
 export async function GET(request: NextRequest) {
+  await ensureProfileColumns();
   try {
     const authorization = await authorizeApi();
     if ('response' in authorization) return authorization.response;
@@ -96,6 +134,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureProfileColumns();
   try {
     const authorization = await authorizeApi();
     if ('response' in authorization) return authorization.response;
