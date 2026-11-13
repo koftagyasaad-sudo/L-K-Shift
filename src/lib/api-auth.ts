@@ -1,9 +1,8 @@
-import { getResilientSessionUser } from "@/lib/resilient-session";
 import { NextResponse } from "next/server";
-import { and, eq, or } from "drizzle-orm";
-import { authOptions } from "@/lib/auth";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { customRoles, users } from "@/db/schema";
+import { getSqlRows } from "@/lib/db";
+import { getResilientSessionUser } from "@/lib/resilient-session";
 
 export interface ApiPrincipal {
   id: string;
@@ -36,33 +35,21 @@ function parsePermissions(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.filter((permission): permission is string => typeof permission === "string");
   }
-
   if (typeof value === "string") {
-    try {
-      return parsePermissions(JSON.parse(value));
-    } catch {
-      return [];
-    }
+    try { return parsePermissions(JSON.parse(value)); } catch { return []; }
   }
-
   if (typeof value === "object" && value !== null) {
     return Object.entries(value)
       .filter(([, enabled]) => enabled === true)
       .map(([permission]) => permission);
   }
-
   return [];
 }
 
 function parseBranchIds(value: unknown): string[] {
   const parsed = typeof value === "string" ? (() => {
-    try {
-      return JSON.parse(value) as unknown;
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(value) as unknown; } catch { return []; }
   })() : value;
-
   if (!Array.isArray(parsed)) return [];
   return parsed
     .filter((branchId): branchId is string | number => typeof branchId === "string" || typeof branchId === "number")
@@ -74,58 +61,82 @@ export async function authorizeApi(
   requiredPermissions?: string | string[]
 ): Promise<ApiAuthorization> {
   const sessionUser = await getResilientSessionUser();
-  const session = sessionUser ? { user: sessionUser } : null;
   const sessionPhone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
   const validId = typeof sessionUser?.id === "string" && sessionUser.id.trim()
     ? sessionUser.id.trim()
     : null;
 
-  if (!session?.user || (!sessionPhone && !validId)) {
+  if (!sessionUser || (!sessionPhone && !validId)) {
     return {
       response: NextResponse.json({ message: "غير مصرح" }, { status: 401 }),
     };
   }
 
-  const [user] = await db
-    .select({
-      id: users.id,
-      systemRole: users.systemRole,
-      jobRole: users.jobRole,
-      primaryBranchId: users.primaryBranchId,
-      isActive: users.isActive,
-    })
-    .from(users)
-    .where(and(
-      validId ? eq(users.id, validId) : eq(users.phone, sessionPhone!),
-      eq(users.isActive, true)
-    ))
-    .limit(1);
+  const condition = validId
+    ? sql`id::text = ${validId}`
+    : sql`BTRIM(phone) = ${sessionPhone}`;
 
-  if (!user) {
+  const rows = getSqlRows<{
+    id: string;
+    systemRole: string;
+    jobRole: string;
+    primaryBranchId: string | null;
+    isActive: boolean;
+  }>(
+    await db.execute(sql`
+      SELECT
+        id::text AS id,
+        COALESCE(system_role::text, 'EMPLOYEE') AS "systemRole",
+        COALESCE(BTRIM(job_role), 'موظف') AS "jobRole",
+        primary_branch_id::text AS "primaryBranchId",
+        COALESCE(is_active, true) AS "isActive"
+      FROM users
+      WHERE ${condition}
+      LIMIT 1;
+    `)
+  );
+
+  const user = rows[0];
+  if (!user || user.isActive === false) {
     return {
       response: NextResponse.json({ message: "غير مصرح" }, { status: 401 }),
     };
   }
+
+  const isSuperAdmin =
+    user.systemRole === "SUPER_ADMIN" ||
+    user.jobRole === "مدير النظام" ||
+    user.jobRole === "SUPER_ADMIN";
 
   let permissions: string[] = [];
   let branchScope = "OWN_BRANCH";
   let allowedBranchIds: string[] = [];
-  if (user.systemRole === "SUPER_ADMIN" || user.jobRole === "مدير النظام" || user.jobRole === "SUPER_ADMIN") {
+
+  if (isSuperAdmin) {
     permissions = ["*"];
     branchScope = "ALL";
   } else {
-    const [role] = await db
-      .select({
-        permissions: customRoles.permissions,
-        branchScope: customRoles.branchScope,
-        allowedBranchIds: customRoles.allowedBranchIds,
-      })
-      .from(customRoles)
-      .where(or(eq(customRoles.name, user.jobRole), eq(customRoles.nameAr, user.jobRole)))
-      .limit(1);
-    permissions = parsePermissions(role?.permissions).filter((permission) => permission !== "*");
-    branchScope = role?.branchScope || "OWN_BRANCH";
-    allowedBranchIds = parseBranchIds(role?.allowedBranchIds);
+    try {
+      const roleRows = getSqlRows<{
+        permissions: unknown;
+        branchScope: string | null;
+        allowedBranchIds: unknown;
+      }>(
+        await db.execute(sql`
+          SELECT
+            permissions,
+            branch_scope AS "branchScope",
+            allowed_branch_ids AS "allowedBranchIds"
+          FROM custom_roles
+          WHERE BTRIM(name) = ${user.jobRole} OR BTRIM(name_ar) = ${user.jobRole}
+          LIMIT 1;
+        `)
+      );
+      const role = roleRows[0];
+      permissions = parsePermissions(role?.permissions).filter((p) => p !== "*");
+      branchScope = role?.branchScope || "OWN_BRANCH";
+      allowedBranchIds = parseBranchIds(role?.allowedBranchIds);
+    } catch {}
   }
 
   const required = requiredPermissions
@@ -147,7 +158,7 @@ export async function authorizeApi(
   return {
     principal: {
       id: user.id,
-      systemRole: user.systemRole,
+      systemRole: isSuperAdmin ? "SUPER_ADMIN" : user.systemRole,
       jobRole: user.jobRole,
       primaryBranchId: user.primaryBranchId,
       branchScope,
