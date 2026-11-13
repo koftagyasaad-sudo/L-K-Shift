@@ -11,35 +11,17 @@ import { notifyRequestReviewers } from "@/lib/request-notifications";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-let registerSchemaReady = false;
-async function ensureRegisterSchema() {
-  if (registerSchemaReady) return;
-  const stmts = [
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_ar text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_en text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS national_id text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_number text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_code text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS primary_branch_id text`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS job_role text DEFAULT 'موظف'`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS system_role text DEFAULT 'EMPLOYEE'`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_salary numeric DEFAULT 0`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS working_hours_per_day integer DEFAULT 8`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT false`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time text DEFAULT '10:00'`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_end_time text DEFAULT '18:00'`,
-    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_name text DEFAULT 'الشيفت الصباحي'`,
-  ];
-  for (const s of stmts) {
-    try { await db.execute(s); } catch {}
-  }
-  registerSchemaReady = true;
+interface ColInfo extends Record<string, unknown> {
+  column_name: string;
+  data_type: string;
+  udt_name: string;
+  is_nullable: string;
+  column_default: string | null;
 }
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
-  const limit = checkRateLimit("self-register:" + ip, 10, 15 * 60 * 1000);
+  const limit = checkRateLimit("self-register:" + ip, 15, 15 * 60 * 1000);
   if (!limit.success) {
     return NextResponse.json(
       { message: "محاولات تسجيل كثيرة. يرجى الانتظار دقائق والمحاولة مرة أخرى." },
@@ -48,17 +30,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await ensureRegisterSchema();
     const body = await request.json();
     const fullName = String(body.fullNameAr || body.fullName || body.name || "").trim();
     const rawPhone = String(body.phone || "").trim();
-    // Normalize Arabic-Indic digits if user typed٠١٥...
-    const phone = rawPhone.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\s+/g, "");
-    const nationalId = body.nationalId
-      ? String(body.nationalId).trim().replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-      : null;
+    const phone = rawPhone
+      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+      .replace(/\s+/g, "");
     const password = String(body.password || "");
-    let branchId = body.branchId ? String(body.branchId).trim() : null;
 
     if (!fullName || fullName.length < 3) {
       return NextResponse.json({ message: "يرجى إدخال الاسم رباعياً بشكل صحيح." }, { status: 400 });
@@ -72,6 +50,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: pwCheck.message }, { status: 400 });
     }
 
+    // Ensure full_name_ar and password_hash exist
+    try { await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_ar text;`); } catch {}
+    try { await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;`); } catch {}
+    try { await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT false;`); } catch {}
+    try { await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS job_role text DEFAULT 'موظف';`); } catch {}
+    try { await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_number text;`); } catch {}
+    try { await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_code text;`); } catch {}
+
+    // Check duplicate phone
     const existingRows = getSqlRows<{ id: string; is_active: boolean }>(
       await db.execute(sql`SELECT id::text AS id, COALESCE(is_active, true) AS is_active FROM users WHERE BTRIM(phone) = ${phone} LIMIT 1;`)
     );
@@ -82,61 +69,84 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: msg }, { status: 409 });
     }
 
-    // Resolve default branch if none was provided so DB foreign-key/not-null never fails
-    if (!branchId) {
-      try {
-        const bRows = getSqlRows<{ id: string }>(
-          await db.execute(sql`SELECT id::text AS id FROM branches ORDER BY created_at ASC LIMIT 1;`)
-        );
-        branchId = bRows[0]?.id || null;
-      } catch {}
+    // Inspect actual columns of users table in Neon DB
+    const colRows = getSqlRows<ColInfo>(
+      await db.execute(sql`
+        SELECT column_name, data_type, udt_name, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'users';
+      `)
+    );
+    const colMap = new Map<string, ColInfo>();
+    for (const c of colRows) colMap.set(c.column_name, c);
+
+    // Relax any NOT NULL constraints on optional columns dynamically
+    for (const c of colRows) {
+      if (
+        c.column_name !== "id" &&
+        c.column_name !== "phone" &&
+        c.is_nullable === "NO" &&
+        !c.column_default
+      ) {
+        try {
+          await db.execute(sql.raw(`ALTER TABLE users ALTER COLUMN "${c.column_name}" DROP NOT NULL;`));
+        } catch {}
+      }
     }
 
-    // Generate guaranteed unique employee code
     const countRows = getSqlRows<{ total: number }>(
       await db.execute(sql`SELECT COUNT(*)::int AS total FROM users;`)
     );
     const nextNum = (countRows[0]?.total || 0) + 1;
-    const empCode = String(nextNum).padStart(3, "0") + "-" + String(Date.now()).slice(-2);
-
+    const empCode = String(nextNum).padStart(3, "0") + "-" + String(Date.now()).slice(-3);
     const hashedPassword = await hashPassword(password);
-    const newId = randomUUID();
 
-    await db.execute(sql`
-      INSERT INTO users (
-        id,
-        full_name_ar,
-        phone,
-        password_hash,
-        employee_number,
-        employee_code,
-        primary_branch_id,
-        job_role,
-        system_role,
-        monthly_salary,
-        working_hours_per_day,
-        is_active
-      ) VALUES (
-        ${newId},
-        ${fullName},
-        ${phone},
-        ${hashedPassword},
-        ${empCode},
-        ${empCode},
-        ${branchId},
-        'موظف (قيد المراجعة)',
-        'EMPLOYEE',
-        0,
-        8,
-        false
-      );
-    `);
+    // Build dynamic column/value list matching exact Neon DB schema
+    const insertCols: string[] = [];
+    const insertVals: ReturnType<typeof sql>[] = [];
 
-    if (nationalId) {
-      try {
-        await db.execute(sql`UPDATE users SET national_id = ${nationalId} WHERE id::text = ${newId};`);
-      } catch {}
+    const addCol = (colName: string, val: ReturnType<typeof sql>) => {
+      if (colMap.has(colName)) {
+        insertCols.push(`"${colName}"`);
+        insertVals.push(val);
+      }
+    };
+
+    const idCol = colMap.get("id");
+    const isNumericId = idCol && (idCol.data_type.includes("int") || idCol.udt_name.includes("int"));
+    const hasDefaultId = idCol && Boolean(idCol.column_default);
+
+    if (!isNumericId && !hasDefaultId) {
+      addCol("id", sql`${randomUUID()}`);
     }
+
+    addCol("full_name_ar", sql`${fullName}`);
+    addCol("full_name_en", sql`${fullName}`);
+    addCol("name", sql`${fullName}`);
+    addCol("full_name", sql`${fullName}`);
+    addCol("phone", sql`${phone}`);
+    addCol("password_hash", sql`${hashedPassword}`);
+    addCol("password", sql`${hashedPassword}`);
+    addCol("employee_number", sql`${empCode}`);
+    addCol("employee_code", sql`${empCode}`);
+    addCol("job_role", sql`'موظف (قيد المراجعة)'`);
+    addCol("role", sql`'EMPLOYEE'`);
+    addCol("monthly_salary", sql`0`);
+    addCol("working_hours_per_day", sql`8`);
+    addCol("is_active", sql`false`);
+
+    const colsSql = sql.raw(insertCols.join(", "));
+    const valsSql = sql.join(insertVals, sql`, `);
+
+    const inserted = getSqlRows<{ id: string }>(
+      await db.execute(sql`
+        INSERT INTO users (${colsSql})
+        VALUES (${valsSql})
+        RETURNING id::text AS id;
+      `)
+    );
+
+    const newId = inserted[0]?.id || "";
 
     try {
       await notifyRequestReviewers(
@@ -145,7 +155,7 @@ export async function POST(request: NextRequest) {
         `قام (${fullName} - ${phone}) بتسجيل بياناته. يرجى مراجعة الحساب وتحديد الفرع والصلاحيات وتفعيله.`,
         "/admin/employees",
         "STAFF_REQUEST",
-        branchId
+        null
       );
     } catch {}
 
