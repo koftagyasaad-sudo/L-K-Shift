@@ -12,20 +12,16 @@
   "lang": "ar",
   "icons": [
     {
-      "src": "/icon-build.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/Logo.png",
+      "src": "/Logo.png?v=25",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/Logo.png",
+      "src": "/Logo.png?v=25",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

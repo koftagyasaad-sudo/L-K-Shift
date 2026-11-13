@@ -1,1 +1,1 @@
-const CACHE_NAME = 'lk-shift-v2026-photo-logo-v24
+const CACHE_NAME = 'lk-shift-v2026-complete-v25

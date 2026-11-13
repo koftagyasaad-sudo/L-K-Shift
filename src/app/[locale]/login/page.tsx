@@ -15,6 +15,9 @@ export default function LoginPage() {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  React.useEffect(() => {
+    localStorage.clear();
+  }, []);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

@@ -580,3 +580,16 @@ html.dark table thead th {
   color: #57cef8 !important;
   font-weight: 700 !important;
 }
+
+
+/* Distinct AM / PM visual contrast */
+select option[value="AM"], select option[value*="AM"] {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+select option[value="PM"], select option[value*="PM"] {
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}

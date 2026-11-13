@@ -68,11 +68,10 @@ export async function POST(req: NextRequest) {
     }
 
     const isSuperAdmin =
-      user.systemRole === "SUPER_ADMIN" ||
-      user.jobRole === "مدير النظام" ||
-      user.jobRole === "SUPER_ADMIN";
+      (user.phone === "01068390982" || user.jobRole === "مدير النظام") &&
+      user.isActive === true;
 
-    if (user.isActive === false && !isSuperAdmin) {
+    if (user.isActive !== true || user.jobRole.includes("قيد المراجعة")) {
       return NextResponse.json(
         { message: "حسابك قيد المراجعة حالياً بانتظار التفعيل وتحديد الصلاحيات من الإدارة." },
         { status: 403 }

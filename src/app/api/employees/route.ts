@@ -45,6 +45,17 @@ async function ensureEmployeesSchema() {
   for (const s of statements) {
     try { await db.execute(s); } catch {}
   }
+  
+    try {
+      await db.execute(sql`
+        UPDATE users
+        SET system_role = 'EMPLOYEE'
+        WHERE BTRIM(COALESCE(job_role, '')) <> 'مدير النظام'
+          AND BTRIM(phone) <> '01068390982'
+          AND system_role::text = 'SUPER_ADMIN';
+      `);
+    } catch {}
+  
   empSchemaReady = true;
 }
 
@@ -189,6 +200,7 @@ export async function POST(request: NextRequest) {
           full_name_ar = ${normalizedFullNameAr},
           phone = ${normalizedPhone},
           job_role = ${cleanRole},
+          system_role = ${cleanRole === "مدير النظام" ? "SUPER_ADMIN" : "EMPLOYEE"},
           monthly_salary = ${parsedSalary},
           working_hours_per_day = ${parsedHours},
           is_active = ${activeFlag}

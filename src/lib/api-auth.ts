@@ -97,16 +97,15 @@ export async function authorizeApi(
   );
 
   const user = rows[0];
-  if (!user || user.isActive === false) {
+  if (!user || user.isActive !== true || String(user.jobRole || "").includes("قيد المراجعة")) {
     return {
       response: NextResponse.json({ message: "غير مصرح" }, { status: 401 }),
     };
   }
 
   const isSuperAdmin =
-    user.systemRole === "SUPER_ADMIN" ||
     user.jobRole === "مدير النظام" ||
-    user.jobRole === "SUPER_ADMIN";
+    user.systemRole === "SUPER_ADMIN";
 
   let permissions: string[] = [];
   let branchScope = "OWN_BRANCH";

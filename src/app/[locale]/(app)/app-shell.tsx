@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { MobileBottomNav } from '@/components/layout/Sidebar';
 import GlobalHeader from '@/components/global-header';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
+import LiveNotificationListener from '@/components/LiveNotificationListener';
 import TopNavigationLoader from '@/components/layout/TopNavigationLoader';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -38,6 +39,7 @@ export default function AppShell({ children }: AppShellProps) {
     >
       <TopNavigationLoader />
       <ServiceWorkerRegister />
+      <LiveNotificationListener />
       <GlobalHeader />
       {/* Subtle icon-only toggle at top-left/right below header (z-10 so it NEVER covers any modal) */}
       <button
