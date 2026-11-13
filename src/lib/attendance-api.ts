@@ -291,6 +291,7 @@ async function getLiveAttendanceRecords(
         a.check_in,
         a.check_out,
         a.distance_meters,
+        a.photo_url,
         a.status,
         CASE
           WHEN (a.check_in AT TIME ZONE 'Africa/Cairo')::time < TIME '06:00'
@@ -325,6 +326,7 @@ async function getLiveAttendanceRecords(
     check_in: string | Date | null;
     check_out: string | Date | null;
     distance_meters: number | null;
+    photo_url?: string | null;
     status: string | null;
     work_date: string | Date;
   }>(raw);
@@ -350,7 +352,7 @@ async function getLiveAttendanceRecords(
       checkInTime,
       checkOutTime,
       gpsDistance: Number(row.distance_meters || 0),
-      photoUrl: null,
+      photoUrl: row.photo_url || null,
       workedMinutes,
       lateMinutes: 0,
       overtimeMinutes: Math.max(0, workedMinutes - Number(row.working_hours_per_day || 8) * 60),
@@ -361,10 +363,23 @@ async function getLiveAttendanceRecords(
   });
 }
 
+let attendancePhotoColReady = false;
+async function ensureAttendancePhotoCol() {
+  if (attendancePhotoColReady) return;
+  try {
+    await db.execute(sql`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS photo_url text;`);
+  } catch {}
+  try {
+    await db.execute(sql`ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS photo_url text;`);
+  } catch {}
+  attendancePhotoColReady = true;
+}
+
 export async function submitAttendance(
   principal: ApiPrincipal,
   input: AttendanceInput
 ): Promise<NextResponse> {
+  await ensureAttendancePhotoCol();
   const canOverride = hasApiPermission(principal, "attendance.override");
   if (!input.photoUrl || !isValidAttendancePhoto(input.photoUrl)) {
     return errorResponse("صورة الحضور مطلوبة وصالحة لإتمام العملية.", 400);
@@ -464,6 +479,7 @@ export async function submitAttendance(
         SET check_in_lat = ${String(input.latitude)},
             check_in_lng = ${String(input.longitude)},
             distance_meters = ${distance},
+            photo_url = COALESCE(${input.photoUrl}, photo_url),
             updated_at = NOW()
         WHERE id::text = ${existing.id};
       `);
@@ -474,11 +490,11 @@ export async function submitAttendance(
       await db.execute(sql`
         INSERT INTO attendance (
           user_id, branch_id, check_in, check_in_lat, check_in_lng,
-          distance_meters, status, created_at, updated_at
+          distance_meters, photo_url, status, created_at, updated_at
         ) VALUES (
           ${targetUserId}, ${branchId}, ${input.timestamp},
           ${String(input.latitude)}, ${String(input.longitude)},
-          ${distance}, ${lateMinutes > 0 ? "late" : "present"}, NOW(), NOW()
+          ${distance}, ${input.photoUrl}, ${lateMinutes > 0 ? "late" : "present"}, NOW(), NOW()
         );
       `);
     }
@@ -501,6 +517,7 @@ export async function submitAttendance(
     SET check_out = ${input.timestamp},
         check_out_lat = ${String(input.latitude)},
         check_out_lng = ${String(input.longitude)},
+        photo_url = COALESCE(${input.photoUrl}, photo_url),
         updated_at = NOW()
     WHERE id::text = ${existing.id};
   `);

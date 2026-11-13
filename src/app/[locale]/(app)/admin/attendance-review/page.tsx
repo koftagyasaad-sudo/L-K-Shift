@@ -339,7 +339,7 @@ export default function AttendanceReviewPage() {
         ) : (
           <div>
             <label className="text-[11px] font-bold text-slate-600 block mb-1">السجل الخاص بي:</label>
-            <div className="p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-orange-600">
+            <div className="p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-[#0099cc] dark:text-[#57cef8]">
               حسابك الشخصي
             </div>
           </div>
@@ -407,14 +407,14 @@ export default function AttendanceReviewPage() {
                   <tr key={r.id} className="hover:bg-slate-50 transition">
                     <td className="p-4">
                       <div className="font-bold text-slate-900 text-sm">{r.userName}</div>
-                      <div className="text-[11px] font-mono text-orange-600 font-bold">#{r.employeeCode}</div>
+                      <div className="text-[11px] font-mono text-[#0099cc] dark:text-[#57cef8] font-bold">#{r.employeeCode}</div>
                     </td>
                     <td className="p-4 font-semibold text-slate-800">{r.branchName}</td>
                     <td className="p-4 font-mono text-slate-600">{r.workDate}</td>
                     <td className="p-4 text-center font-mono font-bold text-emerald-600">
                       {formatTime(r.checkInTime)}
                     </td>
-                    <td className="p-4 text-center font-mono font-bold text-orange-600">
+                    <td className="p-4 text-center font-mono font-bold text-[#0099cc] dark:text-[#57cef8]">
                       {formatTime(r.checkOutTime)}
                     </td>
                     <td className="p-4 text-center">
@@ -428,7 +428,7 @@ export default function AttendanceReviewPage() {
                           <img
                             src={r.photoUrl}
                             alt="Selfie"
-                            className="w-11 h-11 rounded-xl object-cover border-2 border-orange-500/40 group-hover:scale-105 transition shadow-sm"
+                            className="w-11 h-11 rounded-xl object-cover border-2 border-[#57cef8] group-hover:scale-105 transition shadow-sm"
                           />
                           <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
                             <Maximize2 size={13} />
@@ -498,7 +498,7 @@ export default function AttendanceReviewPage() {
                     <tr key={emp.id} className="hover:bg-slate-50 transition">
                       <td className="p-4">
                         <span className="font-bold text-slate-900 text-sm block">{emp.name}</span>
-                        <span className="font-mono text-orange-600 font-bold text-[11px]">#{first?.employeeCode}</span>
+                        <span className="font-mono text-[#0099cc] dark:text-[#57cef8] font-bold text-[11px]">#{first?.employeeCode}</span>
                       </td>
                       <td className="p-4 font-semibold text-slate-700">{first?.branchName}</td>
                       <td className="p-4 text-center font-mono font-bold text-slate-900">
@@ -517,7 +517,7 @@ export default function AttendanceReviewPage() {
                       <td className="p-4 text-center font-mono text-rose-700 font-bold">
                         -{penaltiesTotal.toFixed(0)} ج.م
                       </td>
-                      <td className="p-4 text-center font-mono font-black text-orange-600 bg-orange-50/70">
+                      <td className="p-4 text-center font-mono font-black text-[#0099cc] dark:text-[#57cef8] bg-orange-50/70">
                         {netPay.toFixed(2)} ج.م
                       </td>
                     </tr>
@@ -543,7 +543,7 @@ export default function AttendanceReviewPage() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">{selectedRecord.userName}</h3>
-                <span className="text-[11px] text-orange-600 font-mono">وردية: {selectedRecord.workDate}</span>
+                <span className="text-[11px] text-[#0099cc] dark:text-[#57cef8] font-mono">وردية: {selectedRecord.workDate}</span>
               </div>
               <button
                 type="button"
@@ -573,7 +573,7 @@ export default function AttendanceReviewPage() {
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">وقت الانصراف (الأخير):</span>
-                <span className="font-mono font-bold text-orange-600">{formatTime(selectedRecord.checkOutTime)}</span>
+                <span className="font-mono font-bold text-[#0099cc] dark:text-[#57cef8]">{formatTime(selectedRecord.checkOutTime)}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">الفرع:</span>

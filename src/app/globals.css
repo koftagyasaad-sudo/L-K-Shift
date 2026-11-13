@@ -561,3 +561,22 @@ header .to-orange-700, header .dark\:to-orange-400 {
   background-image: none !important;
   color: var(--build-heading) !important;
 }
+
+
+/* Ensure table headers are always visible in Day & Night mode */
+html:not(.dark) table thead,
+html:not(.dark) table thead tr {
+  background-color: #292f35 !important;
+}
+html:not(.dark) table thead th {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+html.dark table thead,
+html.dark table thead tr {
+  background-color: #11151a !important;
+}
+html.dark table thead th {
+  color: #57cef8 !important;
+  font-weight: 700 !important;
+}
