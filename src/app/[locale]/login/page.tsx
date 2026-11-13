@@ -154,7 +154,7 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
-            src="/Logo.png"
+            src="/icon-build.svg"
             alt="L-K Shift Logo"
             className="mb-3 h-20 w-auto object-contain"
           />
@@ -176,7 +176,7 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'LOGIN'
-                  ? 'bg-white text-orange-600 shadow-sm dark:bg-[#1c1e24] dark:text-orange-500'
+                  ? 'bg-white text-[#0099cc] shadow-sm dark:bg-[#1c1e24] dark:text-[#57cef8]'
                   : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
@@ -191,7 +191,7 @@ export default function LoginPage() {
               }}
               className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 activeTab === 'REGISTER'
-                  ? 'bg-white text-orange-600 shadow-sm dark:bg-[#1c1e24] dark:text-orange-500'
+                  ? 'bg-white text-[#0099cc] shadow-sm dark:bg-[#1c1e24] dark:text-[#57cef8]'
                   : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
@@ -254,7 +254,7 @@ export default function LoginPage() {
               <div className="flex justify-end pt-0.5">
                 <Link
                   href={`/${locale}/forgot-password`}
-                  className="text-xs font-medium text-orange-600 transition-colors hover:text-orange-700 dark:text-orange-500 dark:hover:text-orange-400"
+                  className="text-xs font-medium text-[#0099cc] transition-colors hover:text-orange-700 dark:text-[#57cef8] dark:hover:text-orange-400"
                 >
                   {isRtl ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
                 </Link>
@@ -263,7 +263,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-70"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#57cef8] px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#3a4149] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-70"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -347,7 +347,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-orange-600 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-70"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#57cef8] px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#3a4149] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-70"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

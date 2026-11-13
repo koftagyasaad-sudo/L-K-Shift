@@ -24,8 +24,8 @@ export const metadata: Metadata = {
     title: 'L-K Shift',
   },
   icons: {
-    icon: '/Logo.png',
-    apple: '/Logo.png',
+    icon: '/icon-build.svg',
+    apple: '/icon-build.svg',
   },
 };
 
@@ -34,7 +34,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: 'cover',
-  themeColor: '#3a4149',
+  themeColor: '#181d23',
 };
 
 export default async function RootLayout({

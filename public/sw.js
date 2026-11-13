@@ -1,1 +1,1 @@
-const CACHE_NAME = 'lk-shift-v2026-prod-hardened-v20
+const CACHE_NAME = 'lk-shift-v2026-build-compact-v21

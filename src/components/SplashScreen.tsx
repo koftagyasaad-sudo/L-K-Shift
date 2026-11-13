@@ -32,18 +32,18 @@ export default function SplashScreen() {
       dir="rtl"
     >
       {/* هالة خلفية متحركة */}
-      <div className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-orange-600/25 to-rose-600/25 blur-3xl animate-pulse pointer-events-none" />
+      <div className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-[#57cef8]/20 to-[#70c6eb]/20 blur-3xl animate-pulse pointer-events-none" />
 
       {/* الحاوية الدائرية مع أنيميشن الدخول والتوهج */}
       <div className="relative flex flex-col items-center gap-6">
         <div className="relative flex items-center justify-center">
           {/* حلقة دائرية خارجية دوارة بتدرج لوني فخم */}
-          <div className="absolute -inset-2.5 rounded-full bg-gradient-to-tr from-orange-500 via-rose-500 to-amber-400 opacity-80 blur-xs animate-spin [animation-duration:3s]" />
+          <div className="absolute -inset-2.5 rounded-full bg-gradient-to-tr from-[#57cef8] via-[#70c6eb] to-[#3a4149] opacity-80 blur-xs animate-spin [animation-duration:3s]" />
 
           {/* الإطار الدائري الحاوي للشعار */}
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-slate-900 border-2 border-orange-500/50 p-4 shadow-2xl flex items-center justify-center overflow-hidden transform transition-transform animate-bounce [animation-duration:2s]">
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-slate-900 border-2 border-[#57cef8]/60 p-4 shadow-2xl flex items-center justify-center overflow-hidden transform transition-transform animate-bounce [animation-duration:2s]">
             <img
-              src="/Logo.png"
+              src="/icon-build.svg"
               alt="L-K Shift Core Logo"
               className="w-full h-full object-contain filter drop-shadow brightness-110"
             />
@@ -53,7 +53,7 @@ export default function SplashScreen() {
         {/* النصوص الرسمية وشريط التحميل */}
         <div className="text-center space-y-2">
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-wide">
-            L-K Shift <span className="text-orange-500">Core</span>
+            L-K Shift <span className="text-[#57cef8]">Core</span>
           </h1>
           <p className="text-[11px] font-semibold text-slate-400 tracking-wider">
             نظام إدارة الحضور والورديات الذكي
@@ -61,7 +61,7 @@ export default function SplashScreen() {
 
           {/* شريط التحميل الانسيابي الدائري الأطراف */}
           <div className="w-44 h-1.5 bg-slate-800 rounded-full mx-auto mt-4 overflow-hidden relative">
-            <div className="absolute inset-y-0 bg-gradient-to-r from-orange-500 via-amber-400 to-rose-600 rounded-full w-full -translate-x-full animate-[progress_1.3s_ease-in-out_infinite]" />
+            <div className="absolute inset-y-0 bg-gradient-to-r from-[#57cef8] via-[#70c6eb] to-[#528780] rounded-full w-full -translate-x-full animate-[progress_1.3s_ease-in-out_infinite]" />
           </div>
         </div>
       </div>

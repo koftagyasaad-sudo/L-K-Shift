@@ -1,44 +1,31 @@
 {
-  "name": "L-K Shift Core",
+  "name": "L-K Shift - نظام إدارة الحضور والورديات",
   "short_name": "L-K Shift",
-  "id": "/?source=pwa",
-  "description": "نظام إدارة الحضور والانصراف والورديات الميدانية",
-  "start_url": "/ar/attendance",
+  "description": "منظومة متكاملة لإدارة الحضور الذكي والورديات بالـ GPS",
+  "start_url": "/ar/login",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "window-controls-overlay"],
+  "background_color": "#181d23",
+  "theme_color": "#181d23",
   "orientation": "portrait",
-  "background_color": "#0c0e18",
-  "theme_color": "#0c0e18",
-  "categories": ["business", "productivity"],
+  "dir": "rtl",
+  "lang": "ar",
   "icons": [
     {
+      "src": "/icon-build.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/Logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "sizes": "192x192",
+      "type": "image/png"
     },
     {
       "src": "/Logo.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/Logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "L-K Shift Mobile"
-    },
-    {
-      "src": "/Logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "L-K Shift Desktop"
+      "type": "image/png"
     }
   ]
 }
