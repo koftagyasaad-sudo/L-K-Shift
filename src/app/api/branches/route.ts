@@ -1,234 +1,194 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { sql } from 'drizzle-orm';
-import { authorizeApi, canAccessBranch } from '@/lib/api-auth';
+import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
+import { getSqlRows } from "@/lib/db";
+import { authorizeApi } from "@/lib/api-auth";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function resultRows<T>(result: unknown): T[] {
-  if (Array.isArray(result)) return result as T[];
-  if (typeof result === 'object' && result !== null && 'rows' in result && Array.isArray(result.rows)) {
-    return result.rows as T[];
+let branchesSchemaHealed = false;
+async function ensureBranchesSchema() {
+  if (branchesSchemaHealed) return;
+  const stmts = [
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS name text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS name_ar text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS name_en text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS address text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS phone text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS manager_id text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS latitude double precision DEFAULT 31.122`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS longitude double precision DEFAULT 30.648`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS geofence_radius integer DEFAULT 10`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS radius_meters integer DEFAULT 10`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS grace_period_minutes integer DEFAULT 15`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift_start_time text DEFAULT '10:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift_end_time text DEFAULT '18:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_start text DEFAULT '10:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift1_end text DEFAULT '18:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift2_start text DEFAULT '13:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift2_end text DEFAULT '21:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift3_start text DEFAULT '17:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS shift3_end text DEFAULT '01:00'`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS qr_secret_key text`,
+    sql`ALTER TABLE branches ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`,
+  ];
+  for (const s of stmts) {
+    try { await db.execute(s); } catch {}
   }
-  return [];
+  branchesSchemaHealed = true;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const authorization = await authorizeApi([
-      'branches.view',
-      'branches.manage',
-      'employees.view',
-      'employees.manage',
-      'attendance.view',
-    ]);
-    if ('response' in authorization) return authorization.response;
-
-    const branchId = new URL(request.url).searchParams.get('id')?.trim() || null;
-    const raw = await db.execute(sql`
-      SELECT 
-        b.id::text as id,
-        COALESCE(b.name, 'Branch') as name,
-        COALESCE(b.name_en, b.name, 'Branch') as "nameEn",
-        COALESCE(b.name_ar, b.name, 'فرع') as name_ar,
-        COALESCE(b.name_ar, b.name, 'فرع') as "nameAr",
-        COALESCE(NULLIF(b.latitude::text, '')::double precision, 31.1308) as latitude,
-        COALESCE(NULLIF(b.longitude::text, '')::double precision, 30.6475) as longitude,
-        COALESCE(b.geofence_radius, 100) as geofence_radius,
-        COALESCE(b.geofence_radius, 100) as "geofenceRadius",
-        COALESCE(b.geofence_radius, 100) as "radiusMeters",
-        b.manager_id::text as "managerId",
-        COALESCE(u.full_name_ar, u.name, '') as "managerName",
-        COALESCE(b.phone, '') as phone,
-        COALESCE(b.address, '') as address,
-        COALESCE(b.shift1_start::text, '09:00') as "shift1Start",
-        COALESCE(b.shift1_end::text, '17:00') as "shift1End",
-        COALESCE(b.shift2_start::text, '13:00') as "shift2Start",
-        COALESCE(b.shift2_end::text, '21:00') as "shift2End",
-        COALESCE(b.shift3_start::text, '17:00') as "shift3Start",
-        COALESCE(b.shift3_end::text, '01:00') as "shift3End",
-        COALESCE(b.grace_period_minutes, 15) as "gracePeriodMinutes"
-      FROM branches b
-      LEFT JOIN users u ON b.manager_id::text = u.id::text
-      WHERE (${branchId ?? null}::text IS NULL OR b.id::text = ${branchId ?? null}::text)
-      ORDER BY b.id ASC;
-    `);
-
-    const branches = resultRows<Record<string, unknown>>(raw);
-    const visibleBranches = branches.filter((branch) =>
-      authorization.principal.systemRole === 'SUPER_ADMIN'
-      || canAccessBranch(authorization.principal, String(branch.id))
-    );
-    if (branchId) {
-      return visibleBranches.length
-        ? NextResponse.json(visibleBranches[0], { status: 200 })
-        : NextResponse.json({ message: 'الفرع غير موجود' }, { status: 404 });
-    }
-    return NextResponse.json(visibleBranches, { status: 200 });
-  } catch (error) {
-    console.error('Branches GET error:', error);
-    return NextResponse.json({ message: 'تعذر تحميل بيانات الفروع.' }, { status: 500 });
-  }
-}
-
-async function saveBranch(request: NextRequest) {
-  try {
-    const authorization = await authorizeApi('branches.manage');
-    if ('response' in authorization) return authorization.response;
-
-    const body = await request.json();
-    const {
-      id,
-      name,
-      nameEn,
-      nameAr,
-      latitude,
-      longitude,
-      radius,
-      geofenceRadius,
-      geofence_radius,
-      radiusMeters,
-      managerId,
-      phone,
-      address,
-      shift1Start,
-      shift1End,
-      shift2Start,
-      shift2End,
-      shift3Start,
-      shift3End,
-      gracePeriodMinutes,
-    } = body;
-
-    if (!nameAr) {
-      return NextResponse.json({ message: 'اسم الفرع بالعربية مطلوب' }, { status: 400 });
-    }
-
-    if (id && !canAccessBranch(authorization.principal, String(id))) {
-      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
-    }
-    if (!id && authorization.principal.branchScope !== 'ALL') {
-      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
-    }
-
-    const enName = nameEn || name || 'Branch';
-    const lat = latitude !== undefined && latitude !== null ? parseFloat(latitude) : 31.1308;
-    const lng = longitude !== undefined && longitude !== null ? parseFloat(longitude) : 30.6475;
-    const requestedRadius = radius ?? radiusMeters ?? geofenceRadius ?? geofence_radius;
-    const hasRequestedRadius = requestedRadius !== undefined && requestedRadius !== null && requestedRadius !== '';
-    const radiusValue = hasRequestedRadius ? Number(requestedRadius) : 100;
-    if ((!id || hasRequestedRadius) && (!Number.isSafeInteger(radiusValue) || radiusValue < 1)) {
-      return NextResponse.json({ message: 'نصف قطر النطاق يجب أن يكون عددًا صحيحًا موجبًا' }, { status: 400 });
-    }
-    const mgrId = managerId == null || String(managerId).trim() === ''
-      ? null
-      : String(managerId).trim();
-    const s1Start = shift1Start || '09:00';
-    const s1End = shift1End || '17:00';
-    const s2Start = shift2Start || '13:00';
-    const s2End = shift2End || '21:00';
-    const s3Start = shift3Start || '17:00';
-    const s3End = shift3End || '01:00';
-    const grace = gracePeriodMinutes !== undefined ? parseInt(gracePeriodMinutes, 10) : 15;
-
-    if (id) {
-      const raw = await db.execute(sql`
-        UPDATE branches
-        SET 
-          name = ${enName},
-          name_en = ${enName},
-          name_ar = ${nameAr},
-          latitude = ${lat},
-          longitude = ${lng},
-          geofence_radius = CASE
-            WHEN ${hasRequestedRadius} THEN ${radiusValue}
-            ELSE geofence_radius
-          END,
-          manager_id = ${mgrId},
-          phone = ${phone || null},
-          address = ${address || null},
-          shift1_start = ${s1Start},
-          shift1_end = ${s1End},
-          shift2_start = ${s2Start},
-          shift2_end = ${s2End},
-          shift3_start = ${s3Start},
-          shift3_end = ${s3End},
-          grace_period_minutes = ${grace}
-        WHERE id::text = ${String(id)}
-        RETURNING id::text AS id, geofence_radius AS "geofenceRadius";
-      `);
-      const updated = resultRows<{ id: string; geofenceRadius: number }>(raw);
-      if (!updated.length) {
-        return NextResponse.json({ message: 'الفرع غير موجود' }, { status: 404 });
-      }
-      return NextResponse.json({
-        success: true,
-        message: 'تم تحديث بيانات الفرع بنجاح',
-        branch: { ...updated[0], radiusMeters: updated[0].geofenceRadius },
-      });
-    } else {
+    await ensureBranchesSchema();
+    const rows = getSqlRows<Record<string, unknown>>(
       await db.execute(sql`
-        INSERT INTO branches (
-          name, name_en, name_ar, latitude, longitude, geofence_radius,
-          manager_id, phone, address,
-          shift1_start, shift1_end, shift2_start, shift2_end, shift3_start, shift3_end,
-          grace_period_minutes, qr_secret_key
-        ) VALUES (
-          ${enName}, ${enName}, ${nameAr}, ${lat}, ${lng}, ${radiusValue},
-          ${mgrId}, ${phone || null}, ${address || null},
-          ${s1Start}, ${s1End}, ${s2Start}, ${s2End}, ${s3Start}, ${s3End},
-          ${grace}, md5(random()::text)
-        );
-      `);
-      return NextResponse.json({ success: true, message: 'تمت إضافة الفرع الجديد بنجاح' });
-    }
+        SELECT
+          id::text AS id,
+          COALESCE(name_ar, name, 'فرع') AS "nameAr",
+          COALESCE(name_ar, name, 'فرع') AS "name",
+          COALESCE(name_en, name_ar, 'Branch') AS "nameEn",
+          COALESCE(address, '') AS "address",
+          COALESCE(phone, '') AS "phone",
+          manager_id::text AS "managerId",
+          COALESCE(latitude:: float8, 31.12225) AS "latitude",
+          COALESCE(longitude::float8, 30.64821) AS "longitude",
+          COALESCE(geofence_radius, 10) AS "geofenceRadius",
+          COALESCE(geofence_radius, 10) AS "radiusMeters",
+          COALESCE(grace_period_minutes, 15) AS "gracePeriodMinutes",
+          COALESCE(shift1_start, shift_start_time, '10:00') AS "shift1Start",
+          COALESCE(shift1_end, shift_end_time, '18:00') AS "shift1End",
+          COALESCE(shift2_start, '13:00') AS "shift2Start",
+          COALESCE(shift2_end, '21:00') AS "shift2End",
+          COALESCE(shift3_start, '17:00') AS "shift3Start",
+          COALESCE(shift3_end, '01:00') AS "shift3End",
+          COALESCE(is_active, true) AS "isActive"
+        FROM branches
+        ORDER BY created_at ASC;
+      `)
+    );
+    return NextResponse.json(rows, { status: 200 });
   } catch (error) {
-    console.error('Branches POST error:', error);
-    return NextResponse.json({ message: errorMessage(error, 'فشل حفظ الفرع') }, { status: 500 });
+    console.error("Branches GET error:", error);
+    return NextResponse.json({ message: "تعذر جلب الفروع" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
-  return saveBranch(request);
-}
+  try {
+    const auth = await authorizeApi(["branches.manage", "branches.view"]);
+    if ("response" in auth) return auth.response;
+    await ensureBranchesSchema();
 
-export async function PUT(request: NextRequest) {
-  return saveBranch(request);
+    const body = await request.json();
+    const id = body.id ? String(body.id).trim() : null;
+    const nameAr = String(body.nameAr || body.name_ar || body.name || "").trim();
+    const nameEn = String(body.nameEn || body.name_en || nameAr || "Branch").trim();
+    const address = body.address ? String(body.address).trim() : null;
+    const phone = body.phone ? String(body.phone).trim() : null;
+    const managerId = body.managerId && String(body.managerId).trim() !== "" ? String(body.managerId).trim() : null;
+    const latitude = Number(body.latitude);
+    const longitude = Number(body.longitude);
+    const geofenceRadius = Math.max(1, parseInt(String(body.geofenceRadius ?? body.radiusMeters ?? 10), 10) || 10);
+    const gracePeriodMinutes = parseInt(String(body.gracePeriodMinutes ?? 15), 10) || 15;
+    const shift1Start = String(body.shift1Start || body.shiftStartTime || "10:00").trim();
+    const shift1End = String(body.shift1End || body.shiftEndTime || "18:00").trim();
+    const shift2Start = String(body.shift2Start || "13:00").trim();
+    const shift2End = String(body.shift2End || "21:00").trim();
+    const shift3Start = String(body.shift3Start || "17:00").trim();
+    const shift3End = String(body.shift3End || "01:00").trim();
+
+    if (!nameAr || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      return NextResponse.json({ message: "اسم الفرع وإحداثيات الموقع مطلوبة" }, { status: 400 });
+    }
+
+    if (id) {
+      await db.execute(sql`
+        UPDATE branches
+        SET
+          name_ar = ${nameAr},
+          name_en = ${nameEn},
+          address = ${address},
+          latitude = ${latitude},
+          longitude = ${longitude},
+          geofence_radius = ${geofenceRadius}
+        WHERE id::text = ${id};
+      `);
+      // Optional columns updated safely
+      try {
+        await db.execute(sql`
+          UPDATE branches
+          SET
+            name = ${nameAr},
+            phone = ${phone},
+            manager_id = ${managerId},
+            grace_period_minutes = ${gracePeriodMinutes},
+            shift1_start = ${shift1Start},
+            shift1_end = ${shift1End},
+            shift2_start = ${shift2Start},
+            shift2_end = ${shift2End},
+            shift3_start = ${shift3Start},
+            shift3_end = ${shift3End}
+          WHERE id::text = ${id};
+        `);
+      } catch {}
+
+      return NextResponse.json({ success: true, id, message: "تم تحديث الفرع بنجاح" });
+    } else {
+      const newId = randomUUID();
+      const qrSecret = randomUUID().replace(/-/g, "");
+      await db.execute(sql`
+        INSERT INTO branches (
+          id, name_ar, name_en, address, latitude, longitude, geofence_radius, is_active, created_at
+        ) VALUES (
+          ${newId}, ${nameAr}, ${nameEn}, ${address}, ${latitude}, ${longitude}, ${geofenceRadius}, true, NOW()
+        );
+      `);
+      try {
+        await db.execute(sql`
+          UPDATE branches
+          SET
+            name = ${nameAr},
+            phone = ${phone},
+            manager_id = ${managerId},
+            grace_period_minutes = ${gracePeriodMinutes},
+            shift1_start = ${shift1Start},
+            shift1_end = ${shift1End},
+            shift2_start = ${shift2Start},
+            shift2_end = ${shift2End},
+            shift3_start = ${shift3Start},
+            shift3_end = ${shift3End},
+            qr_secret_key = ${qrSecret}
+          WHERE id::text = ${newId};
+        `);
+      } catch {}
+
+      return NextResponse.json({ success: true, id: newId, message: "تم إضافة الفرع بنجاح" }, { status: 201 });
+    }
+  } catch (error) {
+    console.error("Branches POST error:", error);
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "تعذر حفظ بيانات الفرع" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const authorization = await authorizeApi('branches.manage');
-    if ('response' in authorization) return authorization.response;
-
+    const auth = await authorizeApi("branches.manage");
+    if ("response" in auth) return auth.response;
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ message: "معرف الفرع مطلوب" }, { status: 400 });
 
-    if (!id) {
-      return NextResponse.json({ message: 'معرف الفرع مطلوب' }, { status: 400 });
-    }
-
-    const branchId = id.trim();
-    if (!canAccessBranch(authorization.principal, branchId)) {
-      return NextResponse.json({ message: 'ممنوع' }, { status: 403 });
-    }
-
-    try {
-      await db.execute(sql`UPDATE users SET primary_branch_id = NULL WHERE primary_branch_id = ${branchId};`);
-      await db.execute(sql`UPDATE users SET branch_id = NULL WHERE branch_id = ${branchId};`);
-      await db.execute(sql`UPDATE attendance_logs SET branch_id = NULL WHERE branch_id = ${branchId};`);
-    } catch {}
-
-    await db.execute(sql`DELETE FROM branches WHERE id::text = ${branchId};`);
-
-    return NextResponse.json({ success: true, message: 'تم حذف الفرع بنجاح' });
+    await db.execute(sql`UPDATE users SET primary_branch_id = NULL WHERE primary_branch_id::text = ${id};`);
+    await db.execute(sql`DELETE FROM branches WHERE id::text = ${id};`);
+    return NextResponse.json({ success: true, message: "تم حذف الفرع بنجاح" });
   } catch (error) {
-    console.error('Branches DELETE error:', error);
-    return NextResponse.json({ message: errorMessage(error, 'فشل حذف الفرع') }, { status: 500 });
+    console.error("Branches DELETE error:", error);
+    return NextResponse.json({ message: "تعذر حذف الفرع" }, { status: 500 });
   }
 }

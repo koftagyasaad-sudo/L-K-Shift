@@ -1,1 +1,1 @@
-const CACHE_NAME = 'lk-shift-v2026-build-compact-v21
+const CACHE_NAME = 'lk-shift-v2026-strict-geofence-v22

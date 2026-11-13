@@ -500,6 +500,7 @@ textarea::placeholder {
   font-family: var(--font-ibm-plex-arabic), 'IBM Plex Sans Arabic', sans-serif !important;
 }
 
+
 /* === COMPACT ONE-PAGE DENSITY & ZERO-ORANGE SYSTEM === */
 html {
   font-size: 13.5px !important;
@@ -510,39 +511,45 @@ html {
   }
 }
 
-/* Compact spacing so each page fits cleanly on a single viewport */
 .app-main {
   line-height: 1.45 !important;
 }
-.app-main h1 { font-size: 1.35rem !important; }
-.app-main h2 { font-size: 1.15rem !important; }
-.app-main h3 { font-size: 1rem !important; }
+.app-main h1 { font-size: 1.3rem !important; }
+.app-main h2 { font-size: 1.1rem !important; }
+.app-main h3 { font-size: 0.95rem !important; }
 .app-main p, .app-main span, .app-main td, .app-main th, .app-main button, .app-main input, .app-main select {
-  font-size: 0.85rem !important;
+  font-size: 0.84rem !important;
 }
 .app-main .p-6, .app-main .p-8, .app-main .sm\:p-8 {
-  padding: 0.9rem !important;
+  padding: 0.85rem !important;
 }
 .app-main .p-5, .app-main .p-4 {
-  padding: 0.75rem !important;
+  padding: 0.65rem !important;
 }
 .app-main .space-y-6 > :not([hidden]) ~ :not([hidden]),
 .app-main .space-y-8 > :not([hidden]) ~ :not([hidden]) {
-  margin-top: 0.75rem !important;
+  margin-top: 0.65rem !important;
 }
 .app-main table th, .app-main table td {
-  padding-top: 0.45rem !important;
-  padding-bottom: 0.45rem !important;
-  padding-left: 0.6rem !important;
-  padding-right: 0.6rem !important;
+  padding: 0.4rem 0.55rem !important;
 }
 
-/* When in Compact One-Page Mode (.lk-compact-view), cap long tables to 5 rows with smooth scroll or expand via button */
-.lk-compact-view .app-main table tbody tr:nth-child(n+6) {
-  display: none;
+/* REAL ONE-PAGE COMPACT MODE (.lk-compact-view): Hides secondary filter blocks, subtitles, and caps tables so the whole page fits on 1 screen without scrolling */
+.lk-compact-view .app-main > div > div > p,
+.lk-compact-view .app-main section > div > p,
+.lk-compact-view .app-main table tbody tr:nth-child(n+5) {
+  display: none !important;
 }
-.lk-compact-view .app-main p.max-w-2xl {
-  display: none;
+
+/* Collapse large filter cards and secondary sections in Compact Mode */
+.lk-compact-view .app-main > div > div:has(input[type='date']),
+.lk-compact-view .app-main > div > div:has(input[placeholder*='ابحث']) {
+  display: none !important;
+}
+
+/* Constrain main container in compact mode so it fits cleanly on one screen */
+.lk-compact-view .app-main > div {
+  gap: 0.5rem !important;
 }
 
 /* Eliminate any remaining orange badges in Header */

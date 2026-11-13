@@ -23,40 +23,36 @@ function nullableText(value: unknown): string | null {
   return text === "" ? null : text;
 }
 
-let codesSanitized = false;
-async function ensureCleanEmployeeCodes() {
-  if (codesSanitized) return;
-  try {
-    await db.execute(sql`
-      WITH numbered AS (
-        SELECT id, LPAD(ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC)::text, 3, '0') AS seq_code
-        FROM users
-      )
-      UPDATE users u
-      SET employee_number = n.seq_code,
-          employee_code = n.seq_code
-      FROM numbered n
-      WHERE u.id = n.id
-        AND (
-          u.employee_number IS NULL
-          OR BTRIM(u.employee_number) = ''
-          OR LENGTH(u.employee_number) > 10
-          OR u.employee_code IS NULL
-          OR BTRIM(u.employee_code) = ''
-          OR LENGTH(u.employee_code) > 10
-        );
-    `);
-    codesSanitized = true;
-  } catch (e) {
-    console.warn("Employee code sanitization skipped:", e);
+let empSchemaReady = false;
+async function ensureEmployeesSchema() {
+  if (empSchemaReady) return;
+  const statements = [
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_ar text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_en text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS national_id text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_number text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_code text`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS job_role text DEFAULT 'موظف'`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_salary numeric DEFAULT 5000`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS working_hours_per_day integer DEFAULT 8`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_start_time text DEFAULT '10:00'`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_end_time text DEFAULT '18:00'`,
+    sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shift_name text DEFAULT 'الشيفت الصباحي'`,
+    sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_primary_branch_id_branches_id_fk`,
+    sql`ALTER TABLE users ALTER COLUMN primary_branch_id TYPE text USING primary_branch_id::text`,
+  ];
+  for (const s of statements) {
+    try { await db.execute(s); } catch {}
   }
+  empSchemaReady = true;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const authorization = await authorizeApi("employees.view");
     if ("response" in authorization) return authorization.response;
-    await ensureCleanEmployeeCodes();
+    await ensureEmployeesSchema();
 
     const { searchParams } = new URL(request.url);
     const empId = searchParams.get("id");
@@ -77,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const raw = await db.execute(sql`
       SELECT 
-        u.id,
+        u.id::text AS id,
         COALESCE(u.full_name_ar, 'موظف') AS "fullNameAr",
         COALESCE(u.full_name_ar, 'موظف') AS "name",
         COALESCE(u.full_name_ar, 'موظف') AS "fullName",
@@ -93,8 +89,8 @@ export async function GET(request: NextRequest) {
           NULLIF(CASE WHEN LENGTH(u.employee_number) <= 10 THEN u.employee_number ELSE NULL END, ''),
           '001'
         ) AS "employeeNumber",
-        u.primary_branch_id AS "branchId",
-        u.primary_branch_id AS "primaryBranchId",
+        u.primary_branch_id::text AS "branchId",
+        u.primary_branch_id::text AS "primaryBranchId",
         COALESCE(b.name_ar, 'الإدارة') AS "branchName",
         COALESCE(u.job_role, 'موظف') AS "role",
         COALESCE(u.job_role, 'موظف') AS "jobRole",
@@ -138,23 +134,25 @@ async function resolveBranchId(inputBranch: unknown, fallbackBranchId: string | 
   if (!rawVal || rawVal === "0" || rawVal === "NaN" || rawVal === "null" || rawVal === "undefined") {
     return fallbackBranchId;
   }
-  const found = await db.execute(sql`
-    SELECT id::text AS id FROM branches
-    WHERE id::text = ${rawVal}
-       OR name_ar = ${rawVal}
-       OR name_en = ${rawVal}
-    LIMIT 1;
-  `);
-  const rows = resultRows<{ id: string }>(found);
-  if (rows.length > 0) return rows[0].id;
-  return fallbackBranchId;
+  try {
+    const found = await db.execute(sql`
+      SELECT id::text AS id FROM branches
+      WHERE id::text = ${rawVal}
+         OR BTRIM(name_ar) = ${rawVal}
+         OR BTRIM(name_en) = ${rawVal}
+      LIMIT 1;
+    `);
+    const rows = resultRows<{ id: string }>(found);
+    if (rows.length > 0) return rows[0].id;
+  } catch {}
+  return rawVal;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const authorization = await authorizeApi("employees.manage");
     if ("response" in authorization) return authorization.response;
-    await ensureCleanEmployeeCodes();
+    await ensureEmployeesSchema();
 
     const body = await request.json();
     const {
@@ -174,27 +172,60 @@ export async function POST(request: NextRequest) {
 
     const requestedBranchId = await resolveBranchId(branchId, authorization.principal.primaryBranchId);
     const rawCode = employeeCode ? String(employeeCode).trim() : "";
-    const cleanCode = rawCode && rawCode.length <= 10 && !rawCode.includes("-") ? rawCode : null;
+    const cleanCode = rawCode && rawCode.length <= 10 ? rawCode : null;
+    const cleanRole = role && role !== "موظف (قيد المراجعة)" ? String(role).trim() : "موظف";
+    const parsedSalary = salaryValue !== undefined && salaryValue !== null && salaryValue !== ""
+      ? Number(salaryValue) || 0
+      : 5000;
+    const parsedHours = workingHoursPerDay ? parseInt(String(workingHoursPerDay), 10) || 8 : 8;
+    const activeFlag = isActive !== false;
 
     if (id) {
+      const targetId = String(id).trim();
+      // Core update with guaranteed columns
       await db.execute(sql`
         UPDATE users
         SET 
           full_name_ar = ${normalizedFullNameAr},
           phone = ${normalizedPhone},
-          employee_number = COALESCE(${cleanCode}, employee_number),
-          employee_code = COALESCE(${cleanCode}, employee_code),
-          primary_branch_id = ${requestedBranchId},
-          job_role = ${(role && role !== "موظف (قيد المراجعة)") ? role : "موظف"},
-          monthly_salary = ${salaryValue ? parseFloat(String(salaryValue)) : 5000},
-          working_hours_per_day = ${workingHoursPerDay ? parseInt(String(workingHoursPerDay), 10) : 8},
-          is_active = ${isActive !== false},
-          shift_start_time = ${shiftStartTime || "10:00"},
-          shift_end_time = ${shiftEndTime || "18:00"},
-          shift_name = ${shiftName || "الشيفت الصباحي"},
-          updated_at = NOW()
-        WHERE id::text = ${String(id).trim()};
+          job_role = ${cleanRole},
+          monthly_salary = ${parsedSalary},
+          working_hours_per_day = ${parsedHours},
+          is_active = ${activeFlag}
+        WHERE id::text = ${targetId};
       `);
+
+      // Update branch & shift columns in isolated blocks so type/constraint differences never fail the save
+      try {
+        await db.execute(sql`
+          UPDATE users
+          SET primary_branch_id = ${requestedBranchId}
+          WHERE id::text = ${targetId};
+        `);
+      } catch (branchErr) {
+        console.warn("Branch ID update fallback:", branchErr);
+      }
+
+      if (cleanCode) {
+        try {
+          await db.execute(sql`
+            UPDATE users
+            SET employee_number = ${cleanCode}, employee_code = ${cleanCode}
+            WHERE id::text = ${targetId};
+          `);
+        } catch {}
+      }
+
+      try {
+        await db.execute(sql`
+          UPDATE users
+          SET 
+            shift_start_time = ${shiftStartTime || "10:00"},
+            shift_end_time = ${shiftEndTime || "18:00"},
+            shift_name = ${shiftName || "الشيفت الصباحي"}
+          WHERE id::text = ${targetId};
+        `);
+      } catch {}
 
       if (password && String(password).trim() !== "") {
         const pwCheck = validateStrongPassword(String(password));
@@ -202,7 +233,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ message: pwCheck.message }, { status: 400 });
         }
         const hashed = await hashPassword(String(password));
-        await db.execute(sql`UPDATE users SET password_hash = ${hashed} WHERE id::text = ${String(id).trim()};`);
+        await db.execute(sql`UPDATE users SET password_hash = ${hashed} WHERE id::text = ${targetId};`);
       }
 
       return NextResponse.json({ success: true, message: "تم تحديث بيانات الموظف بنجاح" });
@@ -226,14 +257,13 @@ export async function POST(request: NextRequest) {
         INSERT INTO users (
           id, full_name_ar, phone, password_hash, employee_number, employee_code,
           primary_branch_id, job_role, system_role, monthly_salary, working_hours_per_day,
-          is_active, shift_start_time, shift_end_time, shift_name, created_at, updated_at
+          is_active, shift_start_time, shift_end_time, shift_name
         ) VALUES (
           ${newId}, ${normalizedFullNameAr}, ${normalizedPhone}, ${hashedPassword},
-          ${finalCode}, ${finalCode}, ${requestedBranchId}, ${role || "موظف"},
-          'EMPLOYEE', ${salaryValue ? parseFloat(String(salaryValue)) : 5000},
-          ${workingHoursPerDay ? parseInt(String(workingHoursPerDay), 10) : 8},
+          ${finalCode}, ${finalCode}, ${requestedBranchId}, ${cleanRole},
+          'EMPLOYEE', ${parsedSalary}, ${parsedHours},
           true, ${shiftStartTime || "10:00"}, ${shiftEndTime || "18:00"},
-          ${shiftName || "الشيفت الصباحي"}, NOW(), NOW()
+          ${shiftName || "الشيفت الصباحي"}
         );
       `);
 

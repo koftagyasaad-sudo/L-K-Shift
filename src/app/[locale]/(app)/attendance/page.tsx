@@ -165,9 +165,7 @@ export default function AttendancePage() {
         setStatusMsg({ type: 'err', text: errorText });
       },
       {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 15000,
+        enableHighAccuracy: true, timeout: 20000, maximumAge: 10000,
       }
     );
   }, [updateDistance]);

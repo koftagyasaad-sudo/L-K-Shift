@@ -433,7 +433,7 @@ export async function submitAttendance(
     return errorResponse("إحداثيات الفرع غير صالحة.", 500);
   }
   const distance = distanceMeters(input.latitude, input.longitude, branchLatitude, branchLongitude);
-  const allowedRadius = Math.max(100, Number(branch.geofence_radius) || 100) + 100;
+  const allowedRadius = Math.max(1, Number(branch.geofence_radius) || 10);
   if (distance > allowedRadius) {
     return errorResponse(`أنت خارج نطاق الفرع. المسافة ${distance}م (المسموح ${allowedRadius}م).`, 400);
   }
