@@ -88,9 +88,10 @@ export default function LoginPage() {
         user.role === 'SUPER_ADMIN' ||
         String(user.role || '').includes('مدير');
 
+      const activeLocale = (locale === 'ar' || locale === 'en') ? locale : 'ar';
       const targetPath = (isAdmin || perms.length > 0)
-        ? `/${locale}/admin/dashboard`
-        : `/${locale}/attendance`;
+        ? `/${activeLocale}/admin/dashboard`
+        : `/${activeLocale}/attendance`;
 
       window.location.href = targetPath;
     } catch (err: unknown) {
