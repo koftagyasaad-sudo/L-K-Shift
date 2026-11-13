@@ -375,7 +375,7 @@ export default function AttendancePage() {
         const msg = err instanceof Error ? err.message : 'تعذر تسجيل البصمة';
         setStatusMsg({
           type: 'err',
-          text: `❌ لم يتم تسجيل حضورك: ${msg}`,
+          text: `❌ لم يتم تسجيل ${action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'}: ${msg}`,
         });
       }
     } finally {

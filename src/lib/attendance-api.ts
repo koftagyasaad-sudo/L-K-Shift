@@ -504,9 +504,7 @@ export async function submitAttendance(
   if (!existing?.check_in) {
     return errorResponse("يجب تسجيل الحضور أولاً قبل تسجيل الانصراف.", 400);
   }
-  if (existing.check_out) {
-    return errorResponse("تم تسجيل الانصراف مسبقاً.", 400);
-  }
+  // Allow updating check_out with latest punch
   const checkInTime = new Date(existing.check_in);
   if (input.timestamp < checkInTime) {
     return errorResponse("وقت الانصراف يسبق وقت الحضور.", 400);
