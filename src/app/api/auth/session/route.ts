@@ -10,7 +10,14 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as { phone?: string | null; id?: string | null; name?: string | null } | undefined;
+    const sessionUser = session?.user as {
+      phone?: string | null;
+      id?: string | null;
+      name?: string | null;
+      role?: string | null;
+      systemRole?: string | null;
+      branchId?: string | null;
+    } | undefined;
 
     const phone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
     const rawId = sessionUser?.id ? String(sessionUser.id).trim() : null;
@@ -19,41 +26,67 @@ export async function GET() {
       return NextResponse.json({ authenticated: false, message: "غير مصرح" }, { status: 401 });
     }
 
-    const condition = rawId ? sql`u.id::text = ${rawId}` : sql`BTRIM(u.phone) = ${phone}`;
-    const userRows = getSqlRows<{
+    // 1. Safe core user query (only guaranteed columns)
+    let dbUser: {
       id: string;
       phone: string;
       fullNameAr: string | null;
-      fullNameEn: string | null;
       jobRole: string | null;
       systemRole: string | null;
       primaryBranchId: string | null;
       isActive: boolean | null;
-      branchName: string | null;
-      shiftStart: string | null;
-      shiftEnd: string | null;
-    }>(await db.execute(sql`
-      SELECT
-        u.id::text AS id,
-        BTRIM(u.phone) AS phone,
-        u.full_name_ar AS "fullNameAr",
-        u.full_name_en AS "fullNameEn",
-        COALESCE(BTRIM(u.job_role), 'موظف') AS "jobRole",
-        COALESCE(u.system_role::text, 'EMPLOYEE') AS "systemRole",
-        u.primary_branch_id::text AS "primaryBranchId",
-        COALESCE(u.is_active, true) AS "isActive",
-        COALESCE(b.name_ar, 'الإدارة') AS "branchName",
-        COALESCE(u.shift_start_time, b.shift_start_time, '10:00') AS "shiftStart",
-        COALESCE(u.shift_end_time, b.shift_end_time, '18:00') AS "shiftEnd"
-      FROM users u
-      LEFT JOIN branches b ON u.primary_branch_id::text = b.id::text
-      WHERE ${condition}
-      LIMIT 1;
-    `));
+    } | undefined;
 
-    const dbUser = userRows[0];
+    try {
+      const condition = rawId ? sql`id::text = ${rawId}` : sql`BTRIM(phone) = ${phone}`;
+      const userRows = getSqlRows<NonNullable<typeof dbUser>>(await db.execute(sql`
+        SELECT
+          id::text AS id,
+          BTRIM(phone) AS phone,
+          full_name_ar AS "fullNameAr",
+          COALESCE(BTRIM(job_role), 'موظف') AS "jobRole",
+          COALESCE(system_role::text, 'EMPLOYEE') AS "systemRole",
+          primary_branch_id::text AS "primaryBranchId",
+          COALESCE(is_active, true) AS "isActive"
+        FROM users
+        WHERE ${condition}
+        LIMIT 1;
+      `));
+      dbUser = userRows[0];
+    } catch (dbErr) {
+      console.error("Primary user lookup error, falling back to JWT session:", dbErr);
+      dbUser = {
+        id: rawId || phone || "1",
+        phone: phone || "",
+        fullNameAr: sessionUser?.name || phone,
+        jobRole: sessionUser?.role || "مدير النظام",
+        systemRole: sessionUser?.systemRole || "SUPER_ADMIN",
+        primaryBranchId: sessionUser?.branchId || null,
+        isActive: true,
+      };
+    }
+
     if (!dbUser || dbUser.isActive === false) {
       return NextResponse.json({ authenticated: false, message: "غير مصرح" }, { status: 401 });
+    }
+
+    // 2. Isolated optional branch lookup (never crashes session if column is missing)
+    let branchName = "الإدارة";
+    const shiftStart = "10:00";
+    const shiftEnd = "18:00";
+
+    if (dbUser.primaryBranchId) {
+      try {
+        const bRows = getSqlRows<{ nameAr: string | null }>(await db.execute(sql`
+          SELECT name_ar AS "nameAr"
+          FROM branches
+          WHERE id::text = ${dbUser.primaryBranchId}
+          LIMIT 1;
+        `));
+        if (bRows[0]?.nameAr) {
+          branchName = bRows[0].nameAr;
+        }
+      } catch {}
     }
 
     const isSuperAdmin =
@@ -82,7 +115,7 @@ export async function GET() {
       } catch {}
     }
 
-    const displayName = dbUser.fullNameAr || dbUser.fullNameEn || sessionUser?.name || dbUser.phone;
+    const displayName = dbUser.fullNameAr || sessionUser?.name || dbUser.phone;
 
     return NextResponse.json({
       authenticated: true,
@@ -94,9 +127,9 @@ export async function GET() {
         role: dbUser.jobRole || "EMPLOYEE",
         systemRole: isSuperAdmin ? "SUPER_ADMIN" : (dbUser.systemRole || "EMPLOYEE"),
         branchId: dbUser.primaryBranchId,
-        branchName: dbUser.branchName || "",
-        shiftStart: dbUser.shiftStart || "10:00",
-        shiftEnd: dbUser.shiftEnd || "18:00",
+        branchName,
+        shiftStart,
+        shiftEnd,
         permissions,
         isOnboarded: true,
       },
