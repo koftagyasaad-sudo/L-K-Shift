@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { getResilientSessionUser } from "@/lib/resilient-session";
 import { NextResponse } from "next/server";
 import { and, eq, or } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
@@ -73,8 +73,8 @@ function parseBranchIds(value: unknown): string[] {
 export async function authorizeApi(
   requiredPermissions?: string | string[]
 ): Promise<ApiAuthorization> {
-  const session = await getServerSession(authOptions);
-  const sessionUser = session?.user;
+  const sessionUser = await getResilientSessionUser();
+  const session = sessionUser ? { user: sessionUser } : null;
   const sessionPhone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
   const validId = typeof sessionUser?.id === "string" && sessionUser.id.trim()
     ? sessionUser.id.trim()

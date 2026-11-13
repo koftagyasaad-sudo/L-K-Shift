@@ -1,4 +1,4 @@
-import { getServerSession } from "next-auth";
+import { getResilientSessionUser } from "@/lib/resilient-session";
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { authOptions } from "@/lib/auth";
@@ -9,15 +9,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    const sessionUser = session?.user as {
-      phone?: string | null;
-      id?: string | null;
-      name?: string | null;
-      role?: string | null;
-      systemRole?: string | null;
-      branchId?: string | null;
-    } | undefined;
+    const sessionUser = await getResilientSessionUser();
+    const session = sessionUser ? { user: sessionUser } : null;
 
     const phone = sessionUser?.phone ? String(sessionUser.phone).trim() : null;
     const rawId = sessionUser?.id ? String(sessionUser.id).trim() : null;

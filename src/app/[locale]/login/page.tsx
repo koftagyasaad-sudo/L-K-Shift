@@ -45,43 +45,42 @@ export default function LoginPage() {
     }
 
     try {
-      const result = await signIn('credentials', {
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          phone: submittedPhone,
+          password: submittedPassword,
+        }),
+      });
+
+      const loginData = await loginRes.json();
+      if (!loginRes.ok || !loginData.success) {
+        throw new Error(loginData.message || (isRtl ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : 'Invalid credentials'));
+      }
+
+      // Also call NextAuth signIn in the background without blocking
+      signIn('credentials', {
         phone: submittedPhone,
         username: submittedPhone,
         password: submittedPassword,
         redirect: false,
-      });
+      }).catch(() => {});
 
-      if (!result || result.error) {
-        throw new Error(isRtl ? 'رقم الهاتف أو كلمة المرور غير صحيحة' : 'Invalid credentials');
-      }
-
-      const res = await fetch('/api/auth/session', {
-        cache: 'no-store',
-        credentials: 'include',
-      });
-      const data = await res.json();
-
-      const user = data?.user || {
-        id: submittedPhone,
-        name: submittedPhone,
-        phone: submittedPhone,
-        role: 'مدير النظام',
-        systemRole: 'SUPER_ADMIN',
-        permissions: ['*'],
-      };
+      const user = loginData.user;
 
       localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userId', String(user.id || '1'));
+      localStorage.setItem('userId', String(user.id));
       localStorage.setItem('userName', String(user.name || submittedPhone));
       localStorage.setItem('userPhone', String(user.phone || submittedPhone));
       localStorage.setItem('userRole', String(user.role || 'مدير النظام'));
       localStorage.setItem('userBranchId', user.branchId ? String(user.branchId) : '');
       localStorage.setItem('userBranchName', String(user.branchName || 'الإدارة'));
-      localStorage.setItem('userPermissions', JSON.stringify(user.permissions || ['*']));
+      localStorage.setItem('userPermissions', JSON.stringify(user.permissions || []));
       localStorage.setItem('isOnboarded', 'true');
 
-      const perms: string[] = Array.isArray(user.permissions) ? user.permissions : ['*'];
+      const perms: string[] = Array.isArray(user.permissions) ? user.permissions : [];
       const isAdmin =
         perms.includes('*') ||
         user.systemRole === 'SUPER_ADMIN' ||
@@ -93,7 +92,7 @@ export default function LoginPage() {
         ? `/${locale}/admin/dashboard`
         : `/${locale}/attendance`;
 
-      window.location.assign(targetPath);
+      window.location.href = targetPath;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : (isRtl ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login failed'));
       setLoading(false);
