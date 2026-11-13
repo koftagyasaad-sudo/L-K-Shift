@@ -110,7 +110,7 @@ export async function authorizeApi(
   let permissions: string[] = [];
   let branchScope = "OWN_BRANCH";
   let allowedBranchIds: string[] = [];
-  if (user.systemRole === "SUPER_ADMIN") {
+  if (user.systemRole === "SUPER_ADMIN" || user.jobRole === "مدير النظام" || user.jobRole === "SUPER_ADMIN") {
     permissions = ["*"];
     branchScope = "ALL";
   } else {
