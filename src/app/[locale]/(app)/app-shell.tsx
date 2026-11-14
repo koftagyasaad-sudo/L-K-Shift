@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { MobileBottomNav } from '@/components/layout/Sidebar';
 import GlobalHeader from '@/components/global-header';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
@@ -9,7 +9,7 @@ import LiveNotificationListener from '@/components/LiveNotificationListener';
 import { syncOfflineAttendance } from '@/offlineSync';
 import TopNavigationLoader from '@/components/layout/TopNavigationLoader';
 import LaunchSplashScreen from '@/components/LaunchSplashScreen';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -17,25 +17,107 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const params = useParams();
+  const pathname = usePathname() || '';
   const locale = (params?.locale as string) || 'ar';
   const isRtl = locale === 'ar';
+
   const [compactMode, setCompactMode] = useState<boolean>(false);
+  const [authStatus, setAuthStatus] = useState<'CHECKING' | 'AUTHORIZED' | 'UNAUTHORIZED'>('CHECKING');
 
   useEffect(() => {
-    void syncOfflineAttendance();
+    let active = true;
+
+    const verifyStrictAuth = async () => {
+      const isAuthFlag = localStorage.getItem('isAuthenticated') === 'true';
+      const storedUserId = (localStorage.getItem('userId') || '').trim();
+      const storedPhone = (localStorage.getItem('userPhone') || '').trim();
+
+      // 1. Immediate block if device has no local login record at all
+      if (!isAuthFlag || !storedUserId || !storedPhone) {
+        if (active) {
+          setAuthStatus('UNAUTHORIZED');
+          window.location.replace(`/${locale}/login`);
+        }
+        return;
+      }
+
+      // 2. If offline, verify that this user actually exists in the encrypted SHA-256 offline vault
+      if (!navigator.onLine) {
+        try {
+          const vaultRaw = localStorage.getItem('lk_offline_vault');
+          const vault = vaultRaw ? JSON.parse(vaultRaw) : {};
+          if (vault[storedPhone] && String(vault[storedPhone]?.user?.id) === storedUserId) {
+            if (active) setAuthStatus('AUTHORIZED');
+            return;
+          }
+        } catch {}
+        if (active) {
+          setAuthStatus('UNAUTHORIZED');
+          window.location.replace(`/${locale}/login`);
+        }
+        return;
+      }
+
+      // 3. When online, verify active session & account approval status with the server
+      try {
+        const res = await fetch('/api/auth/session', { cache: 'no-store', credentials: 'include' });
+        if (!res.ok) {
+          throw new Error('Unauthorized session');
+        }
+        const data = await res.json();
+        const serverUser = data?.user;
+        if (!serverUser || !serverUser.id || serverUser.isActive === false) {
+          throw new Error('No active server user');
+        }
+        if (active) {
+          setAuthStatus('AUTHORIZED');
+          void syncOfflineAttendance();
+        }
+      } catch {
+        // Wipe invalid/expired session and force redirect to login
+        const v = localStorage.getItem('lk_offline_vault');
+        const b = localStorage.getItem('lk_cached_branches');
+        localStorage.clear();
+        if (v) localStorage.setItem('lk_offline_vault', v);
+        if (b) localStorage.setItem('lk_cached_branches', b);
+        if (active) {
+          setAuthStatus('UNAUTHORIZED');
+          window.location.replace(`/${locale}/login`);
+        }
+      }
+    };
+
+    void verifyStrictAuth();
+
     const onOnline = () => { void syncOfflineAttendance(); };
     window.addEventListener('online', onOnline);
     const saved = localStorage.getItem('lk_compact_view');
     if (saved === 'true') {
       setCompactMode(true);
     }
-  }, []);
+
+    return () => {
+      active = false;
+      window.removeEventListener('online', onOnline);
+    };
+  }, [locale, pathname]);
 
   const toggleCompact = () => {
     const next = !compactMode;
     setCompactMode(next);
     localStorage.setItem('lk_compact_view', String(next));
   };
+
+  // Do NOT mount children (so AttendancePage NEVER requests Camera or GPS) until authStatus === 'AUTHORIZED'
+  if (authStatus !== 'AUTHORIZED') {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#181d23] text-white" dir={isRtl ? 'rtl' : 'ltr'}>
+        <LaunchSplashScreen />
+        <Loader2 className="h-7 w-7 animate-spin text-[#57cef8]" />
+        <p className="mt-3 text-xs font-bold text-slate-300">جاري التحقق من تسجيل الدخول...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -47,7 +129,6 @@ export default function AppShell({ children }: AppShellProps) {
       <ServiceWorkerRegister />
       <LiveNotificationListener />
       <GlobalHeader />
-      {/* Subtle icon-only toggle at top-left/right below header (z-10 so it NEVER covers any modal) */}
       <button
         type="button"
         onClick={toggleCompact}

@@ -1,12 +1,9 @@
-const CACHE_NAME = 'lk-shift-v2026-sleek-offline-v27';
-const APP_SHELL_URLS = [
-  '/ar/attendance',
-  '/ar/requests',
-  '/ar/employee/salary',
-  '/ar/profile',
+const CACHE_NAME = 'lk-shift-v2026-strict-auth-v28';
+const PUBLIC_SHELL_URLS = [
   '/ar/login',
   '/manifest.json',
-  '/Logo.png?v=25',
+  '/Logo.png?v=28',
+  '/icon-192.png?v=28',
 ];
 
 self.addEventListener('install', (event) => {
@@ -14,8 +11,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.allSettled(
-        APP_SHELL_URLS.map((url) =>
-          fetch(url, { credentials: 'include' }).then((res) => {
+        PUBLIC_SHELL_URLS.map((url) =>
+          fetch(url).then((res) => {
             if (res.ok) return cache.put(url, res);
           })
         )
@@ -43,9 +40,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // For API GET requests (like /api/branches), use Network-First and fall back to cached response when offline
   if (url.pathname.startsWith('/api/')) {
-    if (url.pathname === '/api/branches' || url.pathname === '/api/auth/session') {
+    if (url.pathname === '/api/branches') {
       event.respondWith(
         fetch(req)
           .then((res) => {
@@ -61,7 +57,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For Next.js static chunks (_next/static), images, fonts: Cache-First with Network fallback
   if (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.endsWith('.png') ||
@@ -87,7 +82,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For HTML page navigations & RSC payloads: Network-First, fallback to cached page or /ar/attendance shell when offline
   event.respondWith(
     fetch(req)
       .then((res) => {
@@ -102,8 +96,6 @@ self.addEventListener('fetch', (event) => {
         if (exactMatch) return exactMatch;
         const pathOnlyMatch = await caches.match(url.pathname);
         if (pathOnlyMatch) return pathOnlyMatch;
-        const attendanceFallback = await caches.match('/ar/attendance');
-        if (attendanceFallback) return attendanceFallback;
         return caches.match('/ar/login');
       })
   );

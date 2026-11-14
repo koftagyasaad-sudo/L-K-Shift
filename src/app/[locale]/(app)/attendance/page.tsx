@@ -198,8 +198,13 @@ export default function AttendancePage() {
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    const uid = localStorage.getItem('userId') || '';
+    const uid = (localStorage.getItem('userId') || '').trim();
     const uname = localStorage.getItem('userName') || '';
+    const isAuth = localStorage.getItem('isAuthenticated') === 'true';
+    if (!isAuth || !uid) {
+      window.location.replace('/' + locale + '/login');
+      return;
+    }
     setUserId(uid);
     setUserName(uname);
 
@@ -285,6 +290,9 @@ export default function AttendancePage() {
   }, [stopCamera]);
 
   useEffect(() => {
+    const uid = (localStorage.getItem('userId') || '').trim();
+    const isAuth = localStorage.getItem('isAuthenticated') === 'true';
+    if (!isAuth || !uid) return;
     void startCamera();
     return () => {
       stopCamera();
