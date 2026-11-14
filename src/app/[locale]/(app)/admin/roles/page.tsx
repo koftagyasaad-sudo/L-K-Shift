@@ -38,22 +38,44 @@ interface BranchItem {
 type BranchScope = 'ALL' | 'OWN_BRANCH' | 'CUSTOM';
 
 const SYSTEM_PERMISSIONS = [
-  { id: 'dashboard.view', label: 'لوحة التحكم والتقارير العامة', group: 'عام' },
-  { id: 'dashboard.analytics', label: 'التحليلات المالية والتشغيلية المتقدمة', group: 'عام' },
-  { id: 'attendance.view', label: 'تسجيل الحضور والانصراف الميداني (GPS)', group: 'الحضور' },
-  { id: 'attendance.review', label: 'مراجعة الحضور والرواتب لكافة الفروع', group: 'الحضور' },
-  { id: 'attendance.zk_sheet', label: 'تفريغ وطباعة شيتات ماكينة ZK ومسير الرواتب', group: 'الحضور' },
-  { id: 'employees.view', label: 'عرض شؤون الموظفين وبياناتهم', group: 'الموظفين' },
-  { id: 'employees.manage', label: 'إضافة وتعديل بيانات الموظفين والمسلسل الوظيفي', group: 'الموظفين' },
-  { id: 'hr_files.view', label: 'استعراض وطباعة ملفات واستمارات الـ HR الرسمية', group: 'الموظفين' },
-  { id: 'branches.view', label: 'استعراض الفروع ومواقعها الجغرافية', group: 'الفروع' },
-  { id: 'branches.manage', label: 'إضافة وتعديل وحذف الفروع ونطاق الـ Geofence', group: 'الفروع' },
-  { id: 'roles.view', label: 'استعراض الأدوار وقوائم الصلاحيات', group: 'الصلاحيات' },
-  { id: 'roles.manage', label: 'إدارة وتعديل وتخصيص صلاحيات الأدوار', group: 'الصلاحيات' },
-  { id: 'recruitment.view', label: 'فرز واستعراض استمارات التوظيف والتقديم', group: 'التوظيف' },
-  { id: 'recruitment.manage', label: 'فحص واعتماد أو رفض طلبات التوظيف', group: 'التوظيف' },
-  { id: 'leaves.approve', label: 'اعتماد الإجازات والأذونات والسلف', group: 'الطلبات' },
-  { id: 'staff_requests.manage', label: 'تقديم واعتماد طلبات احتياج العمالة', group: 'الطلبات' },
+  // 1. قائمة الداشبورد والنظرة العامة (عناصر تفصيلية داخل القائمة)
+  { id: 'dashboard.view', label: 'فتح شاشة النظرة العامة (الداشبورد الرئيسية)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.priorities_bar', label: 'داخل الداشبورد: إظهار شريط (متابعة اليوم والاختصارات)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.cards.branches', label: 'داخل الداشبورد: إظهار كارت إحصائية (الفروع)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.cards.employees', label: 'داخل الداشبورد: إظهار كارت إحصائية (الموظفون)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.cards.attendance', label: 'داخل الداشبورد: إظهار كارت (مراجعة الحضور)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.cards.requests', label: 'داخل الداشبورد: إظهار كارت (طلبات الموظفين)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.cards.payroll', label: 'داخل الداشبورد: إظهار كارت (الرواتب والمسيرات)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.cards.roles', label: 'داخل الداشبورد: إظهار كارت (الأدوار والصلاحيات)', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.branches_table', label: 'داخل الداشبورد: إظهار جدول تفاصيل الفروع أسفل الصفحة', group: '1. قائمة الداشبورد والنظرة العامة' },
+  { id: 'dashboard.analytics', label: 'داخل الداشبورد: التحليلات المالية والتشغيلية المتقدمة', group: '1. قائمة الداشبورد والنظرة العامة' },
+
+  // 2. قائمة الحضور والانصراف والرواتب
+  { id: 'attendance.view', label: 'فتح صفحة تسجيل الحضور والانصراف الميداني (GPS + كاميرا)', group: '2. قائمة الحضور والرواتب' },
+  { id: 'attendance.review', label: 'فتح شاشة مراجعة سجلات الحضور والانصراف والصور', group: '2. قائمة الحضور والرواتب' },
+  { id: 'attendance.override', label: 'داخل مراجعة الحضور: السماح بتعديل البصمات يدوياً واعتمادها', group: '2. قائمة الحضور والرواتب' },
+  { id: 'attendance.zk_sheet', label: 'داخل مراجعة الحضور: تفريغ وطباعة شيتات ZK ومسير الرواتب', group: '2. قائمة الحضور والرواتب' },
+  { id: 'payroll.view', label: 'داخل مسير الرواتب: الاطلاع على الرواتب الأساسية والخصومات المالية', group: '2. قائمة الحضور والرواتب' },
+
+  // 3. قائمة شؤون الموظفين والـ HR
+  { id: 'employees.view', label: 'فتح قائمة الموظفين والاطلاع على بياناتهم الأساسية', group: '3. قائمة شؤون الموظفين والـ HR' },
+  { id: 'employees.manage', label: 'داخل الموظفين: إضافة موظف وتعديل الدور والفرع والراتب وتفعيل الحساب', group: '3. قائمة شؤون الموظفين والـ HR' },
+  { id: 'hr_files.view', label: 'داخل الموظفين: فتح وطباعة استمارة الـ HR الكاملة (زر HR)', group: '3. قائمة شؤون الموظفين والـ HR' },
+
+  // 4. قائمة الفروع والنطاق الجغرافي
+  { id: 'branches.view', label: 'عرض بيانات الفرع المخصص فقط (قراءة فقط بدون تعديل)', group: '4. قائمة الفروع والنطاق الجغرافي' },
+  { id: 'branches.manage', label: 'إضافة فرع جديد أو تعديل إحداثيات ونطاق ومواعيد الفروع', group: '4. قائمة الفروع والنطاق الجغرافي' },
+
+  // 5. قائمة الطلبات والشكاوى والجزاءات
+  { id: 'leaves.view', label: 'عرض قائمة طلبات الإجازات والأذونات والسلف الواردة', group: '5. قائمة الطلبات والجزاءات' },
+  { id: 'leaves.approve', label: 'داخل الطلبات: زر قبول أو رفض الإجازات والأذونات والسلف مع كتابة السبب', group: '5. قائمة الطلبات والجزاءات' },
+  { id: 'staff_requests.manage', label: 'داخل الطلبات: إرسال واعتماد طلبات احتياج العمالة وتوقيع الجزاءات', group: '5. قائمة الطلبات والجزاءات' },
+
+  // 6. قائمة الأدوار والتوظيف
+  { id: 'roles.view', label: 'عرض قائمة الأدوار الوظيفية والصلاحيات', group: '6. قائمة الأدوار والتوظيف' },
+  { id: 'roles.manage', label: 'إضافة وتعديل وحذف الأدوار وتخصيص الصلاحيات الدقيقة', group: '6. قائمة الأدوار والتوظيف' },
+  { id: 'recruitment.view', label: 'عرض استمارات التقديم والتوظيف الواردة', group: '6. قائمة الأدوار والتوظيف' },
+  { id: 'recruitment.manage', label: 'داخل التوظيف: قبول أو رفض المتقدمين للوظائف', group: '6. قائمة الأدوار والتوظيف' },
 ];
 
 function parsePermissions(perms: unknown): string[] {
@@ -632,28 +654,55 @@ export default function RolesManagementPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto p-1 custom-scrollbar">
-                  {SYSTEM_PERMISSIONS.map((perm) => {
-                    const isChecked = selectedPermissions.includes(perm.id);
+                <div className="space-y-4 max-h-96 overflow-y-auto p-1 custom-scrollbar">
+                  {Array.from(new Set(SYSTEM_PERMISSIONS.map((p) => p.group))).map((groupName) => {
+                    const groupItems = SYSTEM_PERMISSIONS.filter((p) => p.group === groupName);
+                    const allGroupSelected = groupItems.every((p) => selectedPermissions.includes(p.id));
+                    const toggleGroupAll = () => {
+                      if (allGroupSelected) {
+                        setSelectedPermissions((prev) => prev.filter((id) => !groupItems.some((g) => g.id === id)));
+                      } else {
+                        setSelectedPermissions((prev) => Array.from(new Set([...prev, ...groupItems.map((g) => g.id)])));
+                      }
+                    };
                     return (
-                      <div
-                        key={perm.id}
-                        onClick={() => togglePermission(perm.id)}
-                        className={`flex items-center justify-between p-3 rounded-2xl border text-xs cursor-pointer transition ${
-                          isChecked
-                            ? 'bg-orange-50 border-orange-400 text-slate-900 font-bold shadow-xs'
-                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <span className="leading-snug">{perm.label}</span>
-                        <div
-                          className={`w-5 h-5 rounded-lg flex items-center justify-center border shrink-0 mr-2 transition ${
-                            isChecked
-                              ? 'bg-orange-500 border-orange-500 text-white'
-                              : 'border-slate-300 bg-white'
-                          }`}
-                        >
-                          {isChecked && <Check size={13} strokeWidth={3} />}
+                      <div key={groupName} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                          <span className="text-xs font-extrabold text-slate-900">{groupName}</span>
+                          <button
+                            type="button"
+                            onClick={toggleGroupAll}
+                            className="text-[11px] font-bold text-[#0099cc] hover:underline cursor-pointer"
+                          >
+                            {allGroupSelected ? 'إلغاء تحديد عناصر القائمة' : 'تحديد كل عناصر القائمة'}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {groupItems.map((perm) => {
+                            const isChecked = selectedPermissions.includes(perm.id);
+                            return (
+                              <div
+                                key={perm.id}
+                                onClick={() => togglePermission(perm.id)}
+                                className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition ${
+                                  isChecked
+                                    ? 'bg-sky-50 border-[#57cef8] text-slate-900 font-bold shadow-xs'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                <span className="leading-snug">{perm.label}</span>
+                                <div
+                                  className={`w-5 h-5 rounded-lg flex items-center justify-center border shrink-0 mr-2 transition ${
+                                    isChecked
+                                      ? 'bg-[#57cef8] border-[#57cef8] text-[#181d23]'
+                                      : 'border-slate-300 bg-white'
+                                  }`}
+                                >
+                                  {isChecked && <Check size={13} strokeWidth={3} />}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );

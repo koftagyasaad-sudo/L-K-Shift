@@ -91,6 +91,28 @@ export async function GET() {
         ORDER BY id ASC;
       `)
     );
+
+    // Check if logged-in user has restricted branch scope
+    const auth = await authorizeApi();
+    if ("principal" in auth && auth.principal) {
+      const p = auth.principal;
+      if (p.systemRole !== "SUPER_ADMIN" && p.jobRole !== "مدير النظام" && p.branchScope !== "ALL") {
+        const scoped = rows.filter((b: Record<string, unknown>) => {
+          const bid = String(b.id || "");
+          if (p.branchScope === "CUSTOM" && p.allowedBranchIds.length > 0) {
+            return p.allowedBranchIds.includes(bid);
+          }
+          if (p.primaryBranchId) {
+            return bid === String(p.primaryBranchId);
+          }
+          return true;
+        });
+        if (scoped.length > 0) {
+          return NextResponse.json(scoped, { status: 200 });
+        }
+      }
+    }
+
     return NextResponse.json(rows, { status: 200 });
   } catch (error) {
     console.error("Branches GET error:", error);
@@ -100,7 +122,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await authorizeApi(["branches.manage", "branches.view"]);
+    const auth = await authorizeApi("branches.manage");
     if ("response" in auth) return auth.response;
 
     const colMap = await getBranchColumns();

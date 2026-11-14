@@ -61,6 +61,8 @@ export default function AttendancePage() {
   const [lastCapturedPhoto, setLastCapturedPhoto] = useState<string>('');
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [gpsPermissionDenied, setGpsPermissionDenied] = useState<boolean>(false);
+  const [showPermHelpModal, setShowPermHelpModal] = useState<boolean>(false);
 
   const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371000;
@@ -169,6 +171,7 @@ export default function AttendancePage() {
         const lng = position.coords.longitude;
         const acc = Math.round(position.coords.accuracy);
 
+        setGpsPermissionDenied(false);
         setUserCoords({ lat, lng });
         setLocationAccuracy(acc);
         setLocating(false);
@@ -177,7 +180,8 @@ export default function AttendancePage() {
         setLocating(false);
         let errorText = 'تعذر تحديد موقعك. يرجى تفعيل الـ GPS والسماح بالوصول للموقع.';
         if (error.code === error.PERMISSION_DENIED) {
-          errorText = 'تم رفض إذن الوصول للموقع. يرجى تفعيل الإذن من إعدادات المتصفح.';
+          setGpsPermissionDenied(true);
+          errorText = 'تم رفض إذن الوصول للموقع (GPS). اضغط هنا على هذه الرسالة لتفعيل الصلاحية الآن.';
         }
         setStatusMsg({ type: 'err', text: errorText });
       },
@@ -325,6 +329,44 @@ export default function AttendancePage() {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
     setLastCapturedPhoto(dataUrl);
     return dataUrl;
+  };
+
+  
+  const handleInteractivePermissionFix = async () => {
+    setStatusMsg(null);
+    let stillBlocked = false;
+
+    // 1. Try requesting GPS immediately
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsPermissionDenied(false);
+          setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setLocationAccuracy(Math.round(pos.coords.accuracy));
+          setLocating(false);
+        },
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            setGpsPermissionDenied(true);
+            stillBlocked = true;
+            setShowPermHelpModal(true);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
+    // 2. Try requesting Camera immediately
+    try {
+      cameraRequestRef.current = false;
+      await startCamera();
+    } catch {
+      stillBlocked = true;
+    }
+
+    if (cameraPermission === 'denied' || gpsPermissionDenied || stillBlocked) {
+      setShowPermHelpModal(true);
+    }
   };
 
   const handleAttendanceAction = async (action: 'CHECK_IN' | 'CHECK_OUT') => {
@@ -479,14 +521,30 @@ export default function AttendancePage() {
       {/* رسالة التأكيد الخضراء أو الحمراء الواضحة */}
       {statusMsg && (
         <div
-          className={`p-4 rounded border-2 flex items-center gap-3 text-sm font-extrabold shadow-md ${
+          onClick={() => {
+            if (statusMsg.type === 'err') void handleInteractivePermissionFix();
+          }}
+          role={statusMsg.type === 'err' ? 'button' : undefined}
+          tabIndex={statusMsg.type === 'err' ? 0 : undefined}
+          className={`p-4 rounded border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm font-extrabold shadow-md transition ${
             statusMsg.type === 'ok'
               ? 'bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-300'
-              : 'bg-rose-500/15 border-rose-500 text-rose-700 dark:text-rose-300'
+              : 'bg-rose-500/15 border-rose-500 text-rose-700 dark:text-rose-300 cursor-pointer hover:bg-rose-500/25'
           }`}
         >
-          {statusMsg.type === 'ok' ? <CheckCircle2 size={22} className="shrink-0 text-emerald-500" /> : <AlertCircle size={22} className="shrink-0 text-rose-500" />}
-          <span className="leading-relaxed">{statusMsg.text}</span>
+          <div className="flex items-center gap-3">
+            {statusMsg.type === 'ok' ? (
+              <CheckCircle2 size={22} className="shrink-0 text-emerald-500" />
+            ) : (
+              <AlertCircle size={22} className="shrink-0 text-rose-500 animate-pulse" />
+            )}
+            <span className="leading-relaxed">{statusMsg.text}</span>
+          </div>
+          {statusMsg.type === 'err' && (
+            <span className="inline-flex items-center justify-center shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-extrabold text-white shadow-xs">
+              اضغط هنا لمنح الصلاحية وتفعيلها 🔓
+            </span>
+          )}
         </div>
       )}
 
@@ -587,7 +645,7 @@ export default function AttendancePage() {
               </p>
               <button
                 type="button"
-                onClick={() => void startCamera()}
+                onClick={() => void handleInteractivePermissionFix()}
                 className="rounded bg-[#57cef8] px-4 py-1.5 text-xs font-bold text-[#181d23]"
               >
                 تشغيل الكاميرا

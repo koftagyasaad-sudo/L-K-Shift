@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePaginatedItems, PaginationControls } from '@/components/ui/PaginationControls';
+import { Lock } from 'lucide-react';
 
 interface DashboardBranch {
   id: string;
@@ -21,9 +22,11 @@ interface DashboardBranch {
 export default function DashboardBranchesTable({
   branches,
   locale,
+  canManageBranches = false,
 }: {
   branches: DashboardBranch[];
   locale: string;
+  canManageBranches?: boolean;
 }) {
   const isRtl = locale === 'ar';
   const branchPage = usePaginatedItems(branches, locale);
@@ -32,7 +35,7 @@ export default function DashboardBranchesTable({
     return (
       <div className="p-12 text-center text-slate-600 dark:text-zinc-400">
         <p className="text-sm font-medium">
-          {isRtl ? 'لا توجد فروع مسجلة حتى الآن.' : 'No branches found.'}
+          {isRtl ? 'لا توجد فروع مخصصة لحسابك حتى الآن.' : 'No branches assigned.'}
         </p>
       </div>
     );
@@ -48,7 +51,7 @@ export default function DashboardBranchesTable({
               <th className="px-6 py-4 font-semibold">{isRtl ? 'العنوان' : 'Address'}</th>
               <th className="px-6 py-4 font-semibold">{isRtl ? 'نصف القطر (GPS)' : 'Geofence'}</th>
               <th className="px-6 py-4 font-semibold">{isRtl ? 'الحالة' : 'Status'}</th>
-              <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
+              <th className="px-6 py-4 font-semibold text-center">{isRtl ? 'الصلاحية / الإجراء' : 'Access'}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-white/[0.06]">
@@ -67,13 +70,13 @@ export default function DashboardBranchesTable({
                     {branch.address || '—'}
                   </td>
                   <td className="px-6 py-4 font-mono text-xs tabular-nums text-slate-600 dark:text-zinc-400">
-                    {branch.radiusMeters || branch.geofenceRadius || branch.geofence_radius || 100} م
+                    {branch.radiusMeters || branch.geofenceRadius || branch.geofence_radius || 10}م
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                      className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold ${
                         branch.isActive ?? branch.is_active ?? true
-                          ? 'bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-zinc-300'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                           : 'bg-slate-100 text-slate-500 dark:bg-white/[0.04] dark:text-zinc-500'
                       }`}
                     >
@@ -84,13 +87,20 @@ export default function DashboardBranchesTable({
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <Link
-                      href={`/${locale}/admin/branches/${branch.id}`}
-                      prefetch
-                      className="text-xs font-medium text-slate-600 hover:text-orange-600 hover:underline dark:text-zinc-300 dark:hover:text-orange-500"
-                    >
-                      {isRtl ? 'تعديل' : 'Edit'}
-                    </Link>
+                    {canManageBranches ? (
+                      <Link
+                        href={`/${locale}/admin/branches`}
+                        prefetch
+                        className="text-xs font-bold text-[#0099cc] hover:underline dark:text-[#57cef8]"
+                      >
+                        {isRtl ? 'تعديل الفرع' : 'Edit'}
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400">
+                        <Lock className="h-3 w-3" />
+                        <span>{isRtl ? 'للعرض فقط' : 'Read Only'}</span>
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
