@@ -24,8 +24,8 @@ export const metadata: Metadata = {
     title: 'L-K Shift',
   },
   icons: {
-    icon: '/icon-build.svg',
-    apple: '/icon-build.svg',
+    icon: '/Logo.png?v=28',
+    apple: '/Logo.png?v=28',
   },
 };
 

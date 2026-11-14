@@ -240,7 +240,7 @@ export default function GlobalHeader() {
     <header className="sticky top-0 z-30 w-full border-b border-slate-200/90 bg-white/90 backdrop-blur-xl text-slate-900 dark:border-white/[0.08] dark:bg-[#181d23]/95 dark:text-zinc-100">
       <div className="mx-auto flex h-14 w-full min-w-0 max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:px-8">
         <Link href={`/${locale}/attendance`} className="flex shrink-0 items-center gap-2" aria-label="L-K Shift">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#57cef8] text-xs font-black tracking-tight text-[#181d23] shadow-xs">
+          <span dir="ltr" className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#57cef8] text-xs font-black tracking-tight text-[#181d23] shadow-xs">
             LK
           </span>
           <span className="hidden text-sm font-extrabold tracking-tight text-slate-900 dark:text-white sm:inline">

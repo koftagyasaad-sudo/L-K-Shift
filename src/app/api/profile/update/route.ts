@@ -1,3 +1,4 @@
+import { hashPassword as hashUnifiedPassword, verifyPassword as verifyUnifiedPassword } from '@/lib/passwords';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { sql } from 'drizzle-orm';
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest) {
       const trimmedCurrentPass = currentPassword ? currentPassword.trim() : '';
 
       // 1. التحقق من كلمة المرور الحالية (سواء قديمة نصية أو مشفرة)
-      const isCurrentCorrect = verifyPassword(trimmedCurrentPass, existingPasswordHash);
+      const isCurrentCorrect = await verifyUnifiedPassword(trimmedCurrentPass, existingPasswordHash);
       if (!isCurrentCorrect) {
         return NextResponse.json({
           message: 'كلمة المرور الحالية غير صحيحة، يرجى التأكد وإعادة المحاولة.',
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
       }
 
       // 3. التشفير قبل الحفظ
-      finalPasswordHash = hashPassword(trimmedNewPass);
+      finalPasswordHash = await hashUnifiedPassword(trimmedNewPass);
     }
 
     const gradYearNum = graduationYear ? parseInt(graduationYear, 10) : null;

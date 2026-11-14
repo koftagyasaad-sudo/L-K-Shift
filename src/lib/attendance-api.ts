@@ -380,6 +380,13 @@ export async function submitAttendance(
   input: AttendanceInput
 ): Promise<NextResponse> {
   await ensureAttendancePhotoCol();
+  const nowMs = Date.now();
+  const punchMs = input.timestamp instanceof Date ? input.timestamp.getTime() : new Date(input.timestamp).getTime();
+  const MAX_OFFLINE_AGE_MS = 48 * 60 * 60 * 1000; // 48 hours max offline queue age
+  const MAX_FUTURE_DRIFT_MS = 10 * 60 * 1000; // 10 minutes max clock drift
+  if (Number.isNaN(punchMs) || punchMs > nowMs + MAX_FUTURE_DRIFT_MS || punchMs < nowMs - MAX_OFFLINE_AGE_MS) {
+    return errorResponse("توقيت البصمة غير صالح أو متلاعب بساعة الهاتف.", 400);
+  }
   const canOverride = hasApiPermission(principal, "attendance.override");
   if (!input.photoUrl || !isValidAttendancePhoto(input.photoUrl)) {
     return errorResponse("صورة الحضور مطلوبة وصالحة لإتمام العملية.", 400);

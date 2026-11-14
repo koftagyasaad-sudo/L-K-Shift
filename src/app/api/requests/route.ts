@@ -58,7 +58,9 @@ export async function GET(request: NextRequest) {
 
     const principal = authorization.principal;
     const { searchParams } = new URL(request.url);
-    const requestedUserId = searchParams.get("userId")?.trim() || null;
+    const rawReqUserId = searchParams.get("userId")?.trim() || null;
+    const isReviewer = principal.systemRole === "SUPER_ADMIN" || principal.jobRole.includes("مدير") || principal.jobRole.toUpperCase().includes("HR") || principal.jobRole.includes("موارد");
+    const requestedUserId = isReviewer ? rawReqUserId : String(principal.id);
 
     const raw = await db.execute(sql`
       SELECT 

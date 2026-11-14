@@ -316,7 +316,7 @@ export default function LoginPage() {
             <div className="absolute h-16 w-16 rounded-2xl bg-[#57cef8]/20 blur-md animate-pulse" />
             <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-[#57cef8] bg-[#232a32] shadow-lg transition-transform duration-300 hover:scale-105">
               <div className="flex flex-col items-center">
-                <div className="flex items-baseline text-xl font-black tracking-tighter leading-none">
+                <div className="flex items-baseline text-xl font-black tracking-tighter leading-none" dir="ltr">
                   <span className="text-white">L</span>
                   <span className="text-[#57cef8]">K</span>
                 </div>
