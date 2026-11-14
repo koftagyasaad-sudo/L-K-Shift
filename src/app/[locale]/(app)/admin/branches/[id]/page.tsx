@@ -18,6 +18,7 @@ interface ManagerOption {
   role?: string;
 }
 
+// Guarded by branches.manage permission
 export default function EditBranchPage({ params }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
