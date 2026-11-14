@@ -2,7 +2,7 @@
   "name": "L-K Shift - نظام إدارة الحضور والورديات",
   "short_name": "L-K Shift",
   "description": "منظومة متكاملة لإدارة الحضور الذكي والورديات بالـ GPS",
-  "start_url": "/ar/login",
+  "start_url": "/ar/attendance",
   "scope": "/",
   "display": "standalone",
   "background_color": "#181d23",
@@ -12,16 +12,16 @@
   "lang": "ar",
   "icons": [
     {
-      "src": "/Logo.png?v=25",
+      "src": "/icon-192.png?v=27",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Logo.png?v=25",
+      "src": "/Logo.png?v=27",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

@@ -8,6 +8,7 @@ import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import LiveNotificationListener from '@/components/LiveNotificationListener';
 import { syncOfflineAttendance } from '@/offlineSync';
 import TopNavigationLoader from '@/components/layout/TopNavigationLoader';
+import LaunchSplashScreen from '@/components/LaunchSplashScreen';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface AppShellProps {
@@ -41,6 +42,7 @@ export default function AppShell({ children }: AppShellProps) {
       className={`app-shell ${compactMode ? 'lk-compact-view' : 'lk-expanded-view'} relative flex min-h-screen w-full min-w-0 max-w-full flex-col overflow-x-hidden bg-[#f2f3f5] text-slate-900 dark:bg-[#181d23] dark:text-zinc-100`}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      <LaunchSplashScreen />
       <TopNavigationLoader />
       <ServiceWorkerRegister />
       <LiveNotificationListener />

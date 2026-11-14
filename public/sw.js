@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lk-shift-v2026-offline-pwa-v26';
+const CACHE_NAME = 'lk-shift-v2026-sleek-offline-v27';
 const APP_SHELL_URLS = [
   '/ar/attendance',
   '/ar/requests',

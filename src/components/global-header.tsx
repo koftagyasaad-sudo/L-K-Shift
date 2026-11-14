@@ -222,7 +222,7 @@ export default function GlobalHeader() {
 
   const handleLogout = () => {
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
-      localStorage.clear();
+      const v = localStorage.getItem('lk_offline_vault'); const b = localStorage.getItem('lk_cached_branches'); localStorage.clear(); if (v) localStorage.setItem('lk_offline_vault', v); if (b) localStorage.setItem('lk_cached_branches', b);
       window.location.href = `/${locale}/login`;
     });
   };
