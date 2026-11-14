@@ -6,6 +6,7 @@ import { MobileBottomNav } from '@/components/layout/Sidebar';
 import GlobalHeader from '@/components/global-header';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import LiveNotificationListener from '@/components/LiveNotificationListener';
+import { syncOfflineAttendance } from '@/offlineSync';
 import TopNavigationLoader from '@/components/layout/TopNavigationLoader';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -20,6 +21,9 @@ export default function AppShell({ children }: AppShellProps) {
   const [compactMode, setCompactMode] = useState<boolean>(false);
 
   useEffect(() => {
+    void syncOfflineAttendance();
+    const onOnline = () => { void syncOfflineAttendance(); };
+    window.addEventListener('online', onOnline);
     const saved = localStorage.getItem('lk_compact_view');
     if (saved === 'true') {
       setCompactMode(true);

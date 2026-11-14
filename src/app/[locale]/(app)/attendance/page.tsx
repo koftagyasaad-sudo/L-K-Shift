@@ -79,6 +79,18 @@ export default function AttendancePage() {
     let mounted = true;
     const loadBranches = async () => {
       try {
+        const cachedRaw = localStorage.getItem('lk_cached_branches');
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (mounted && Array.isArray(parsed) && parsed.length > 0) {
+            setBranches(parsed);
+            const userSavedBranch = localStorage.getItem('userBranchId') || '';
+            const initial = parsed.find((b: BranchItem) => b.id === userSavedBranch) || parsed[0];
+            if (initial) setSelectedBranchId(initial.id);
+          }
+        }
+      } catch {}
+      try {
         const res = await fetch('/api/branches', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
@@ -91,6 +103,7 @@ export default function AttendancePage() {
             radius: Math.max(1, Number(b.geofenceRadius ?? b.geofence_radius ?? b.radiusMeters ?? 10)),
           }));
           setBranches(mapped);
+          try { localStorage.setItem('lk_cached_branches', JSON.stringify(mapped)); } catch {}
           const userSavedBranch = localStorage.getItem('userBranchId') || '';
           const initialBranch = mapped.find((b) => b.id === userSavedBranch) || mapped[0];
           if (initialBranch) {
@@ -329,6 +342,35 @@ export default function AttendancePage() {
 
     setLoading(true);
 
+    if (!navigator.onLine) {
+      try {
+        await saveOfflineAttendance({
+          userId,
+          userName,
+          branchId: currentBranch.id,
+          action,
+          latitude: userCoords.lat,
+          longitude: userCoords.lng,
+          distanceMeters: distance || 0,
+          photoBase64: photo,
+          timestamp: new Date().toISOString(),
+        });
+        await checkPending();
+        setStatusMsg({
+          type: 'ok',
+          text: `✅ تم تسجيل ${action === 'CHECK_IN' ? 'حضورك' : 'انصرافك'} أوفلاين في (${currentBranch.name}) — المسافة ${distance}م. سيتم رفعها تلقائياً فور اتصال الهاتف بالإنترنت.`,
+        });
+      } catch {
+        setStatusMsg({
+          type: 'err',
+          text: '❌ تعذر حفظ البصمة محلياً على الهاتف.',
+        });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch('/api/attendance', {
         method: 'POST',
@@ -359,6 +401,7 @@ export default function AttendancePage() {
         await saveOfflineAttendance({
           userId,
           userName,
+          branchId: currentBranch.id,
           action,
           latitude: userCoords.lat,
           longitude: userCoords.lng,
