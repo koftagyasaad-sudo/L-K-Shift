@@ -100,6 +100,15 @@ export default function AppShell({ children }: AppShellProps) {
     }, 15000);
     window.addEventListener('online', onOnline);
     const saved = localStorage.getItem('lk_compact_view');
+    const handleCompactEvent = () => {
+      setCompactMode((prev) => {
+        const next = !prev;
+        localStorage.setItem('lk_compact_view', String(next));
+        window.dispatchEvent(new CustomEvent('lk-compact-changed', { detail: next }));
+        return next;
+      });
+    };
+    window.addEventListener('lk-toggle-compact', handleCompactEvent);
     if (saved === 'true') {
       setCompactMode(true);
     }
@@ -107,6 +116,7 @@ export default function AppShell({ children }: AppShellProps) {
     return () => {
       active = false;
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('lk-toggle-compact', handleCompactEvent);
       clearInterval(periodicSync);
     };
   }, [locale, pathname]);
@@ -138,15 +148,7 @@ export default function AppShell({ children }: AppShellProps) {
       <ServiceWorkerRegister />
       <LiveNotificationListener />
       <GlobalHeader />
-      <button
-        type="button"
-        onClick={toggleCompact}
-        title={compactMode ? 'إظهار كافة التفاصيل' : 'ضغط الصفحة'}
-        aria-label={compactMode ? 'إظهار كافة التفاصيل' : 'ضغط الصفحة'}
-        className="fixed top-[3.75rem] end-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-[#57cef8]/50 bg-white/90 text-[#3a4149] shadow-xs transition hover:bg-[#57cef8] hover:text-white dark:bg-[#232a32]/90 dark:text-[#57cef8]"
-      >
-        {compactMode ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-      </button>
+      
       <main className="app-main w-full min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto px-3 pb-16 pt-3 sm:px-5 sm:pt-4 lg:px-7 lg:pb-8">
         {children}
       </main>

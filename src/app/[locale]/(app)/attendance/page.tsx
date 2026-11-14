@@ -80,20 +80,59 @@ export default function AttendancePage() {
   useEffect(() => {
     let mounted = true;
     const loadBranches = async () => {
+      let assignedBranchId = (localStorage.getItem('userBranchId') || '').trim();
+      let assignedBranchName = (localStorage.getItem('userBranchName') || '').trim();
+
+      // Fetch latest assigned branch from active session in case admin updated employee's branch
+      try {
+        const sessionRes = await fetch('/api/auth/session', { cache: 'no-store', credentials: 'include' });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          const sUser = sessionData?.user;
+          if (sUser) {
+            if (sUser.branchId || sUser.primaryBranchId) {
+              assignedBranchId = String(sUser.branchId || sUser.primaryBranchId).trim();
+              localStorage.setItem('userBranchId', assignedBranchId);
+            }
+            if (sUser.branchName) {
+              assignedBranchName = String(sUser.branchName).trim();
+              localStorage.setItem('userBranchName', assignedBranchName);
+            }
+          }
+        }
+      } catch {}
+
+      const pickAssignedBranch = (list: BranchItem[]) => {
+        if (!list.length) return null;
+        if (assignedBranchId) {
+          const byId = list.find((b) => String(b.id) === assignedBranchId);
+          if (byId) return byId;
+        }
+        if (assignedBranchName) {
+          const byName = list.find(
+            (b) => b.name.trim() === assignedBranchName || b.name.includes(assignedBranchName) || assignedBranchName.includes(b.name)
+          );
+          if (byName) return byName;
+        }
+        return list[0];
+      };
+
       try {
         const cachedRaw = localStorage.getItem('lk_cached_branches');
         if (cachedRaw) {
           const parsed = JSON.parse(cachedRaw);
           if (mounted && Array.isArray(parsed) && parsed.length > 0) {
             setBranches(parsed);
-            const userSavedBranch = localStorage.getItem('userBranchId') || '';
-            const initial = parsed.find((b: BranchItem) => b.id === userSavedBranch) || parsed[0];
-            if (initial) setSelectedBranchId(initial.id);
+            const initial = pickAssignedBranch(parsed);
+            if (initial && !manualBranchSelectedRef.current) {
+              setSelectedBranchId(initial.id);
+            }
           }
         }
       } catch {}
+
       try {
-        const res = await fetch('/api/branches', { cache: 'no-store' });
+        const res = await fetch('/api/branches', { cache: 'no-store', credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json();
         if (mounted && Array.isArray(data) && data.length > 0) {
@@ -106,9 +145,8 @@ export default function AttendancePage() {
           }));
           setBranches(mapped);
           try { localStorage.setItem('lk_cached_branches', JSON.stringify(mapped)); } catch {}
-          const userSavedBranch = localStorage.getItem('userBranchId') || '';
-          const initialBranch = mapped.find((b) => b.id === userSavedBranch) || mapped[0];
-          if (initialBranch) {
+          const initialBranch = pickAssignedBranch(mapped);
+          if (initialBranch && !manualBranchSelectedRef.current) {
             setSelectedBranchId(initialBranch.id);
           }
         }
@@ -128,31 +166,11 @@ export default function AttendancePage() {
     radius: 10,
   };
 
-  // Recalculate distance cleanly whenever userCoords or selectedBranchId changes (NO auto-branch switching loop)
+  // Calculate distance strictly against the employee's assigned/selected branch (never switch branch by GPS)
   useEffect(() => {
     if (!userCoords || branches.length === 0) return;
-
-    // Only auto-pick closest branch on very first GPS read if user hasn't manually changed the dropdown
-    if (!manualBranchSelectedRef.current && branches.length > 1) {
-      let closest = currentBranch;
-      let minDist = getDistanceMeters(userCoords.lat, userCoords.lng, currentBranch.lat, currentBranch.lng);
-      for (const b of branches) {
-        const d = getDistanceMeters(userCoords.lat, userCoords.lng, b.lat, b.lng);
-        if (d < minDist) {
-          minDist = d;
-          closest = b;
-        }
-      }
-      manualBranchSelectedRef.current = true;
-      if (closest.id !== selectedBranchId) {
-        setSelectedBranchId(closest.id);
-        return;
-      }
-    }
-
     const dist = getDistanceMeters(userCoords.lat, userCoords.lng, currentBranch.lat, currentBranch.lng);
     setDistance(dist);
-    // Strict exact radius check without any +100m buffer
     setIsInsideGeofence(dist <= currentBranch.radius);
   }, [userCoords, selectedBranchId, branches, currentBranch]);
 

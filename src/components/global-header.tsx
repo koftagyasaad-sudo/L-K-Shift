@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useParams } from 'next/navigation';
-import { Bell, CalendarDays, CheckCheck, Clock3, LogOut, ShieldAlert, UserRound, Volume2 } from 'lucide-react';
+import { Bell, CalendarDays, CheckCheck, Clock3, Eye, EyeOff, LogOut, ShieldAlert, UserRound, Volume2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { DesktopNav } from '@/components/layout/Sidebar';
 
@@ -88,6 +88,17 @@ export default function GlobalHeader() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [hasAudioUnlocked, setHasAudioUnlocked] = useState(true);
+  const [compactMode, setCompactMode] = useState(false);
+
+  useEffect(() => {
+    setCompactMode(localStorage.getItem('lk_compact_view') === 'true');
+    const onCompactChanged = (e: Event) => {
+      const custom = e as CustomEvent<boolean>;
+      setCompactMode(Boolean(custom.detail));
+    };
+    window.addEventListener('lk-compact-changed', onCompactChanged);
+    return () => window.removeEventListener('lk-compact-changed', onCompactChanged);
+  }, []);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const prevUnreadCountRef = useRef(-1);
@@ -252,6 +263,15 @@ export default function GlobalHeader() {
 
         <div className="ms-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('lk-toggle-compact'))}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 dark:border-white/[0.08] dark:text-[#57cef8] dark:hover:bg-[#232a32] cursor-pointer"
+            title={compactMode ? (isRtl ? 'إظهار كافة التفاصيل' : 'Expand view') : (isRtl ? 'ضغط الصفحة وإخفاء التفاصيل' : 'Compact view')}
+            aria-label={compactMode ? 'إظهار كافة التفاصيل' : 'ضغط الصفحة'}
+          >
+            {compactMode ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
           <Link
             href={localizedPath}
             className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 px-2 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 dark:border-white/[0.08] dark:text-zinc-300 dark:hover:bg-[#232a32]"
