@@ -89,7 +89,15 @@ export default function AppShell({ children }: AppShellProps) {
 
     void verifyStrictAuth();
 
-    const onOnline = () => { void syncOfflineAttendance(); };
+    const runSyncWithRetry = () => {
+      void syncOfflineAttendance();
+      setTimeout(() => { void syncOfflineAttendance(); }, 2500);
+      setTimeout(() => { void syncOfflineAttendance(); }, 7000);
+    };
+    const onOnline = () => { runSyncWithRetry(); };
+    const periodicSync = setInterval(() => {
+      if (navigator.onLine) void syncOfflineAttendance();
+    }, 15000);
     window.addEventListener('online', onOnline);
     const saved = localStorage.getItem('lk_compact_view');
     if (saved === 'true') {
@@ -99,6 +107,7 @@ export default function AppShell({ children }: AppShellProps) {
     return () => {
       active = false;
       window.removeEventListener('online', onOnline);
+      clearInterval(periodicSync);
     };
   }, [locale, pathname]);
 

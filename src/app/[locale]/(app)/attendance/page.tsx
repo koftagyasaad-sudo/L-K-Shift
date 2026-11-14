@@ -209,6 +209,17 @@ export default function AttendancePage() {
     setUserName(uname);
 
     checkPending();
+    if (navigator.onLine) {
+      void syncOfflineAttendance().then((res) => {
+        checkPending();
+        if (res.syncedCount > 0) {
+          setStatusMsg({
+            type: 'ok',
+            text: `✅ تمت مزامنة (${res.syncedCount}) بصمة أوفلاين ورفعها للسيرفر بنجاح!`,
+          });
+        }
+      });
+    }
     acquirePreciseLocation();
 
     const handleStatusChange = async () => {
